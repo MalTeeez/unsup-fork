@@ -1,10 +1,11 @@
-package com.unascribed.sup.opengl;
+package com.unascribed.sup.opengl.pieces;
+
+import static com.unascribed.sup.opengl.util.GL.*;
 
 import com.unascribed.sup.ColorChoice;
 import com.unascribed.sup.Puppet;
 import com.unascribed.sup.ThrobberAnim;
-
-import static com.unascribed.sup.opengl.GL.*;
+import com.unascribed.sup.opengl.GLPuppet;
 
 public class GLThrobber {
 

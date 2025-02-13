@@ -1,4 +1,4 @@
-package com.unascribed.sup.opengl;
+package com.unascribed.sup.opengl.util;
 
 import java.io.ByteArrayOutputStream;
 import java.io.DataOutputStream;

@@ -1,4 +1,4 @@
-package com.unascribed.sup.opengl;
+package com.unascribed.sup.opengl.pieces;
 
 import static org.lwjgl.opengl.GL11.*;
 import static org.lwjgl.opengl.KHRDebug.*;
