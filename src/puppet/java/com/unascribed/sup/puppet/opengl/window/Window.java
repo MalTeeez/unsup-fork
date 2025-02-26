@@ -305,7 +305,9 @@ public abstract class Window {
 	public void close() {
 		if (!run || handle == 0) return;
 		run = false;
-		glfwHideWindow(handle);
+		Puppet.runOnMainThread(() -> {
+			glfwHideWindow(handle);
+		});
 	}
 	
 	protected abstract void renderInner();
