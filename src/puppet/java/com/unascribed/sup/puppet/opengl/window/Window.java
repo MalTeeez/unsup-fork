@@ -305,6 +305,12 @@ public abstract class Window {
 	public void close() {
 		if (!run || handle == 0) return;
 		run = false;
+		// Here lies my sanity and $200 (used to buy an M1 Mac Mini for debugging this and other problems)
+		// macOS crashes your program with an inscrutable error if you call UI methods off the main thread
+		// Without stacktraces, it's nearly impossible to find the problem
+		// With enough perseverance and trying every fucking JVM implementation known to man, you can eventually get a stacktrace
+		// Only to find it's a simple-ass mistake
+		// GLFW please add checking for this
 		Puppet.runOnMainThread(() -> {
 			glfwHideWindow(handle);
 		});
