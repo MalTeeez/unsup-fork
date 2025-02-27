@@ -10,8 +10,10 @@ import java.util.concurrent.atomic.AtomicInteger;
 import org.lwjgl.glfw.GLFWImage;
 import org.lwjgl.opengl.EXTFramebufferBlit;
 import org.lwjgl.opengl.GL;
+import org.lwjgl.system.JNI;
+import org.lwjgl.system.Library;
 import org.lwjgl.system.Platform;
-
+import org.lwjgl.system.SharedLibrary;
 import com.unascribed.sup.puppet.ColorChoice;
 import com.unascribed.sup.puppet.Puppet;
 import com.unascribed.sup.puppet.opengl.GLPuppet;
@@ -29,7 +31,8 @@ public abstract class Window {
 	
 	private static boolean slowYapped = false;
 	
-	private static final boolean OS_HAS_BROKEN_BUFFER_SWAP = Platform.get() == Platform.WINDOWS || Platform.get() == Platform.MACOSX;
+	private static final boolean MACOS = Platform.get() == Platform.MACOSX;
+	private static final boolean OS_HAS_BROKEN_BUFFER_SWAP = Platform.get() == Platform.WINDOWS || MACOS;
 	
 	protected Window parent;
 	
@@ -234,6 +237,8 @@ public abstract class Window {
 		if (renderThread == null) {
 			renderThread = new Thread(() -> {
 				glfwMakeContextCurrent(handle);
+				long cgl = macGetCGL();
+				macLockCGL(cgl);
 				GL.createCapabilities();
 				
 				scratchTex = glGenTextures();
@@ -245,6 +250,7 @@ public abstract class Window {
 				glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_CLAMP_TO_BORDER);
 				
 				OpenGLDebug.install();
+				macUnlockCGL(cgl);
 				
 				while (run) {
 					if (!render()) {
@@ -266,6 +272,8 @@ public abstract class Window {
 	}
 
 	public boolean render() {
+		long cgl = macGetCGL();
+		macLockCGL(cgl);
 		boolean rendered;
 		synchronized (this) {
 			if (!honorNeedsRender) {
@@ -348,9 +356,10 @@ public abstract class Window {
 				buffersSynced = true;
 			}
 		}
+		macUnlockCGL(cgl);
 		return rendered;
 	}
-	
+
 	public void close() {
 		if (!run || handle == 0) return;
 		run = false;
@@ -366,5 +375,38 @@ public abstract class Window {
 	}
 	
 	protected abstract void renderInner();
+	
+
+	
+	// https://github.com/glfw/glfw/issues/1997
+	
+	private static SharedLibrary CoreOpenGL;
+	private static long CGLGetCurrentContext, CGLLockContext, CGLUnlockContext;
+	
+	private static long macGetCGL() {
+		if (MACOS) {
+			if (CGLGetCurrentContext == 0) {
+				if (CoreOpenGL == null) CoreOpenGL = Library.loadNative(GLPuppet.class, "com.unascribed",
+						"/System/Library/Frameworks/OpenGL.framework");
+				CGLGetCurrentContext = CoreOpenGL.getFunctionAddress("CGLGetCurrentContext");
+				CGLLockContext = CoreOpenGL.getFunctionAddress("CGLLockContext");
+				CGLUnlockContext = CoreOpenGL.getFunctionAddress("CGLUnlockContext");
+			}
+			return JNI.invokeP(CGLGetCurrentContext);
+		}
+		return 0;
+	}
+	
+	private static void macLockCGL(long handle) {
+		if (MACOS) {
+			JNI.invokePV(handle, CGLLockContext);
+		}
+	}
+	
+	private static void macUnlockCGL(long handle) {
+		if (MACOS) {
+			JNI.invokePV(handle, CGLUnlockContext);
+		}
+	}
 
 }
