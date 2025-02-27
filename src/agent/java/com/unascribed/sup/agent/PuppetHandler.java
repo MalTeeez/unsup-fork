@@ -4,6 +4,7 @@ import java.io.BufferedOutputStream;
 import java.io.BufferedReader;
 import java.io.ByteArrayInputStream;
 import java.io.File;
+import java.io.FileInputStream;
 import java.io.FileOutputStream;
 import java.io.IOException;
 import java.io.InputStream;
@@ -409,9 +410,8 @@ public class PuppetHandler {
 		boolean needsDownload = true;
 		if (cacheFile.exists()) {
 			try {
-				byte[] data = RequestHelper.loadAndVerify(cacheFile.toURI(), 64*M, cacheFileSig.toURI(), Agent.unsupSig);
 				try (FileOutputStream fos = new FileOutputStream(out);
-						InputStream is = new BrotliInputStream(new ByteArrayInputStream(data))) {
+						InputStream is = new BrotliInputStream(new FileInputStream(cacheFile))) {
 					Util.copy(is, fos);
 				}
 				needsDownload = false;
