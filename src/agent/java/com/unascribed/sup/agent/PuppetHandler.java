@@ -28,6 +28,8 @@ import java.util.concurrent.Executors;
 import java.util.concurrent.Future;
 import java.util.concurrent.ThreadLocalRandom;
 import java.util.concurrent.TimeUnit;
+import java.util.regex.Matcher;
+import java.util.regex.Pattern;
 
 import org.brotli.dec.BrotliInputStream;
 
@@ -52,6 +54,8 @@ public class PuppetHandler {
 	private static Map<String, Latch> alertWaiters = new HashMap<>();
 	
 	private static final int crashId = ThreadLocalRandom.current().nextInt()&Integer.MAX_VALUE;
+	
+	private static final Pattern IMK_CLIENT = Pattern.compile(" \\+\\[IMKClient subclass\\]: chose IMKClient_(Modern|Legacy)$");
 	
 	public enum AlertOptionType { OK, OK_CANCEL, YES_NO, YES_NO_CANCEL, YES_NO_TO_ALL_CANCEL }
 	public enum AlertOption { CLOSED, OK, YES, NO, CANCEL, YESTOALL, NOTOALL }
@@ -298,7 +302,11 @@ public class PuppetHandler {
 					while (true) {
 						String line = br.readLine();
 						if (line == null) return;
-						if (line.contains("|")) {
+						Matcher imk = IMK_CLIENT.matcher(line);
+						if (imk.find()) {
+							// sigh
+							Log.log("DEBUG", "puppet", "macOS chose the "+imk.group(1)+" IMKClient implementation");
+						} else if (line.contains("|")) {
 							int idx = line.indexOf('|');
 							Log.log(line.substring(0, idx), "puppet", line.substring(idx+1));
 						} else {

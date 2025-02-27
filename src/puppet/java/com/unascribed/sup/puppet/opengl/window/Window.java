@@ -8,7 +8,9 @@ import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicInteger;
 
 import org.lwjgl.glfw.GLFWImage;
+import org.lwjgl.opengl.EXTFramebufferBlit;
 import org.lwjgl.opengl.GL;
+import org.lwjgl.system.Platform;
 
 import com.unascribed.sup.puppet.ColorChoice;
 import com.unascribed.sup.puppet.Puppet;
@@ -24,6 +26,10 @@ import static org.lwjgl.system.MemoryUtil.*;
 public abstract class Window {
 	
 	private static final Map<Class<? extends Window>, AtomicInteger> threadNumbers = new HashMap<>();
+	
+	private static boolean slowYapped = false;
+	
+	private static final boolean OS_HAS_BROKEN_BUFFER_SWAP = Platform.get() == Platform.WINDOWS || Platform.get() == Platform.MACOSX;
 	
 	protected Window parent;
 	
@@ -44,6 +50,7 @@ public abstract class Window {
 	
 	private long timeShown;
 	private boolean honorNeedsRender = false;
+	private boolean buffersSynced = false;
 	
 	private Thread renderThread;
 	
@@ -67,9 +74,16 @@ public abstract class Window {
 		glfwWindowHint(GLFW_OPENGL_FORWARD_COMPAT, GLFW_FALSE);
 		glfwWindowHint(GLFW_DECORATED, GLFW_TRUE);
 		glfwWindowHint(GLFW_VISIBLE, GLFW_FALSE);
-		glfwWindowHint(GLFW_ALPHA_BITS, GLFW_DONT_CARE);
-		glfwWindowHint(GLFW_DEPTH_BITS, GLFW_DONT_CARE);
+		
+		glfwWindowHint(GLFW_RED_BITS, 8);
+		glfwWindowHint(GLFW_GREEN_BITS, 8);
+		glfwWindowHint(GLFW_BLUE_BITS, 8);
+		glfwWindowHint(GLFW_ALPHA_BITS, 0);
+		glfwWindowHint(GLFW_DEPTH_BITS, 0);
+		glfwWindowHint(GLFW_STENCIL_BITS, 0);
+		
 		glfwWindowHint(GLFW_SAMPLES, 16);
+		
 		glfwWindowHint(GLFW_SCALE_FRAMEBUFFER, GLFW_TRUE);
 		glfwWindowHint(GLFW_SCALE_TO_MONITOR, GLFW_TRUE);
 		glfwWindowHintString(GLFW_WAYLAND_APP_ID, "com.unascribed.sup");
@@ -263,7 +277,10 @@ public abstract class Window {
 					needsFullRedraw = true;
 				}
 			}
-			if (!honorNeedsRender || needsRerender()) {
+			if (OS_HAS_BROKEN_BUFFER_SWAP) {
+				needsFullRedraw = true;
+			}
+			if (!honorNeedsRender || needsRerender() || OS_HAS_BROKEN_BUFFER_SWAP) {
 				if (fbWidth == 0) {
 					int[] fbw = new int[1];
 					int[] fbh = new int[1];
@@ -298,7 +315,39 @@ public abstract class Window {
 				rendered = false;
 			}
 		}
-		if (rendered) glfwSwapBuffers(handle);
+		if (rendered) {
+			buffersSynced = false;
+			glfwSwapBuffers(handle);
+		} else {
+			if (!buffersSynced) {
+				glReadBuffer(GL_BACK);
+				glDrawBuffer(GL_FRONT);
+
+				int fbWidth, fbHeight;
+				synchronized (this) {
+					fbWidth = this.fbWidth;
+					fbHeight = this.fbHeight;
+				}
+				
+				if (GL.getCapabilities().GL_EXT_framebuffer_blit) {
+					EXTFramebufferBlit.glBlitFramebufferEXT(0, 0, fbWidth, fbHeight, 0, 0, fbWidth, fbHeight, GL_COLOR_BUFFER_BIT, GL_NEAREST);
+				} else {
+					if (!slowYapped) {
+						slowYapped = true;
+						Puppet.log("DEBUG", "Using ReadPixels/DrawPixels to copy framebuffer data (this is slow and bad)");
+					}
+					ByteBuffer buf = memAlloc(fbWidth*fbHeight*4);
+					glReadPixels(0, 0, fbWidth, fbHeight, GL_RGBA, GL_UNSIGNED_BYTE, buf);
+					glDrawPixels(fbWidth, fbHeight, GL_RGBA, GL_UNSIGNED_BYTE, buf);
+					memFree(buf);
+				}
+				
+				glReadBuffer(GL_BACK);
+				glDrawBuffer(GL_BACK);
+				
+				buffersSynced = true;
+			}
+		}
 		return rendered;
 	}
 	

@@ -77,6 +77,9 @@ public class ProgressWindow extends Window {
 		Puppet.log("DEBUG", "OpenGL Version: "+glGetString(GL_VERSION));
 		Puppet.log("DEBUG", "OpenGL Renderer: "+glGetString(GL_RENDERER));
 		Puppet.log("DEBUG", "OpenGL Vendor: "+glGetString(GL_VENDOR));
+		Puppet.log("DEBUG", "Framebuffer Bits: r"+glGetInteger(GL_RED_BITS)+" g"+glGetInteger(GL_GREEN_BITS)+
+				" b"+glGetInteger(GL_BLUE_BITS)+" a"+glGetInteger(GL_ALPHA_BITS)+" d"+glGetInteger(GL_DEPTH_BITS)+
+				" s"+glGetInteger(GL_STENCIL_BITS)+" x"+glGetInteger(GL_SAMPLES));
 	}
 
 	@Override

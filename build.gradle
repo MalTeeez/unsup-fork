@@ -218,9 +218,9 @@ project.configurations.include.resolve().each { file ->
 		dependsOn t
 		if (project.hasProperty("unsup.ci")) {
 			environment 'LD_LIBRARY_PATH', './.ci'
-			commandLine './.ci/brotli', '-Zj', 'build/tmp/depjars/'+file.name
+			commandLine './.ci/brotli', '-Zfj', 'build/tmp/depjars/'+file.name
 		} else {
-			commandLine 'brotli', '-Zj', 'build/tmp/depjars/'+file.name
+			commandLine 'brotli', '-Zfj', 'build/tmp/depjars/'+file.name
 		}
 	}
 	brotliDepJars.dependsOn bt
