@@ -16,7 +16,6 @@ import java.net.URISyntaxException;
 import java.net.URL;
 import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
-import java.nio.file.StandardCopyOption;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Collection;
@@ -425,7 +424,8 @@ public class PuppetHandler {
 				}
 				
 				Files.deleteIfExists(cacheFile.toPath());
-				Files.move(cacheFileTmp.toPath(), cacheFile.toPath(), StandardCopyOption.ATOMIC_MOVE);
+				Files.move(cacheFileTmp.toPath(), cacheFile.toPath());
+				oldCacheFile.delete();
 				needsDownload = false;
 				Log.debug("Decompressed old cache file");
 			}
@@ -435,13 +435,14 @@ public class PuppetHandler {
 			String dlBase = "https://unsup.y2k.diy/assets/v1/"+url;
 			URI dl = URI.create(dlBase+".jar.br");
 			URI sig = URI.create(dlBase+".sig");
+			Files.createDirectories(cacheDir.toPath());
 			byte[] data = RequestHelper.loadAndVerify(dl, 64*M, sig, Agent.unsupSig);
 			try (FileOutputStream fos = new FileOutputStream(cacheFileTmp);
 					InputStream is = new BrotliInputStream(new ByteArrayInputStream(data))) {
 				Util.copy(is, fos);
 			}
 			Files.deleteIfExists(cacheFile.toPath());
-			Files.move(cacheFileTmp.toPath(), cacheFile.toPath(), StandardCopyOption.ATOMIC_MOVE);
+			Files.move(cacheFileTmp.toPath(), cacheFile.toPath());
 			Log.debug(fname+" downloaded and saved to cache");
 		}
 		return cacheFile;
