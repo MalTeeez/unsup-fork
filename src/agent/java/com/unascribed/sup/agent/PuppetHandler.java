@@ -15,6 +15,8 @@ import java.net.URI;
 import java.net.URISyntaxException;
 import java.net.URL;
 import java.nio.charset.StandardCharsets;
+import java.nio.file.Files;
+import java.nio.file.StandardCopyOption;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Collection;
@@ -404,20 +406,28 @@ public class PuppetHandler {
 		final int M = 1024*1024;
 		
 		String fname = url.replace("/", "-");
-		File out = new File(tmp, fname+".jar");
-		File cacheFile = new File(cacheDir, fname+".jar.br");
-		File cacheFileSig = new File(cacheDir, fname+".sig");
+		File cacheFile = new File(cacheDir, fname+".jar");
+		File cacheFileTmp = new File(cacheDir, fname+".jar.tmp");
 		boolean needsDownload = true;
-		if (cacheFile.exists()) {
-			try {
-				try (FileOutputStream fos = new FileOutputStream(out);
-						InputStream is = new BrotliInputStream(new FileInputStream(cacheFile))) {
+		if (cacheFile.exists() && cacheFile.length() > 32) {
+			needsDownload = false;
+			Log.debug("Got "+fname+" from cache");
+		} else {
+			File oldCacheFile = new File(cacheDir, fname+".jar.br");
+			if (oldCacheFile.exists()) {
+				File oldCacheSig = new File(cacheDir, fname+".sig");
+				Files.deleteIfExists(oldCacheSig.toPath());
+				try (FileOutputStream fos = new FileOutputStream(cacheFileTmp);
+						InputStream is = new BrotliInputStream(new FileInputStream(oldCacheFile))) {
 					Util.copy(is, fos);
+				} catch (IOException e) {
+					Log.debug("Failed to decompress old cache file");
 				}
+				
+				Files.deleteIfExists(cacheFile.toPath());
+				Files.move(cacheFileTmp.toPath(), cacheFile.toPath(), StandardCopyOption.ATOMIC_MOVE);
 				needsDownload = false;
-				Log.debug("Got "+fname+" from cache");
-			} catch (IOException e) {
-				Log.warn("Failed to load cached natives jar, redownloading it", e);
+				Log.debug("Decompressed old cache file");
 			}
 		}
 		if (needsDownload) {
@@ -425,22 +435,16 @@ public class PuppetHandler {
 			String dlBase = "https://unsup.y2k.diy/assets/v1/"+url;
 			URI dl = URI.create(dlBase+".jar.br");
 			URI sig = URI.create(dlBase+".sig");
-			byte[] sigData = RequestHelper.downloadToMemory(sig, 512);
-			cacheDir.mkdirs();
-			try (FileOutputStream fos = new FileOutputStream(cacheFileSig)) {
-				fos.write(sigData);
-			}
-			byte[] data = RequestHelper.loadAndVerify(dl, 64*M, cacheFileSig.toURI(), Agent.unsupSig);
-			try (FileOutputStream fos = new FileOutputStream(cacheFile)) {
-				fos.write(data);
-			}
-			try (FileOutputStream fos = new FileOutputStream(out);
+			byte[] data = RequestHelper.loadAndVerify(dl, 64*M, sig, Agent.unsupSig);
+			try (FileOutputStream fos = new FileOutputStream(cacheFileTmp);
 					InputStream is = new BrotliInputStream(new ByteArrayInputStream(data))) {
 				Util.copy(is, fos);
 			}
+			Files.deleteIfExists(cacheFile.toPath());
+			Files.move(cacheFileTmp.toPath(), cacheFile.toPath(), StandardCopyOption.ATOMIC_MOVE);
 			Log.debug(fname+" downloaded and saved to cache");
 		}
-		return out;
+		return cacheFile;
 	}
 
 	public static void sendConfig() {
