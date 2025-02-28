@@ -67,10 +67,10 @@ import javax.swing.plaf.metal.OceanTheme;
 import org.brotli.dec.BrotliInputStream;
 
 import com.unascribed.sup.AlertMessageType;
+import com.unascribed.sup.ColorChoice;
 import com.unascribed.sup.Util;
 import com.unascribed.sup.data.FlavorGroup;
 import com.unascribed.sup.data.FlavorGroup.FlavorChoice;
-import com.unascribed.sup.puppet.ColorChoice;
 import com.unascribed.sup.puppet.Puppet;
 import com.unascribed.sup.puppet.PuppetDelegate;
 import com.unascribed.sup.puppet.Translate;

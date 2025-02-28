@@ -1,0 +1,129 @@
+package com.unascribed.sup;
+
+import java.io.File;
+import java.util.Arrays;
+import java.util.Collections;
+import java.util.HashSet;
+import java.util.Set;
+import java.util.function.Supplier;
+
+public class PlatDetect {
+
+	public static final OSType OS;
+	public static final ArchType ARCH;
+	
+	public enum OSType {
+		FREEBSD("freebsd", "FreeBSD", PUtil::getXDGCacheDir,
+				ArchType.AMD64),
+		LINUX("linux", "Linux", PUtil::getXDGCacheDir,
+				ArchType.AMD64, ArchType.AARCH64, ArchType.ARM, ArchType.PPC64LE, ArchType.RISCV64),
+		MACOS("macos", "macOS", PUtil::getMacCacheDir,
+				ArchType.AMD64, ArchType.AARCH64),
+		WINDOWS("windows", "Windows", PUtil::getWinCacheDir,
+				ArchType.IA32, ArchType.AMD64, ArchType.AARCH64),
+		UNSUPPORTED("unsupported", "Unsupported", PUtil::getDefaultCacheDir),
+		;
+		
+		public final String lwjglName;
+		public final String friendlyName;
+		public final Supplier<File> cacheDirGetter;
+		public final Set<ArchType> supportedArchitectures;
+		
+		OSType(String lwjglName, String friendlyName, Supplier<File> cacheDirGetter, ArchType... supportedArchitectures) {
+			this.lwjglName = lwjglName;
+			this.friendlyName = friendlyName;
+			this.cacheDirGetter = cacheDirGetter;
+			this.supportedArchitectures = Collections.unmodifiableSet(new HashSet<>(Arrays.asList(supportedArchitectures)));
+		}
+		
+	}
+	
+	public enum ArchType {
+		AARCH64("arm64", "-arm64"),
+		ARM("arm32", "-arm32"),
+		PPC64LE("ppc64le", "-ppc64le"),
+		RISCV64("riscv64", "-riscv64"),
+		AMD64("amd64", ""),
+		IA32("x86", "-x86"),
+		UNSUPPORTED("", ""),
+		;
+		
+		public final String apiName;
+		public final String lwjglSuffix;
+		ArchType(String apiName, String lwjglSuffix) {
+			this.apiName = apiName;
+			this.lwjglSuffix = lwjglSuffix;
+		}
+		
+	}
+	
+	private static class PUtil {
+		
+		private static File getXDGCacheDir() {
+			String home = System.getenv("HOME");
+			if (home == null || home.trim().isEmpty()) {
+				home = System.getProperty("user.home");
+			}
+			String dir = System.getenv("XDG_DATA_HOME");
+			if (dir == null || dir.trim().isEmpty()) {
+				dir = home+"/.cache";
+			}
+			return new File(dir+"/unsup");
+		}
+		
+		private static File getMacCacheDir() {
+			return new File(new File(System.getProperty("user.home")), "Library/Caches/unsup");
+		}
+		
+		private static File getWinCacheDir() {
+			return new File(new File(System.getenv("APPDATA")), "Local/unsup");
+		}
+		
+		private static File getDefaultCacheDir() {
+			return new File(new File(System.getProperty("user.home")), ".unsup");
+		}
+		
+	}
+	
+	static {
+		String osName = System.getProperty("os.name");
+		String osArch = System.getProperty("os.arch");
+		OSType ourOs = OSType.UNSUPPORTED;
+		ArchType ourArch = ArchType.UNSUPPORTED;
+		// adapted from LWJGL3 Platform
+		if (osName.startsWith("Windows")) {
+			ourOs = OSType.WINDOWS;
+		} else if (osName.startsWith("FreeBSD")) {
+			ourOs = OSType.FREEBSD;
+		} else if (osName.startsWith("Linux") || osName.startsWith("SunOS") || osName.startsWith("Unix")) {
+			ourOs = OSType.LINUX;
+		} else if (osName.startsWith("Mac OS X") || osName.startsWith("Darwin")) {
+			ourOs = OSType.MACOS;
+		}
+		boolean is64Bit = osArch.contains("64") || osArch.startsWith("armv8");
+		if (osArch.startsWith("arm") || osArch.startsWith("aarch")) {
+			if (is64Bit) {
+				ourArch = ArchType.AARCH64;
+			} else {
+				ourArch = ArchType.ARM;
+			}
+		} else if (osArch.startsWith("ppc")) {
+			if ("ppc64le".equals(osArch)) {
+				ourArch = ArchType.PPC64LE;
+			}
+		} else if (osArch.startsWith("riscv")) {
+			if ("riscv64".equals(osArch)) {
+				ourArch = ArchType.RISCV64;
+			}
+		} else {
+			if (is64Bit) {
+				ourArch = ArchType.AMD64;
+			} else {
+				ourArch = ArchType.IA32;
+			}
+		}
+		OS = ourOs;
+		ARCH = ourArch;
+	}
+	
+}

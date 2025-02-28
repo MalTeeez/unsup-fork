@@ -2,7 +2,7 @@ package com.unascribed.sup.puppet.opengl.pieces;
 
 import static com.unascribed.sup.puppet.opengl.util.GL.*;
 
-import com.unascribed.sup.puppet.ColorChoice;
+import com.unascribed.sup.ColorChoice;
 import com.unascribed.sup.puppet.Puppet;
 import com.unascribed.sup.puppet.ThrobberAnim;
 

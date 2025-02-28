@@ -12,7 +12,6 @@ import java.util.concurrent.TimeUnit;
 
 import com.unascribed.sup.agent.pieces.QDIni;
 import com.unascribed.sup.data.FlavorGroup;
-import com.unascribed.sup.puppet.ColorChoice;
 import com.unascribed.sup.puppet.Puppet;
 import com.unascribed.sup.puppet.PuppetDelegate;
 import com.unascribed.sup.puppet.Translate;
@@ -21,7 +20,21 @@ import com.unascribed.sup.puppet.opengl.GLPuppet;
 public class PuppetDebug {
 
 	public static void main(String[] args) {
-		ColorChoice.usePrettyDefaults = true;
+		int[] colors = {
+			0x263238,
+			0xFFFFFF,
+			0x90A4AE,
+			0x00EB76,
+			0x455A64,
+			0xFFFFFF,
+			0x00A653,
+			0xFFFFFF,
+			0xD500F9,
+			0x2979FF,
+			0xFF9100,
+			0xFF1744,
+		};
+		ColorChoice.delegate = c -> colors[c.ordinal()];
 
 		URL u = GLPuppet.class.getClassLoader().getResource("com/unascribed/sup/presets/lang/en-US.ini");
 		QDIni translations = null;

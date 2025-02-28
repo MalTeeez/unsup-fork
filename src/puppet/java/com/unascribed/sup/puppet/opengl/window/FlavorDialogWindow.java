@@ -1,9 +1,9 @@
 package com.unascribed.sup.puppet.opengl.window;
 
 
+import com.unascribed.sup.ColorChoice;
 import com.unascribed.sup.data.FlavorGroup;
 import com.unascribed.sup.data.FlavorGroup.FlavorChoice;
-import com.unascribed.sup.puppet.ColorChoice;
 import com.unascribed.sup.puppet.Puppet;
 import com.unascribed.sup.puppet.Translate;
 import com.unascribed.sup.puppet.opengl.pieces.FontManager.Face;

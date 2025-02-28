@@ -4,7 +4,6 @@ import java.io.BufferedOutputStream;
 import java.io.BufferedReader;
 import java.io.ByteArrayInputStream;
 import java.io.File;
-import java.io.FileInputStream;
 import java.io.FileOutputStream;
 import java.io.IOException;
 import java.io.InputStream;
@@ -35,12 +34,17 @@ import java.util.regex.Pattern;
 import org.brotli.dec.BrotliInputStream;
 
 import com.unascribed.sup.AlertMessageType;
+import com.unascribed.sup.ColorChoice;
+import com.unascribed.sup.PlatDetect;
+import com.unascribed.sup.PlatDetect.ArchType;
+import com.unascribed.sup.PlatDetect.OSType;
 import com.unascribed.sup.SysProps;
 import com.unascribed.sup.Util;
 import com.unascribed.sup.SysProps.PuppetMode;
 import com.unascribed.sup.agent.util.RequestHelper;
 import com.unascribed.sup.data.FlavorGroup;
 import com.unascribed.sup.pieces.Latch;
+import com.unascribed.sup.util.Bases;
 
 public class PuppetHandler {
 	
@@ -138,107 +142,60 @@ public class PuppetHandler {
 					List<String> cp = new ArrayList<>();
 					cp.add(ourPath.getAbsolutePath());
 					if (SysProps.PUPPET_MODE != PuppetMode.SWING) {
-						boolean xdg = false;
-						File cacheDir = new File(new File(System.getProperty("user.home")), ".unsup");
-						String osName = System.getProperty("os.name");
-						String ourOs = "unknown";
-						String ourArch = "unknown";
-						// copied from LWJGL3 Platform
-						if (osName.startsWith("Windows")) {
-							ourOs = "windows";
-							cacheDir = new File(new File(System.getenv("APPDATA")), "Local/unsup");
-						} else if (osName.startsWith("FreeBSD")) {
-							ourOs = "freebsd";
-							xdg = true;
-						} else if (osName.startsWith("Linux") || osName.startsWith("SunOS") || osName.startsWith("Unix")) {
-							ourOs = "linux";
-							xdg = true;
-						} else if (osName.startsWith("Mac OS X") || osName.startsWith("Darwin")) {
-							ourOs = "macos";
-							cacheDir = new File(new File(System.getProperty("user.home")), "Library/Caches/unsup");
-						}
-						if (xdg) {
-							String home = System.getenv("HOME");
-							if (home == null || home.trim().isEmpty()) {
-								home = System.getProperty("user.home");
-							}
-							String dir = System.getenv("XDG_DATA_HOME");
-							if (dir == null || dir.trim().isEmpty()) {
-								dir = home+"/.cache";
-							}
-							cacheDir = new File(dir+"/unsup");
-						}
-						if ("macos".equals(ourOs)) {
-							args.add("-XstartOnFirstThread");
-						}
-						String osArch = System.getProperty("os.arch");
-						boolean is64Bit = osArch.contains("64") || osArch.startsWith("armv8");
-						if (osArch.startsWith("arm") || osArch.startsWith("aarch")) {
-							if (is64Bit) {
-								ourArch = "arm64";
-							} else {
-								ourArch = "arm32";
-							}
-						} else if (osArch.startsWith("ppc")) {
-							if ("ppc64le".equals(osArch)) {
-								ourArch = "ppc64le";
-							}
-						} else if (osArch.startsWith("riscv")) {
-							if ("riscv64".equals(osArch)) {
-								ourArch = "riscv64";
-							}
+						if (PlatDetect.OS == OSType.UNSUPPORTED || PlatDetect.ARCH == ArchType.UNSUPPORTED
+								|| !PlatDetect.OS.supportedArchitectures.contains(PlatDetect.ARCH)) {
+							Log.error("Unrecognized platform, falling back to Swing puppet (use -Dunsup.puppetMode=swing to enforce this behavior)");
+							args.add("-Dunsup.puppetMode=swing");
 						} else {
-							if (is64Bit) {
-								ourArch = "amd64";
-							} else {
-								ourArch = "x86";
+							if (PlatDetect.OS == OSType.MACOS) {
+								args.add("-XstartOnFirstThread");
 							}
-						}
-						File fcacheDir = cacheDir;
-						String fourOs = ourOs;
-						String fourArch = ourArch;
-						File tmp = new File(".unsup-tmp/natives");
-						tmp.mkdirs();
-						Log.debug("Retrieving assets for "+ourOs+"-"+ourArch+"...");
-						ExecutorService svc = Executors.newFixedThreadPool(6);
-						List<Future<File>> futures = new ArrayList<>();
-						try {
-							futures.add(svc.submit(() -> {
-								return obtainAsset(tmp, fcacheDir, "bundles/"+bundleVersion+"/"+fourOs+"-"+fourArch);
-							}));
-							boolean needCjk = false;
-							for (String s : Agent.config.keySet()) {
-								if (s.startsWith("strings.")) {
-									String v = Agent.config.get(s);
-									if (v.codePoints().anyMatch(codepoint -> {
-										UnicodeScript sc = UnicodeScript.of(codepoint);
-										// I think this is all of them??
-										return sc == UnicodeScript.HANGUL || sc == UnicodeScript.HAN || sc == UnicodeScript.KATAKANA
-												|| sc == UnicodeScript.HIRAGANA || sc == UnicodeScript.BOPOMOFO;
-									})) {
-										needCjk = true;
-										break;
+							if (!Util.DEVELOPMENT_ENVIRONMENT) {
+								String os = PlatDetect.OS.lwjglName;
+								String arch = PlatDetect.ARCH.apiName;
+								Log.debug("Retrieving assets for "+os+"-"+arch+"...");
+								File cacheDir = PlatDetect.OS.cacheDirGetter.get();
+								ExecutorService svc = Executors.newFixedThreadPool(6);
+								List<Future<File>> futures = new ArrayList<>();
+								try {
+									futures.add(svc.submit(() -> {
+										return obtainAsset(cacheDir, "bundles/"+bundleVersion+"/"+os+"-"+arch);
+									}));
+									boolean needCjk = false;
+									for (String s : Agent.config.keySet()) {
+										if (s.startsWith("strings.")) {
+											String v = Agent.config.get(s);
+											if (v.codePoints().anyMatch(codepoint -> {
+												UnicodeScript sc = UnicodeScript.of(codepoint);
+												// I think this is all of them??
+												return sc == UnicodeScript.HANGUL || sc == UnicodeScript.HAN || sc == UnicodeScript.KATAKANA
+														|| sc == UnicodeScript.HIRAGANA || sc == UnicodeScript.BOPOMOFO;
+											})) {
+												needCjk = true;
+												break;
+											}
+										}
 									}
+									if (needCjk) {
+										Log.debug("Retrieving CJK support...");
+										futures.add(svc.submit(() -> {
+											return obtainAsset(cacheDir, "CJKSupport");
+										}));
+									}
+									svc.shutdown();
+									List<String> addnCp = new ArrayList<>();
+									for (Future<File> f : futures) {
+										addnCp.add(f.get().getAbsolutePath());
+									}
+									cp.addAll(addnCp);
+								} catch (ExecutionException e) {
+									Log.error("Failed to load assets for OpenGL puppet, falling back to Swing puppet (use -Dunsup.puppetMode=swing to enforce this behavior)", e);
+									args.add("-Dunsup.puppetMode=swing");
 								}
 							}
-							if (needCjk) {
-								Log.debug("Retrieving CJK support...");
-								futures.add(svc.submit(() -> {
-									return obtainAsset(tmp, fcacheDir, "CJKSupport");
-								}));
-							}
-							svc.shutdown();
-							List<String> addnCp = new ArrayList<>();
-							for (Future<File> f : futures) {
-								addnCp.add(f.get().getAbsolutePath());
-							}
-							cp.addAll(addnCp);
-						} catch (ExecutionException e) {
-							Log.error("Failed to load assets for OpenGL puppet, falling back to Swing puppet (use -Dunsup.puppetMode=swing to enforce this behavior)", e);
-							args.add("-Dunsup.puppetMode=swing");
 						}
 					}
-					if ("DEV".equals(Util.VERSION)) {
+					if (Util.DEVELOPMENT_ENVIRONMENT) {
 						for (String s : System.getProperty("java.class.path").split(File.pathSeparator)) {
 							cp.add(s);
 						}
@@ -381,7 +338,7 @@ public class PuppetHandler {
 		}
 	}
 
-	private static File obtainAsset(File tmp, File cacheDir, String url) throws IOException {
+	private static File obtainAsset(File cacheDir, String url) throws IOException {
 		final int M = 1024*1024;
 		
 		String fname = url.replace("/", "-");
@@ -391,24 +348,6 @@ public class PuppetHandler {
 		if (cacheFile.exists() && cacheFile.length() > 32) {
 			needsDownload = false;
 			Log.debug("Got "+fname+" from cache");
-		} else {
-			File oldCacheFile = new File(cacheDir, fname+".jar.br");
-			if (oldCacheFile.exists()) {
-				File oldCacheSig = new File(cacheDir, fname+".sig");
-				Files.deleteIfExists(oldCacheSig.toPath());
-				try (FileOutputStream fos = new FileOutputStream(cacheFileTmp);
-						InputStream is = new BrotliInputStream(new FileInputStream(oldCacheFile))) {
-					Util.copy(is, fos);
-				} catch (IOException e) {
-					Log.debug("Failed to decompress old cache file");
-				}
-				
-				Files.deleteIfExists(cacheFile.toPath());
-				Files.move(cacheFileTmp.toPath(), cacheFile.toPath());
-				oldCacheFile.delete();
-				needsDownload = false;
-				Log.debug("Decompressed old cache file");
-			}
 		}
 		if (needsDownload) {
 			Log.debug("Downloading "+fname+" from unsup.y2k.diy...");
@@ -429,22 +368,9 @@ public class PuppetHandler {
 	}
 
 	public static void sendConfig() {
-		tellPuppet(":colorBackground="+Agent.config.get("colors.background", "000000"));
-		tellPuppet(":colorTitle="+Agent.config.get("colors.title", "FFFFFF"));
-		tellPuppet(":colorSubtitle="+Agent.config.get("colors.subtitle", "AAAAAA"));
-		
-		tellPuppet(":colorProgress="+Agent.config.get("colors.progress", "FF0000"));
-		tellPuppet(":colorProgressTrack="+Agent.config.get("colors.progress_track", "AAAAAA"));
-		
-		tellPuppet(":colorDialog="+Agent.config.get("colors.dialog", "FFFFFF"));
-		tellPuppet(":colorButton="+Agent.config.get("colors.button", "FFFFFF"));
-		tellPuppet(":colorButtonText="+Agent.config.get("colors.button_text", "FFFFFF"));
-		
-		tellPuppet(":colorQuestion="+Agent.config.get("colors.info", "FF00FF"));
-		tellPuppet(":colorInfo="+Agent.config.get("colors.info", "00FFFF"));
-		tellPuppet(":colorWarning="+Agent.config.get("colors.info", "FFFF00"));
-		tellPuppet(":colorError="+Agent.config.get("colors.info", "FF0000"));
-		
+		for (ColorChoice cc : ColorChoice.values()) {
+			tellPuppet(":color="+cc.name()+":"+Agent.config.get("colors."+(cc.name().toLowerCase(Locale.ROOT)), Bases.intToHex(cc.defaultValue)));
+		}
 		for (String k : Agent.config.keySet()) {
 			if (k.startsWith("strings.")) {
 				tellPuppet(":string="+k.substring(8)+":"+Agent.config.get(k));

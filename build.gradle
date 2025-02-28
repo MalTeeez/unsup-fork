@@ -18,31 +18,17 @@ plugins {
 	id 'maven-publish'
 }
 
-import java.io.File;
-import java.io.FileOutputStream;
-import java.io.IOException;
-import java.util.Collections;
-import java.util.Iterator;
-import java.util.zip.ZipEntry;
-import java.util.zip.ZipException;
-import java.util.zip.ZipFile;
-import java.util.zip.ZipOutputStream;
-import java.nio.file.Files;
-
-import org.objectweb.asm.ClassReader;
-import org.objectweb.asm.ClassWriter;
-import org.objectweb.asm.Opcodes;
-import org.objectweb.asm.tree.AnnotationNode;
-import org.objectweb.asm.tree.ClassNode;
-import org.objectweb.asm.tree.LdcInsnNode;
+import com.unascribed.sup.PlatDetect;
+import com.unascribed.sup.PlatDetect.OSType;
+import com.unascribed.sup.PlatDetect.ArchType;
+import com.unascribed.sup.build.JarAmender;
 
 ext {
-	platforms = [
-		'linux', 'linux-arm64', 'linux-arm32', 'linux-ppc64le', 'linux-riscv64',
-		'macos', 'macos-arm64',
-		'windows', 'windows-x86', 'windows-arm64',
-		'freebsd',
-	]
+	platforms = OSType.values().collect { os ->
+		os.supportedArchitectures.collect { arch ->
+			os.lwjglName+arch.lwjglSuffix
+		}
+	}.flatten()
 }
 
 base {
@@ -81,7 +67,6 @@ configurations {
 	ogldep
 	compileOnly.extendsFrom ogldep
 	oglnative
-	compileOnly.extendsFrom oglnative
 }
 
 dependencies {
@@ -220,11 +205,10 @@ task proguardJar(type: Jar) {
 }
 
 task amendJar {
-	def amender = file("JarAmender.groovy")
 	dependsOn proguardJar
 	def path = proguardJar.archivePath
 	doFirst {
-		evaluate(amender)(path)
+		JarAmender.amend(path, Long.parseLong('git show -s --format=%ct HEAD'.execute().text.trim())*1000)
 	}
 }
 
@@ -355,9 +339,16 @@ def lwjgl(DependencyHandler deps, String ver, String... modules) {
 		deps.ogldep(dependencies.create("org.lwjgl:lwjgl-${module}:${ver}"))
 	}
 	ext.platforms.each { platform ->
-		deps.oglnative(dependencies.create("org.lwjgl:lwjgl:${ver}:natives-${platform}"))
+		def add = {
+			deps.oglnative(dependencies.create(it))
+			if (platform == PlatDetect.OS.lwjglName+PlatDetect.ARCH.lwjglSuffix) {
+				deps.runtimeOnly(dependencies.create(it))
+			}
+		}
+	
+		add("org.lwjgl:lwjgl:${ver}:natives-${platform}")
 		modules.each { module ->
-			deps.oglnative(dependencies.create("org.lwjgl:lwjgl-${module}:${ver}:natives-${platform}"))
+			add("org.lwjgl:lwjgl-${module}:${ver}:natives-${platform}")
 		}
 	}
 }

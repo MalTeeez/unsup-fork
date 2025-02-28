@@ -30,7 +30,7 @@ public class Bases {
 		return intToHex((l>>32L)&0xFFFFFFFF)+intToHex(l&0xFFFFFFFF);
 	}
 
-	private static String intToHex(long i) {
+	public static String intToHex(long i) {
 		// bad
 		return Long.toHexString((i&0xFFFFFFFFL)|0xF00000000L).substring(1);
 	}

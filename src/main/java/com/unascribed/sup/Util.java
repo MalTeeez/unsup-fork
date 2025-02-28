@@ -8,7 +8,10 @@ import java.net.URISyntaxException;
 
 public class Util {
 
-	public static final String VERSION = Util.class.getPackage().getImplementationVersion() == null ? "DEV" : Util.class.getPackage().getImplementationVersion();
+	private static final String implVer = Util.class.getPackage().getImplementationVersion();
+	
+	public static final String VERSION = implVer == null ? "DEV" : implVer;
+	public static final boolean DEVELOPMENT_ENVIRONMENT = implVer == null;
 
 	/**
 	 * Convert a string path into a URI, to perform proper escaping/etc.

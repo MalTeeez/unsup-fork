@@ -22,6 +22,7 @@ import java.util.concurrent.TimeUnit;
 import javax.annotation.NotNull;
 
 import com.unascribed.sup.AlertMessageType;
+import com.unascribed.sup.ColorChoice;
 import com.unascribed.sup.SysProps;
 import com.unascribed.sup.SysProps.PuppetMode;
 import com.unascribed.sup.data.FlavorGroup;
@@ -42,6 +43,9 @@ public class Puppet {
 	
 	public static void main(String[] args) {
 		Thread.currentThread().setName("Main");
+		
+		ColorChoice.delegate = Puppet::getColor;
+		
 		PuppetMode mode = SysProps.PUPPET_MODE;
 		boolean didOverride = false;
 		PuppetDelegate delTmp = null;
@@ -133,15 +137,16 @@ public class Puppet {
 							r = del::build;
 							break;
 						}
-						case "colorBackground": case "colorTitle": case "colorSubtitle": case "colorProgress":
-						case "colorProgressTrack": case "colorDialog": case "colorButton": case "colorButtonText":
-						case "colorQuestion": case "colorInfo": case "colorWarning": case "colorError":
-							colors[ColorChoice.valueOf(order.substring(5).toUpperCase(Locale.ROOT)).ordinal()] = Integer.parseInt(arg, 16);
+						case "color": {
+							String[] spl = arg.split(":", 2);
+							colors[ColorChoice.valueOf(spl[0]).ordinal()] = Integer.parseInt(spl[1], 16);
 							continue;
-						case "string":
+						}
+						case "string": {
 							String[] spl = arg.split(":", 2);
 							Translate.strings.put(spl[0], spl[1]);
 							continue;
+						}
 						case "belay": {
 							r = () -> {
 								synchronized (orders) {

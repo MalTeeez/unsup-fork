@@ -1,6 +1,6 @@
 package com.unascribed.sup.puppet.opengl.icons;
 
-import com.unascribed.sup.puppet.ColorChoice;
+import com.unascribed.sup.ColorChoice;
 
 /*
  * "Mom can we have SVG"
