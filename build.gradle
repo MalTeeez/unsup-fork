@@ -27,6 +27,7 @@ import java.util.zip.ZipEntry;
 import java.util.zip.ZipException;
 import java.util.zip.ZipFile;
 import java.util.zip.ZipOutputStream;
+import java.nio.file.Files;
 
 import org.objectweb.asm.ClassReader;
 import org.objectweb.asm.ClassWriter;
@@ -34,6 +35,15 @@ import org.objectweb.asm.Opcodes;
 import org.objectweb.asm.tree.AnnotationNode;
 import org.objectweb.asm.tree.ClassNode;
 import org.objectweb.asm.tree.LdcInsnNode;
+
+ext {
+	platforms = [
+		'linux', 'linux-arm64', 'linux-arm32', 'linux-ppc64le', 'linux-riscv64',
+		'macos', 'macos-arm64',
+		'windows', 'windows-x86', 'windows-arm64',
+		'freebsd',
+	]
+}
 
 base {
 	group = 'com.unascribed'
@@ -68,10 +78,10 @@ sourceSets {
 configurations {
 	shade
 	implementation.extendsFrom shade
-	include
-	compileOnly.extendsFrom include
-	natives
-	compileOnly.extendsFrom natives
+	ogldep
+	compileOnly.extendsFrom ogldep
+	oglnative
+	compileOnly.extendsFrom oglnative
 }
 
 dependencies {
@@ -95,7 +105,9 @@ dependencies {
 	shade 'com.unascribed:flexver-java:1.1.1'
 	shade 'me.saharnooby:qoi-java:1.2.1'
 	
-	lwjgl(it, '3.3.6', 'glfw', 'opengl', 'freetype')
+	def lwjglv = '3.3.6'
+	lwjgl(it, lwjglv, 'glfw', 'opengl', 'freetype')
+	ogldep "org.lwjgl:lwjgl-harfbuzz:${lwjglv}"
 }
 
 jar {
@@ -172,11 +184,8 @@ task proguard(type: proguard.gradle.ProGuardTask) {
 	verbose
 }
 
-task brotliDepJars {}
-
 task proguardJar(type: Jar) {
 	dependsOn proguard
-	dependsOn brotliDepJars
 	from(zipTree('build/tmp/proguard.jar'))
 	
 	from(fileTree('build/tmp/depjars')) {
@@ -196,6 +205,9 @@ task proguardJar(type: Jar) {
 		ver = ver+" ("+new java.text.SimpleDateFormat("YYYY-MM-dd HH:mm").format(new java.util.Date())+")"
 	}
 	
+	reproducibleFileOrder = true
+	preserveFileTimestamps = false
+	
 	manifest {
 		attributes (
 			'Main-Class': 'com.unascribed.sup.agent.Agent',
@@ -207,26 +219,60 @@ task proguardJar(type: Jar) {
 	}
 }
 
-project.configurations.include.resolve().each { file ->
-	def t = task("uncompressedJar_"+file.name, type: Jar) {
-		from zipTree(file)
-		archiveFileName.set(file.name)
-		destinationDirectory.set(project.file('build/tmp/depjars'))
-		entryCompression = 'stored'
+task amendJar {
+	def amender = file("JarAmender.groovy")
+	dependsOn proguardJar
+	def path = proguardJar.archivePath
+	doFirst {
+		evaluate(amender)(path)
 	}
-	def bt = task("brotliJar_"+file.name, type:Exec) {
-		dependsOn t
-		if (project.hasProperty("unsup.ci")) {
-			environment 'LD_LIBRARY_PATH', './.ci'
-			commandLine './.ci/brotli', '-Zfj', 'build/tmp/depjars/'+file.name
-		} else {
-			commandLine 'brotli', '-Zfj', 'build/tmp/depjars/'+file.name
-		}
-	}
-	brotliDepJars.dependsOn bt
 }
 
-build.dependsOn proguardJar
+build.dependsOn amendJar
+
+task generateBundles {
+	def tmp = project.file('build/tmp/bundles')
+	def out = project.file('build/bundles')
+	doLast {
+		Files.move(tmp.toPath(), out.toPath())
+	}
+}
+
+task cleanBundles(type: Delete) {
+	delete 'build/tmp/bundles'
+	delete 'build/bundles'
+}
+
+ext.platforms.each { plat ->
+	def b = task("generateBundle_"+plat, type: Jar) {
+		dependsOn cleanBundles
+		
+		destinationDirectory.set(project.file('build/tmp/bundles'))
+		archiveFileName.set(plat+(plat.contains('-') ? '' : '-amd64')+'.jar')
+		entryCompression = 'stored'
+		
+		exclude 'META-INF/**'
+		
+		configurations.ogldep.resolve().each { f ->
+			from zipTree(f)
+		}
+		configurations.oglnative.resolve().each { f ->
+			if (f.name.endsWith("-natives-"+plat+".jar")) {
+				from zipTree(f)
+			}
+		}
+		
+		reproducibleFileOrder = true
+	}
+	def c = task("compressBundle_"+plat, type: Exec) {
+		dependsOn b
+		
+		inputs.file b.archivePath
+		
+		commandLine 'brotli', '-8fj', b.archivePath.absolutePath
+	}
+	generateBundles.dependsOn c
+}
 
 def sigFile = file('build/libs/unsup-'+version+'.jar.sig')
 
@@ -304,21 +350,14 @@ publishing {
 }
 
 def lwjgl(DependencyHandler deps, String ver, String... modules) {
-	def platforms = [
-		'linux', 'linux-arm64', 'linux-arm32', 'linux-ppc64le', 'linux-riscv64',
-		'macos', 'macos-arm64',
-		'windows', 'windows-x86', 'windows-arm64',
-		'freebsd',
-	]
-	
-	deps.include(dependencies.create("org.lwjgl:lwjgl:${ver}"))
+	deps.ogldep(dependencies.create("org.lwjgl:lwjgl:${ver}"))
 	modules.each { module ->
-		deps.include(dependencies.create("org.lwjgl:lwjgl-${module}:${ver}"))
+		deps.ogldep(dependencies.create("org.lwjgl:lwjgl-${module}:${ver}"))
 	}
-	platforms.each { platform ->
-		deps.natives(dependencies.create("org.lwjgl:lwjgl:${ver}:natives-${platform}"))
+	ext.platforms.each { platform ->
+		deps.oglnative(dependencies.create("org.lwjgl:lwjgl:${ver}:natives-${platform}"))
 		modules.each { module ->
-			deps.natives(dependencies.create("org.lwjgl:lwjgl-${module}:${ver}:natives-${platform}"))
+			deps.oglnative(dependencies.create("org.lwjgl:lwjgl-${module}:${ver}:natives-${platform}"))
 		}
 	}
 }

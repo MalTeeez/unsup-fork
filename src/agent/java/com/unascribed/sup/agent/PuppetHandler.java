@@ -13,7 +13,6 @@ import java.io.OutputStream;
 import java.lang.Character.UnicodeScript;
 import java.net.URI;
 import java.net.URISyntaxException;
-import java.net.URL;
 import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.util.ArrayList;
@@ -62,13 +61,7 @@ public class PuppetHandler {
 	public enum AlertOptionType { OK, OK_CANCEL, YES_NO, YES_NO_CANCEL, YES_NO_TO_ALL_CANCEL }
 	public enum AlertOption { CLOSED, OK, YES, NO, CANCEL, YESTOALL, NOTOALL }
 
-	private static final String lwjglVersion = "3.3.6";
-	private static final String[] lwjgls = {
-			"lwjgl",
-			"lwjgl-glfw",
-			"lwjgl-opengl",
-			"lwjgl-freetype",
-	};
+	private static final String bundleVersion = "3.3.6";
 	
 	private static final String[] copyableProps = {
 		"javax.accessibility.assistive_technologies",
@@ -210,22 +203,9 @@ public class PuppetHandler {
 						ExecutorService svc = Executors.newFixedThreadPool(6);
 						List<Future<File>> futures = new ArrayList<>();
 						try {
-							for (String s : lwjgls) {
-								URL url = PuppetHandler.class.getClassLoader().getResource("com/unascribed/sup/jars/"+s+"-"+lwjglVersion+".jar.br");
-								File out = new File(tmp, s+"-"+lwjglVersion+".jar");
-								out.deleteOnExit();
-								if (url != null) {
-									try (FileOutputStream fos = new FileOutputStream(out);
-											InputStream is = new BrotliInputStream(url.openStream())) {
-										Util.copy(is, fos);
-									}
-									cp.add(out.getAbsolutePath());
-								}
-								futures.add(svc.submit(() -> {
-									String module = s.replace("lwjgl-", "");
-									return obtainAsset(tmp, fcacheDir, "natives/"+lwjglVersion+"/"+fourOs+"/"+fourArch+"/"+module);
-								}));
-							}
+							futures.add(svc.submit(() -> {
+								return obtainAsset(tmp, fcacheDir, "bundles/"+bundleVersion+"/"+fourOs+"-"+fourArch);
+							}));
 							boolean needCjk = false;
 							for (String s : Agent.config.keySet()) {
 								if (s.startsWith("strings.")) {
@@ -253,7 +233,7 @@ public class PuppetHandler {
 								addnCp.add(f.get().getAbsolutePath());
 							}
 							cp.addAll(addnCp);
-						} catch (ExecutionException | IOException e) {
+						} catch (ExecutionException e) {
 							Log.error("Failed to load assets for OpenGL puppet, falling back to Swing puppet (use -Dunsup.puppetMode=swing to enforce this behavior)", e);
 							args.add("-Dunsup.puppetMode=swing");
 						}
