@@ -202,7 +202,7 @@ task proguardJar(type: Jar) {
 	
 	def ver = project.version
 	if (ver.endsWith("-SNAPSHOT")) {
-		ver = ver+" ("+new java.text.SimpleDateFormat("YYYY-MM-dd HH:mm").format(new java.util.Date())+")"
+		ver = ver+" ("+('git rev-parse --short=10 HEAD'.execute().text.trim())+")"
 	}
 	
 	reproducibleFileOrder = true
