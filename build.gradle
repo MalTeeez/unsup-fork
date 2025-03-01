@@ -84,6 +84,7 @@ configurations {
 	shade
 	implementation.extendsFrom shade
 	transform
+	transformSrc
 	ogldep
 	compileOnly.extendsFrom ogldep
 	oglnative
@@ -97,10 +98,11 @@ dependencies {
 	}
 	def trans = {
 		def dep = transform(it) { transitive = false }
+		transformSrc(it+':sources') { transitive = false }
 		shade "transformed:${dep.name}:${dep.version}"
 	}
 
-	shade 'com.grack:nanojson:1.9'
+	trans 'com.grack:nanojson:1.9'
 	shade 'net.i2p.crypto:eddsa:0.3.0'
 	
 	trans 'com.squareup.okhttp3:okhttp:4.12.0'
@@ -113,7 +115,7 @@ dependencies {
 	shadeCis 'com.squareup.okio:okio:3.6.0'
 	shadeCis 'com.squareup.okio:okio-jvm:3.6.0'
 	
-	shadeCis 'com.moandjiezana.toml:toml4j:0.7.2'
+	trans 'com.moandjiezana.toml:toml4j:0.7.2'
 	shadeCis 'org.brotli:dec:0.1.2'
 	shade 'com.unascribed:flexver-java:1.1.1'
 	shade 'me.saharnooby:qoi-java:1.2.1'
@@ -131,6 +133,13 @@ configurations.transform.resolve().each { f ->
 	JarTransformer.transform(out)
 }
 
+copy {
+	configurations.transformSrc.resolve().each { f ->
+		from f
+	}
+	into '.gradle/transformed'
+}
+
 jar {
 	archiveClassifier = 'unfinished'
 	destinationDirectory.set(file('build/tmp'))
@@ -139,13 +148,6 @@ jar {
 		from(zipTree(f)) {
 			// overrides
 			exclude 'com/grack/nanojson/JsonWriterBase.class'
-			exclude 'com/moandjiezana/toml/Container.class'
-			exclude 'com/moandjiezana/toml/Container$1.class'
-			exclude 'com/moandjiezana/toml/Container$Table.class'
-			exclude 'com/moandjiezana/toml/Container$TableArray.class'
-			exclude 'com/moandjiezana/toml/Toml.class'
-			exclude 'com/moandjiezana/toml/Toml$1.class'
-			exclude 'com/moandjiezana/toml/Toml$Entry.class'
 		}
 	}
 	

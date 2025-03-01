@@ -45,7 +45,7 @@ steps:
       from_secret: maven_password
   depends_on: [clone, restore-cache]
   commands:
-  - gradle clean build publish -Punsup.ci
+  - gradle clean build publish -Punsup.ci --info
   - gradle --stop
   - rm -rf .gradle-user/daemon
 - name: release

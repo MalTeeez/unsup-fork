@@ -16,10 +16,17 @@ import nilloader.api.ClassTransformer;
 public class JarTransformer {
 
 	public static void transform(File zipFile) throws IOException {
+		System.setProperty("nil.debug.dumpMethodCodeOnSearchFailure", "true");
+		
 		Path zip = zipFile.toPath();
 		
 		List<ClassTransformer> trans = new ArrayList<>();
 		trans.add(new PublicSuffixDatabaseTransformer());
+		trans.add(new ContainerTableTransformer());
+		trans.add(new TomlTransformer());
+		trans.add(new JsonWriterBaseTransformer());
+		trans.add(new JsonStringWriterTransformer());
+		trans.add(new JsonAppendableWriterTransformer());
 		
 		FileSystem fs = FileSystems.newFileSystem(zip, (ClassLoader)null);
 		try {
