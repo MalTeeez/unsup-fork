@@ -35,7 +35,9 @@ steps:
     MAVEN_PASSWORD:
       from_secret: maven_password
   commands:
-  - gradle --no-daemon clean build publish -Punsup.ci
+  - gradle clean build -Punsup.ci
+  - gradle publish -Punsup.ci
+  - gradle --stop
 - name: release
   image: linuxserver/yq:3.4.3
   environment:
