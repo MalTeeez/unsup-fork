@@ -145,10 +145,7 @@ jar {
 	destinationDirectory.set(file('build/tmp'))
 	
 	project.configurations.shade.resolve().each { f ->
-		from(zipTree(f)) {
-			// overrides
-			exclude 'com/grack/nanojson/JsonWriterBase.class'
-		}
+		from(zipTree(f))
 	}
 	
 	from sourceSets.puppet.output
