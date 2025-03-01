@@ -1,7 +1,7 @@
 #!/bin/bash -e
 #
 # This file is part of unsup.
-# Copyright © 2025 Una Kearney (unascribed) and contributors
+# Copyright © 2025 Una Kearney
 # https://git.sleeping.town/unascribed/unsup
 #
 # unsup is free software; you can redistribute it and/or modify it

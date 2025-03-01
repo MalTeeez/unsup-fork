@@ -1,6 +1,6 @@
 /*
  * This file is part of unsup.
- * Copyright © 2020-2025 Una Kearney (unascribed) and contributors
+ * Copyright © 2020-2025 Una Kearney
  * https://git.sleeping.town/unascribed/unsup
  *
  * unsup is free software; you can redistribute it and/or modify it
@@ -113,6 +113,7 @@ public class SwingPuppet {
 	private static JThrobber throbber;
 	private static Image logo, logoLowres;
 	private static List<Image> logos;
+	@SuppressWarnings("unused")
 	private static Font font, fontBold, fontItalic, fontBoldItalic;
 	
 	public static PuppetDelegate start() {

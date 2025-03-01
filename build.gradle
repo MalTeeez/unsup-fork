@@ -1,6 +1,6 @@
 /*
  * This file is part of unsup.
- * Copyright © 2020-2025 Una Kearney (unascribed) and contributors
+ * Copyright © 2020-2025 Una Kearney
  * https://git.sleeping.town/unascribed/unsup
  *
  * unsup is free software; you can redistribute it and/or modify it
@@ -109,9 +109,25 @@ task computeFileDates {
 			include 'update-snapshot-release.sh'
 			include 'gradle/verification-metadata.xml'
 			
+			includeEmptyDirs false
+			
+			def uncreditedAuthors = [
+				// due to Weblate squash commits addon, which i have since uninstalled
+				// this can get removed once all the translations get updated
+				'src/main/resources/com/unascribed/sup/presets/lang/nb-NO.ini': ['Artemis'],
+				'src/main/resources/com/unascribed/sup/presets/lang/ko.ini': ['Skye'],
+				'src/main/resources/com/unascribed/sup/presets/lang/tok.ini': ['Jo Null'],
+			]
+			
 			eachFile {
 				try {
-					def years = ['sh', '-c', "git log --format=%cd --date=iso-strict --follow '${it.path}' |cut -d- -f1 |sort -u"].execute().text.trim().split("\n").collect { Integer.parseInt(it) }
+					def years = ['sh', '-c', "git log --format=%cd --date=iso-strict --follow '${it.path}' |cut -d- -f1 |sort -nu"].execute().text.trim().split("\n").collect { Integer.parseInt(it) }
+					def authors = ['sh', '-c', "git log --format=%aN --follow '${it.path}' |grep -v '^\$' |grep -v 'Sleeping Town Weblate' |sort -u"].execute().text.trim().split("\n").toList()
+					authors.addAll(uncreditedAuthors[it.path] ?: [])
+					if (authors.remove('Una Kearney')) {
+						// main copyright holder name first
+						authors.add(0, 'Una Kearney')
+					}
 					
 					def ranges = []
 					int prev = 0
@@ -138,8 +154,12 @@ task computeFileDates {
 					}
 					compute()
 					
-					file(it.path).text = file(it.path).text.replace('$'+'{year}', ranges.join(', '))
-				} catch (e) {}
+					file(it.path).text = file(it.path).text
+						.replace('$'+'{year}', ranges.join(', '))
+						.replace('$'+'{authors}', authors.join(', '))
+				} catch (e) {
+					e.printStackTrace()
+				}
 				it.exclude()
 			}
 			

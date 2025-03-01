@@ -1,6 +1,6 @@
 /*
  * This file is part of unsup.
- * Copyright © 2025 Una Kearney (unascribed) and contributors
+ * Copyright © 2025 Una Kearney
  * https://git.sleeping.town/unascribed/unsup
  *
  * unsup is free software; you can redistribute it and/or modify it
@@ -80,7 +80,7 @@ public abstract class Window {
 	protected boolean updateDpiScaleByFramebuffer = true;
 	protected long clickCursor;
 	
-	public void create(Window parent, String title, int width, int height, double dpiScale) {
+	public synchronized void create(Window parent, String title, int width, int height, double dpiScale) {
 		if (!Puppet.isMainThread()) throw new IllegalStateException("Must be on main thread");
 		
 		this.parent = parent;
@@ -199,8 +199,10 @@ public abstract class Window {
 				long monitor = glfwGetPrimaryMonitor();
 				glfwGetMonitorWorkarea(monitor, x, y, w, h);
 			} else {
-				glfwGetWindowPos(parent.handle, x, y);
-				glfwGetWindowSize(parent.handle, w, h);
+				synchronized (parent) {
+					glfwGetWindowPos(parent.handle, x, y);
+					glfwGetWindowSize(parent.handle, w, h);
+				}
 			}
 			glfwSetWindowPos(handle, x[0]+(w[0]-physW)/2, y[0]+(h[0]-physH)/2);
 		}
@@ -246,6 +248,10 @@ public abstract class Window {
 	}
 	
 	public void setVisible(boolean visible) {
+		long handle;
+		synchronized (this) {
+			handle = this.handle;
+		}
 		Puppet.runOnMainThread(() -> {
 			if (!run) return;
 			if (visible) {
@@ -295,7 +301,9 @@ public abstract class Window {
 		long cgl = macGetCGL();
 		macLockCGL(cgl);
 		boolean rendered;
+		long handle;
 		synchronized (this) {
+			handle = this.handle;
 			if (!honorNeedsRender) {
 				if (timeShown == 0) timeShown = System.nanoTime();
 				long time = System.nanoTime()-timeShown;

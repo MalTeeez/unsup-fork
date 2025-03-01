@@ -1,6 +1,6 @@
 /*
  * This file is part of unsup.
- * Copyright © 2020-2025 Una Kearney (unascribed) and contributors
+ * Copyright © 2020-2025 Una Kearney
  * https://git.sleeping.town/unascribed/unsup
  *
  * unsup is free software; you can redistribute it and/or modify it
@@ -431,7 +431,7 @@ public class Agent {
 					throw new AssertionError(e);
 				}
 				dns = new DnsOverHttps.Builder()
-						.url(HttpUrl.parse("https://dns10.quad9.net/dns-query"))
+						.url(HttpUrl.get("https://dns10.quad9.net/dns-query"))
 						.bootstrapDnsHosts(quad9Hosts)
 						.client(bootstrapOkhttp)
 						.build();
@@ -442,7 +442,7 @@ public class Agent {
 				String dnsStr = config.get("dns");
 				if (dnsStr.startsWith("https://")) {
 					dns = new DnsOverHttps.Builder()
-							.url(HttpUrl.parse(dnsStr))
+							.url(HttpUrl.get(dnsStr))
 							.client(bootstrapOkhttp)
 							.build();
 					Log.debug("Using "+dnsStr+" for DNS queries");

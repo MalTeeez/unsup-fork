@@ -1,6 +1,6 @@
 /*
  * This file is part of unsup.
- * Copyright © 2025 Una Kearney (unascribed) and contributors
+ * Copyright © 2025 Una Kearney
  * https://git.sleeping.town/unascribed/unsup
  *
  * unsup is free software; you can redistribute it and/or modify it
@@ -83,7 +83,7 @@ public class PlatDetect {
 			if (home == null || home.trim().isEmpty()) {
 				home = System.getProperty("user.home");
 			}
-			String dir = System.getenv("XDG_DATA_HOME");
+			String dir = System.getenv("XDG_CACHE_HOME");
 			if (dir == null || dir.trim().isEmpty()) {
 				dir = home+"/.cache";
 			}
