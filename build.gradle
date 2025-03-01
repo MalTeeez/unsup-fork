@@ -72,9 +72,6 @@ base {
 license {
 	header = project.file('HEADER')
 	ignoreFailures = true
-	properties {
-		year = java.time.Year.now().toString()
-	}
 	tasks {
 		auxillary {
 			files.from('build.gradle')
@@ -94,6 +91,70 @@ license {
 		svg = 'XML'
 	}
 }
+
+task computeFileDates {
+	def root = file('.')
+	doFirst {
+		copy {
+			from '.'
+			
+			include 'src/**/*.java'
+			include 'src/**/*.ini'
+			include 'src/**/*.xml'
+			include 'buildSrc/src/**/*.java'
+			include 'build.gradle'
+			include '.woodpecker.yml'
+			include 'unsup.svg'
+			include 'unsup-lowres.svg'
+			include 'update-snapshot-release.sh'
+			include 'gradle/verification-metadata.xml'
+			
+			eachFile {
+				try {
+					def years = ['sh', '-c', "git log --format=%cd --date=iso-strict --follow '${it.path}' |cut -d- -f1 |sort -u"].execute().text.trim().split("\n").collect { Integer.parseInt(it) }
+					
+					def ranges = []
+					int prev = 0
+					int start = 0
+					int end = 0
+					def compute = {
+						if (start != 0 && end != 0) {
+							if (start != end) {
+								ranges.add(start+'-'+end)
+							} else {
+								ranges.add(''+start)
+							}
+						}
+					}
+					for (int i : years) {
+						if (i == prev+1) {
+							end = i
+						} else {
+							compute()
+							start = i
+							end = i
+						}
+						prev = i
+					}
+					compute()
+					
+					file(it.path).text = file(it.path).text.replace('$'+'{year}', ranges.join(', '))
+				} catch (e) {}
+				it.exclude()
+			}
+			
+			into 'build/tmp/trash'
+		}
+	}
+}
+
+afterEvaluate {
+	updateLicenses.finalizedBy computeFileDates
+	tasks.withType(org.cadixdev.gradle.licenser.tasks.LicenseCheck).each {
+		it.enabled = false
+	}
+}
+
 
 sourceCompatibility = targetCompatibility = 8
 

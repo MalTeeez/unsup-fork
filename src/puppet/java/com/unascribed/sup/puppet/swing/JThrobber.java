@@ -1,6 +1,6 @@
 /*
  * This file is part of unsup.
- * Copyright © 2020-2025 Una Kearney (unascribed) and contributors
+ * Copyright © 2020-2021, 2023-2025 Una Kearney (unascribed) and contributors
  * https://git.sleeping.town/unascribed/unsup
  *
  * unsup is free software; you can redistribute it and/or modify it
