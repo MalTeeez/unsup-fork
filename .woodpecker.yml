@@ -1,4 +1,11 @@
+skip_clone: true
+
 steps:
+- name: clone
+  image: woodpeckerci/plugin-git
+  depends_on: []
+  settings:
+    lfs: false
 - name: restore-cache
   image: meltwater/drone-cache
   environment: &cache_env
