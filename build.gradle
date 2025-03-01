@@ -287,14 +287,9 @@ task proguardJar(type: Jar) {
 	dependsOn proguard
 	dependsOn brotliPublicSuffix
 	
-	
 	from(zipTree('build/tmp/proguard.jar'))
 	from('build/tmp/publicsuffix/okhttp3/internal/publicsuffix/publicsuffixes.br') {
 		into 'com/unascribed/sup/lib/okhttp3/internal/publicsuffix'
-	}
-	
-	from(fileTree('build/tmp/depjars')) {
-		into 'com/unascribed/sup/jars'
 	}
 	
 	exclude 'com/unascribed/sup/lib/okhttp3/internal/platform/android/**'
@@ -417,22 +412,10 @@ if (project.hasProperty("unsup.signifyKey")) {
 
 publishing {
 	repositories {
-		if (project.hasProperty("publish-username")) {
-			maven {
-				url "https://repo-api.sleeping.town/"
-				credentials {
-					username project.hasProperty("publish-username") ? project.getProperty("publish-username") : null
-					password project.hasProperty("publish-password") ? project.getProperty("publish-password") : null
-				}
-			}
-		} else if (project.hasProperty("unsup.ci")) {
-			maven {
-				url "https://repo-api.sleeping.town/"
-				credentials {
-					username System.getenv("MAVEN_USERNAME")
-					password System.getenv("MAVEN_PASSWORD")
-				}
-			}
+		maven {
+			url "https://repo-api.sleeping.town/"
+			name 'SleepingTown'
+			credentials(PasswordCredentials)
 		}
 		maven {
 			url file('build/maven').toURI().toString()

@@ -39,14 +39,13 @@ steps:
       from_secret: signify_key
     SIGNIFY_PASSWORD:
       from_secret: signify_password
-    MAVEN_USERNAME:
+    ORG_GRADLE_PROJECT_SleepingTownUsername:
       from_secret: maven_username
-    MAVEN_PASSWORD:
+    ORG_GRADLE_PROJECT_SleepingTownPassword:
       from_secret: maven_password
   depends_on: [clone, restore-cache]
   commands:
-  - gradle clean build -Punsup.ci
-  - gradle publish -Punsup.ci
+  - gradle clean build publish -Punsup.ci
   - gradle --stop
 - name: release
   image: linuxserver/yq:3.4.3
