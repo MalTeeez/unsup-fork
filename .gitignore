@@ -2,6 +2,7 @@
 /build
 /buildSrc/build
 /bin
+/buildSrc/bin
 .classpath
 .project
 .settings

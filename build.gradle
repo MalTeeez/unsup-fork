@@ -4,9 +4,6 @@ buildscript {
 		maven { url 'https://repo.sleeping.town' }
 	}
 	dependencies {
-		classpath 'org.ow2.asm:asm:9.7.1'
-		classpath 'org.ow2.asm:asm-tree:9.7.1'
-		classpath 'org.ow2.asm:asm-commons:9.7.1'
 		// just used for shrinking. i've used proguard a lot and trust it
 		classpath 'com.guardsquare:proguard-gradle:7.6.1'
 		// for patching
@@ -28,6 +25,15 @@ import com.unascribed.sup.build.transformer.JarTransformer;
 import java.nio.file.Files;
 import java.nio.file.StandardCopyOption;
 
+def commit = providers.exec {
+	commandLine 'git', 'rev-parse', '--short=10', 'HEAD'
+}.standardOutput.asText.get().trim()
+def clean = providers.exec {
+	commandLine 'git', 'diff-index', 'HEAD'
+	ignoreExitValue = true
+}.standardOutput.asText.get().trim().isEmpty()
+
+def snapshotName = commit+(clean ? '' : '-dirty')
 
 ext {
 	platforms = OSType.values().collect { os ->
@@ -223,7 +229,6 @@ task proguard(type: proguard.gradle.ProGuardTask) {
 	
 	keepclassmembers 'enum * { public static **[] values(); public static ** valueOf(java.lang.String); }'
 	keepclassmembernames 'class * { *; }'
-	assumenosideeffects 'class java.util.logging.** { *; }'
 
 	dontwarn 'com.unascribed.sup.lib.**'
 	dontwarn 'org.jetbrains.annotations.**'
@@ -281,6 +286,8 @@ task brotliPublicSuffix(type: Exec) {
 task proguardJar(type: Jar) {
 	dependsOn proguard
 	dependsOn brotliPublicSuffix
+	
+	
 	from(zipTree('build/tmp/proguard.jar'))
 	from('build/tmp/publicsuffix/okhttp3/internal/publicsuffix/publicsuffixes.br') {
 		into 'com/unascribed/sup/lib/okhttp3/internal/publicsuffix'
@@ -302,21 +309,20 @@ task proguardJar(type: Jar) {
 	reproducibleFileOrder = true
 	preserveFileTimestamps = false
 
-	def ver = project.version	
-	doFirst {
-		if (ver.endsWith("-SNAPSHOT")) {
-			ver = ver+" ("+('git rev-parse --short=10 HEAD'.execute().text.trim())+")"
-		}
-	
-		manifest {
-			attributes (
-				'Main-Class': 'com.unascribed.sup.agent.Agent',
-				'Premain-Class': 'com.unascribed.sup.agent.Agent',
-				
-				'Implementation-Title': 'unsup',
-				'Implementation-Version': ver
-			)
-		}
+	def ver = project.version
+	if (ver.endsWith("-SNAPSHOT")) {
+		archiveVersion = "${ver}+${snapshotName}"
+		ver = "${ver} (${snapshotName})"
+	}
+
+	manifest {
+		attributes (
+			'Main-Class': 'com.unascribed.sup.agent.Agent',
+			'Premain-Class': 'com.unascribed.sup.agent.Agent',
+			
+			'Implementation-Title': 'unsup',
+			'Implementation-Version': ver
+		)
 	}
 }
 
