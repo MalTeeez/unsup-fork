@@ -16,7 +16,6 @@ buildscript {
 
 plugins {
 	id 'com.github.ben-manes.versions' version '0.52.0'
-	id 'com.gradleup.shadow' version '8.3.6'
 	id 'java-library'
 	id 'maven-publish'
 }
@@ -41,7 +40,7 @@ ext {
 base {
 	group = 'com.unascribed'
 	archivesName = 'unsup'
-	version = '1.1'+(project.hasProperty("unsup.ci") ? '-SNAPSHOT' : '-pre6')
+	version = project.hasProperty('unsup.release') ? project.getProperty('unsup.release') : '1.1-SNAPSHOT'
 }
 
 sourceCompatibility = targetCompatibility = 8
@@ -128,33 +127,68 @@ configurations.transform.resolve().each { f ->
 }
 
 jar {
-	archiveClassifier = 'slim'
+	archiveClassifier = 'unfinished'
 	destinationDirectory.set(file('build/tmp'))
-	from sourceSets.puppet.output
-	from sourceSets.agent.output
-}
-
-shadowJar {
-	archiveClassifier = 'fat'
-	destinationDirectory.set(file('build/tmp'))
-	configurations = [project.configurations.shade]
 	
-	def pfx = 'com.unascribed.sup.lib.'
-	
-	relocate 'com.grack.nanojson', pfx+'nanojson'
-	relocate 'com.moandjiezana.toml', pfx+'toml'
-	relocate 'com.unascribed.flexver', pfx+'flexver'
-	relocate 'me.saharnooby.qoi', pfx+'qoi'
-	relocate 'net.i2p.crypto.eddsa', pfx+'eddsa'
-	relocate 'kotlin', pfx+'kotlin'
-	relocate 'okhttp3', pfx+'okhttp3'
-	relocate 'okio', pfx+'okio'
-	relocate 'org.brotli.dec', pfx+'brotli'
+	project.configurations.shade.resolve().each { f ->
+		from(zipTree(f)) {
+			// overrides
+			exclude 'com/grack/nanojson/JsonWriterBase.class'
+			exclude 'com/moandjiezana/toml/Container.class'
+			exclude 'com/moandjiezana/toml/Container$1.class'
+			exclude 'com/moandjiezana/toml/Container$Table.class'
+			exclude 'com/moandjiezana/toml/Container$TableArray.class'
+			exclude 'com/moandjiezana/toml/Toml.class'
+			exclude 'com/moandjiezana/toml/Toml$1.class'
+			exclude 'com/moandjiezana/toml/Toml$Entry.class'
+		}
+	}
 	
 	from sourceSets.puppet.output
 	from sourceSets.agent.output
 	
 	exclude 'javax/annotation/**'
+	
+	duplicatesStrategy = 'fail'
+	
+	def mapfile = file('build/tmp/proguard.map')
+	doFirst {
+		def pfx = 'com/unascribed/sup/lib/'
+		def relocations = [
+			'com/grack/nanojson/': pfx+'nanojson/',
+			'com/moandjiezana/toml/': pfx+'toml/',
+			'com/unascribed/flexver/': pfx+'flexver/',
+			'me/saharnooby/qoi/': pfx+'qoi/',
+			'net/i2p/crypto/eddsa/': pfx+'eddsa/',
+			'kotlin/': pfx+'kotlin/',
+			'okhttp3/': pfx+'okhttp3/',
+			'okio/': pfx+'okio/',
+			'org/brotli/dec/': pfx+'brotli/',
+		]
+		
+		mapfile.text = ""
+		
+		eachFile {
+			def n = it.path
+			def pg = false
+			if (n.endsWith(".class")) {
+				n = n.substring(0, n.length()-6)
+				pg = true
+			}
+			def newName = n
+			for (def en : relocations.entrySet()) {
+				if (n.startsWith(en.key)) {
+					newName = n.replace(en.key, en.value)
+					break
+				}
+			}
+			if (pg) {
+				mapfile.append("${n} -> ${newName}:\n")
+			} else {
+				it.path = newName
+			}
+		}
+	}
 }
 
 tasks.named("dependencyUpdates").configure {
@@ -170,24 +204,26 @@ def pgLibJars = files(
 	System.properties["java.home"]+"/jmods/java.desktop.jmod", // used by the puppet
 	System.properties["java.home"]+"/jmods/java.management.jmod", // for the agent
 	System.properties["java.home"]+"/jmods/java.xml.jmod", // html renderer in the opengl puppet
+	System.properties["java.home"]+"/jmods/java.logging.jmod", // used by okhttp
 )
 
 task proguard(type: proguard.gradle.ProGuardTask) {
-	dependsOn shadowJar
-	injars shadowJar.archivePath
+	dependsOn jar
+	injars jar.archivePath
 	libraryjars pgLibJars
 	outjars 'build/tmp/proguard.jar'
 	
-	dontobfuscate
 	dontoptimize
 	
-	keep(allowshrinking: true, 'class * { *; }')
+	applymapping 'build/tmp/proguard.map'
 	
 	keep 'class com.unascribed.sup.agent.Agent { *; }'
 	keep 'class com.unascribed.sup.puppet.Puppet { *; }'
 	keep 'class com.unascribed.sup.Unsup { *; }'
 	
 	keepclassmembers 'enum * { public static **[] values(); public static ** valueOf(java.lang.String); }'
+	keepclassmembernames 'class * { *; }'
+	assumenosideeffects 'class java.util.logging.** { *; }'
 
 	dontwarn 'com.unascribed.sup.lib.**'
 	dontwarn 'org.jetbrains.annotations.**'
@@ -195,6 +231,9 @@ task proguard(type: proguard.gradle.ProGuardTask) {
 	dontwarn 'javax.annotation.**'
 	dontwarn 'com.unascribed.sup.puppet.opengl.util.GL'
 	dontwarn 'sun.misc.**'
+	dontwarn 'okhttp3.internal.platform.**'
+	dontwarn 'lombok.**'
+	dontwarn 'org.codehaus.mojo.animal_sniffer.**'
 	
 	keepattributes '*'
 	
