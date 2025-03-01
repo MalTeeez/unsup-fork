@@ -1,6 +1,8 @@
 package com.unascribed.sup.puppet.opengl;
 
 import org.lwjgl.PointerBuffer;
+import org.lwjgl.system.Configuration;
+import org.lwjgl.util.freetype.FreeType;
 
 import com.unascribed.sup.AlertMessageType;
 import com.unascribed.sup.SysProps;
@@ -41,6 +43,8 @@ public class GLPuppet {
 				"UNSUP_SCALE", "QT_SCALE_FACTOR", "GDK_DPI_SCALE×GDK_SCALE", "ELM_SCALE");
 		scaleOverridden = oDpiScale.isPresent();
 		double dpiScale = oDpiScale.orElse(1);
+		
+		Configuration.HARFBUZZ_LIBRARY_NAME.set(FreeType.getLibrary());
 		
 		switch (SysProps.PUPPET_PLATFORM) {
 			case COCOA:
