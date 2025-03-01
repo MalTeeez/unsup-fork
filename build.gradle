@@ -1,3 +1,22 @@
+/*
+ * This file is part of unsup.
+ * Copyright © 2020-2025 Una Kearney (unascribed) and contributors
+ * https://git.sleeping.town/unascribed/unsup
+ *
+ * unsup is free software; you can redistribute it and/or modify it
+ * under the terms of the GNU Lesser General Public License as published
+ * by the Free Software Foundation; either version 3 of the License, or
+ * (at your option) any later version.
+ *
+ * unsup is distributed in the hope that it will be useful, but WITHOUT
+ * ANY WARRANTY; without even the implied warranty of MERCHANTABILITY or
+ * FITNESS FOR A PARTICULAR PURPOSE. See the GNU General Public License
+ * for more details.
+ *
+ * You should have received a copy of the GNU Lesser General Public
+ * License along with unsup; if not, see <https://www.gnu.org/licenses/>.
+ */
+
 buildscript {
 	repositories {
 		mavenCentral()
@@ -13,6 +32,7 @@ buildscript {
 
 plugins {
 	id 'com.github.ben-manes.versions' version '0.52.0'
+	id 'org.cadixdev.licenser' version '0.6.1'
 	id 'java-library'
 	id 'maven-publish'
 }
@@ -47,6 +67,32 @@ base {
 	group = 'com.unascribed'
 	archivesName = 'unsup'
 	version = project.hasProperty('unsup.release') ? project.getProperty('unsup.release') : '1.1-SNAPSHOT'
+}
+
+license {
+	header = project.file('HEADER')
+	ignoreFailures = true
+	properties {
+		year = java.time.Year.now().toString()
+	}
+	tasks {
+		auxillary {
+			files.from('build.gradle')
+			files.from('.woodpecker.yml')
+			files.from('src/debug')
+			files.from('unsup.svg')
+			files.from('unsup-lowres.svg')
+			files.from('update-snapshot-release.sh')
+			files.from('gradle/verification-metadata.xml')
+		}
+		buildSrc {
+			files.from('buildSrc/src')
+		}
+	}
+	style {
+		ini = 'HASH'
+		svg = 'XML'
+	}
 }
 
 sourceCompatibility = targetCompatibility = 8
