@@ -36,6 +36,13 @@ steps:
       from_secret: maven_password
   commands:
   - gradle --no-daemon clean build publish -Punsup.ci
+- name: release
+  image: linuxserver/yq:3.4.3
+  environment:
+    FORGEJO_KEY:
+      from_secret: forgejo_key
+  commands:
+  - ./update-snapshot-release.sh
 - name: update-cache
   image: meltwater/drone-cache
   when:
@@ -58,13 +65,6 @@ steps:
     mount:
       - '.gradle'
       - '.gradle-user'
-- name: release
-  image: linuxserver/yq:3.4.3
-  environment:
-    FORGEJO_KEY:
-      from_secret: forgejo_key
-  commands:
-  - ./update-snapshot-release.sh
 
 when:
   - branch: "trunk"
