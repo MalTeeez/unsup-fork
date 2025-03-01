@@ -12,15 +12,13 @@ import java.util.Map;
 import java.util.Set;
 import java.util.regex.Pattern;
 
-import org.brotli.dec.BrotliInputStream;
 import org.lwjgl.PointerBuffer;
 import org.lwjgl.util.freetype.FT_Bitmap;
 import org.lwjgl.util.freetype.FT_Face;
 
 import com.unascribed.sup.Util;
+import com.unascribed.sup.puppet.FontResources;
 import com.unascribed.sup.puppet.Puppet;
-import com.unascribed.sup.puppet.opengl.GLPuppet;
-
 import static org.lwjgl.util.freetype.FreeType.*;
 import static com.unascribed.sup.puppet.opengl.util.GL.*;
 import static org.lwjgl.system.MemoryUtil.*;
@@ -35,10 +33,10 @@ public class FontManager {
 	private Map<CacheKey, CachedTexture> cachedTextures = new HashMap<>();
 	
 	public enum Face {
-		REGULAR("FiraGO-Regular.ttf.br", "NotoSansCJK-Regular.ttc"),
-		BOLD("FiraGO-Bold.ttf.br", "NotoSansCJK-Bold.ttc"),
-		ITALIC("FiraGO-Italic.ttf.br", "NotoSansCJK-Regular.ttc"),
-		BOLDITALIC("FiraGO-BoldItalic.ttf.br", "NotoSansCJK-Bold.ttc"),
+		REGULAR("FiraGO.zip.br!FiraGO-Regular.ttf", "NotoSansCJK-Regular.ttc"),
+		BOLD("FiraGO.zip.br!FiraGO-Bold.ttf.br", "NotoSansCJK-Bold.ttc"),
+		ITALIC("FiraGO.zip.br!FiraGO-Italic.ttf.br", "NotoSansCJK-Regular.ttc"),
+		BOLDITALIC("FiraGO.zip.br!FiraGO-BoldItalic.ttf.br", "NotoSansCJK-Bold.ttc"),
 		;
 		public final String[] filenames;
 
@@ -222,13 +220,9 @@ public class FontManager {
 		PointerBuffer ftFacePtr = memAllocPointer(1);
 		try {
 			ByteArrayOutputStream baos = new ByteArrayOutputStream();
-			try (InputStream in = GLPuppet.class.getClassLoader().getResourceAsStream("com/unascribed/sup/assets/fonts/"+name)) {
+			try (InputStream in = FontResources.get(name)) {
 				if (in == null) return null;
-				InputStream win = in;
-				if (name.endsWith(".br")) {
-					win = new BrotliInputStream(in);
-				}
-				Util.copy(win, baos);
+				Util.copy(in, baos);
 			} catch (IOException e) {
 				Puppet.log("WARN", "Failed to load font "+name, e);
 				return null;

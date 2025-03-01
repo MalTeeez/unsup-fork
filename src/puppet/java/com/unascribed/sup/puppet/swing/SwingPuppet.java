@@ -64,13 +64,12 @@ import javax.swing.plaf.basic.BasicSplitPaneUI;
 import javax.swing.plaf.metal.MetalLookAndFeel;
 import javax.swing.plaf.metal.OceanTheme;
 
-import org.brotli.dec.BrotliInputStream;
-
 import com.unascribed.sup.AlertMessageType;
 import com.unascribed.sup.ColorChoice;
 import com.unascribed.sup.Util;
 import com.unascribed.sup.data.FlavorGroup;
 import com.unascribed.sup.data.FlavorGroup.FlavorChoice;
+import com.unascribed.sup.puppet.FontResources;
 import com.unascribed.sup.puppet.Puppet;
 import com.unascribed.sup.puppet.PuppetDelegate;
 import com.unascribed.sup.puppet.Translate;
@@ -114,10 +113,10 @@ public class SwingPuppet {
 		logos.add(logo);
 		logos.add(logoLowres);
 		
-		font = loadFont("FiraGO-Regular.ttf.br", Font.PLAIN);
-		fontBold = loadFont("FiraGO-Bold.ttf.br", Font.BOLD);
-		fontItalic = loadFont("FiraGO-Italic.ttf.br", Font.ITALIC);
-		fontBoldItalic = loadFont("FiraGO-BoldItalic.ttf.br", Font.BOLD|Font.ITALIC);
+		font = loadFont("FiraGO.zip.br!FiraGO-Regular.ttf", Font.PLAIN);
+		fontBold = loadFont("FiraGO.zip.br!FiraGO-Bold.ttf", Font.BOLD);
+		fontItalic = loadFont("FiraGO.zip.br!FiraGO-Italic.ttf", Font.ITALIC);
+		fontBoldItalic = loadFont("FiraGO.zip.br!FiraGO-BoldItalic.ttf", Font.BOLD|Font.ITALIC);
 		
 		return new PuppetDelegate() {
 			
@@ -285,7 +284,7 @@ public class SwingPuppet {
 	}
 
 	private static Font loadFont(String name, int style) {
-		try (InputStream in = new BrotliInputStream(SwingPuppet.class.getClassLoader().getResourceAsStream("com/unascribed/sup/assets/fonts/"+name))) {
+		try (InputStream in = FontResources.get(name)) {
 			Font f = Font.createFont(Font.TRUETYPE_FONT, in).deriveFont(style);
 			GraphicsEnvironment.getLocalGraphicsEnvironment().registerFont(f);
 			return f;

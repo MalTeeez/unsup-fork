@@ -47,6 +47,7 @@ steps:
   commands:
   - gradle clean build publish -Punsup.ci
   - gradle --stop
+  - rm -rf .gradle-user/daemon
 - name: release
   image: linuxserver/yq:3.4.3
   environment:
