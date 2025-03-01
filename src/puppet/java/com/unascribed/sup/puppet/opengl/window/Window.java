@@ -15,7 +15,7 @@ import org.lwjgl.system.Library;
 import org.lwjgl.system.Platform;
 import org.lwjgl.system.SharedLibrary;
 
-import com.unascribed.sup.ColorChoice;
+import com.unascribed.sup.data.ColorChoice;
 import com.unascribed.sup.puppet.Puppet;
 import com.unascribed.sup.puppet.opengl.GLPuppet;
 import com.unascribed.sup.puppet.opengl.pieces.FontManager;

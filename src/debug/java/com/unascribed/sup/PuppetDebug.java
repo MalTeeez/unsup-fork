@@ -11,11 +11,14 @@ import java.util.List;
 import java.util.concurrent.TimeUnit;
 
 import com.unascribed.sup.agent.pieces.QDIni;
+import com.unascribed.sup.data.AlertMessageType;
+import com.unascribed.sup.data.ColorChoice;
 import com.unascribed.sup.data.FlavorGroup;
 import com.unascribed.sup.puppet.Puppet;
 import com.unascribed.sup.puppet.PuppetDelegate;
 import com.unascribed.sup.puppet.Translate;
 import com.unascribed.sup.puppet.opengl.GLPuppet;
+import com.unascribed.sup.util.Resources;
 
 public class PuppetDebug {
 
@@ -36,7 +39,7 @@ public class PuppetDebug {
 		};
 		ColorChoice.delegate = c -> colors[c.ordinal()];
 
-		URL u = GLPuppet.class.getClassLoader().getResource("com/unascribed/sup/presets/lang/en-US.ini");
+		URL u = Resources.get("presets/lang/en-US.ini");
 		QDIni translations = null;
 		try (InputStream in = u.openStream()) {
 			translations = QDIni.load("<preset en-US>", in);

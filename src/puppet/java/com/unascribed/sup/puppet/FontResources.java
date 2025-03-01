@@ -8,6 +8,8 @@ import java.util.zip.ZipInputStream;
 
 import org.brotli.dec.BrotliInputStream;
 
+import com.unascribed.sup.util.Resources;
+
 public class FontResources {
 
 	public static InputStream get(String name) throws IOException {
@@ -22,8 +24,9 @@ public class FontResources {
 					break;
 				}
 			}
+			if (in == null) zin.close();
 		} else {
-			in = FontResources.class.getClassLoader().getResourceAsStream("com/unascribed/sup/assets/fonts/"+name);
+			in = Resources.open("assets/fonts/"+name);
 		}
 		
 		if (in == null) return null;

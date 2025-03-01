@@ -14,6 +14,7 @@ import java.nio.file.Files;
 import java.nio.file.InvalidPathException;
 import java.nio.file.Path;
 import java.nio.file.StandardCopyOption;
+import java.security.cert.X509Certificate;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.EnumMap;
@@ -37,8 +38,6 @@ import java.util.regex.Pattern;
 import com.grack.nanojson.JsonObject;
 import com.grack.nanojson.JsonParser;
 import com.grack.nanojson.JsonWriter;
-import com.unascribed.sup.AlertMessageType;
-import com.unascribed.sup.SysProps;
 import com.unascribed.sup.Unsup;
 import com.unascribed.sup.Util;
 import com.unascribed.sup.agent.PuppetHandler.AlertOption;
@@ -58,9 +57,12 @@ import com.unascribed.sup.agent.signing.SigProvider;
 import com.unascribed.sup.agent.util.RequestHelper;
 import com.unascribed.sup.agent.util.RequestHelper.DownloadedFile;
 import com.unascribed.sup.agent.util.RequestHelper.Retry;
+import com.unascribed.sup.data.AlertMessageType;
 import com.unascribed.sup.data.ConflictType;
 import com.unascribed.sup.data.SourceFormat;
+import com.unascribed.sup.data.SysProps;
 import com.unascribed.sup.pieces.ExceptableRunnable;
+import com.unascribed.sup.util.Resources;
 import com.unascribed.sup.util.Strings;
 
 import okhttp3.Dns;
@@ -378,14 +380,12 @@ public class Agent {
 
 	private static void setupOkHttp() throws AssertionError {
 		Dns dns = Dns.SYSTEM;
-		HandshakeCertificates certs = new HandshakeCertificates.Builder()
-				.addPlatformTrustedCertificates()
-				// certs not shipped by old Mojang Java (they're staying on some antique version for Intel Windows driver bs reasons)
-				.addTrustedCertificate(CACerts.ISRG_ROOT_X1) // Let's Encrypt
-				.addTrustedCertificate(CACerts.USERTRUST_ECC) // Sectigo (GitHub)
-				.addTrustedCertificate(CACerts.AMAZON_ROOT_CA_1) // CurseForge
-				.addTrustedCertificate(CACerts.GTS_ROOT_R4) // Modrinth
-				.build();
+		HandshakeCertificates.Builder certsBldr = new HandshakeCertificates.Builder()
+				.addPlatformTrustedCertificates();
+		for (X509Certificate cert : CACerts.certs) {
+			certsBldr.addTrustedCertificate(cert);
+		}
+		HandshakeCertificates certs = certsBldr.build();
 		OkHttpClient bootstrapOkhttp = new OkHttpClient.Builder()
 			.connectTimeout(30, TimeUnit.SECONDS)
 			.readTimeout(15, TimeUnit.SECONDS)
@@ -861,7 +861,7 @@ public class Agent {
 	}
 	
 	private static QDIni mergePreset(QDIni config, String presetName, boolean mustExist) {
-		URL u = Agent.class.getClassLoader().getResource("com/unascribed/sup/presets/"+presetName+".ini");
+		URL u = Resources.get("presets/"+presetName+".ini");
 		if (u == null) {
 			if (!mustExist) {
 				Log.debug("Optional preset "+presetName+" not found");

@@ -21,12 +21,12 @@ import java.util.concurrent.TimeUnit;
 
 import javax.annotation.NotNull;
 
-import com.unascribed.sup.AlertMessageType;
-import com.unascribed.sup.ColorChoice;
-import com.unascribed.sup.SysProps;
-import com.unascribed.sup.SysProps.PuppetMode;
+import com.unascribed.sup.data.AlertMessageType;
+import com.unascribed.sup.data.ColorChoice;
 import com.unascribed.sup.data.FlavorGroup;
+import com.unascribed.sup.data.SysProps;
 import com.unascribed.sup.data.FlavorGroup.FlavorChoice;
+import com.unascribed.sup.data.SysProps.PuppetMode;
 import com.unascribed.sup.puppet.opengl.GLPuppet;
 import com.unascribed.sup.puppet.swing.SwingPuppet;
 
@@ -195,7 +195,7 @@ public class Puppet {
 							} else if ("done".equals(arg)) {
 								r = del::setDone;
 							} else {
-								Puppet.log("WARN", "Unknown mode "+arg+", expected ind or det");
+								Puppet.log("WARN", "Unknown mode "+arg+", expected ind, det, or done");
 								continue;
 							}
 							break;

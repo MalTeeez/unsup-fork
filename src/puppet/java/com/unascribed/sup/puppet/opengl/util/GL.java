@@ -6,7 +6,7 @@ import java.util.List;
 import org.lwjgl.opengl.GL12;
 import org.lwjgl.opengl.GL13;
 
-import com.unascribed.sup.ColorChoice;
+import com.unascribed.sup.data.ColorChoice;
 
 public class GL extends GL13 {
 	

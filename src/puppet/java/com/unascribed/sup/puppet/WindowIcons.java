@@ -5,7 +5,7 @@ import java.io.InputStream;
 
 import org.brotli.dec.BrotliInputStream;
 
-import com.unascribed.sup.puppet.opengl.GLPuppet;
+import com.unascribed.sup.util.Resources;
 
 import me.saharnooby.qoi.QOIDecoder;
 import me.saharnooby.qoi.QOIImage;
@@ -17,7 +17,7 @@ public class WindowIcons {
 	public static final QOIImage highres = load("unsup");
 
 	private static QOIImage load(String name) {
-		try (InputStream in = new BrotliInputStream(GLPuppet.class.getClassLoader().getResourceAsStream("com/unascribed/sup/assets/"+name+".qoi.br"))) {
+		try (InputStream in = new BrotliInputStream(Resources.open("assets/"+name+".qoi.br"))) {
 			return QOIDecoder.decode(in, 4);
 		} catch (IOException | NullPointerException e) {
 			Puppet.log("ERROR", "Failed to load "+name+".qoi", e);

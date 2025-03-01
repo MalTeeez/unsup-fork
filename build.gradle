@@ -58,7 +58,6 @@ compileJava {
 repositories { 
 	mavenCentral()
 	maven { url 'https://repo.sleeping.town' }
-	maven { url 'https://repo.unascribed.com' }
 	exclusiveContent {
 		forRepository {
 			flatDir { dirs '.gradle/transformed' }

@@ -2,7 +2,7 @@ package com.unascribed.sup.puppet;
 
 import java.util.List;
 
-import com.unascribed.sup.AlertMessageType;
+import com.unascribed.sup.data.AlertMessageType;
 import com.unascribed.sup.data.FlavorGroup;
 
 public interface PuppetDelegate {

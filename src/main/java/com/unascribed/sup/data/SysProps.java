@@ -1,4 +1,4 @@
-package com.unascribed.sup;
+package com.unascribed.sup.data;
 
 import java.util.Locale;
 

@@ -4,10 +4,10 @@ import org.lwjgl.PointerBuffer;
 import org.lwjgl.system.Configuration;
 import org.lwjgl.util.freetype.FreeType;
 
-import com.unascribed.sup.AlertMessageType;
-import com.unascribed.sup.SysProps;
 import com.unascribed.sup.Util;
+import com.unascribed.sup.data.AlertMessageType;
 import com.unascribed.sup.data.FlavorGroup;
+import com.unascribed.sup.data.SysProps;
 import com.unascribed.sup.pieces.Latch;
 import com.unascribed.sup.puppet.Puppet;
 import com.unascribed.sup.puppet.PuppetDelegate;
@@ -16,6 +16,7 @@ import com.unascribed.sup.puppet.WindowIcons;
 import com.unascribed.sup.puppet.opengl.util.QDPNG;
 import com.unascribed.sup.puppet.opengl.window.FlavorDialogWindow;
 import com.unascribed.sup.puppet.opengl.window.ProgressWindow;
+import com.unascribed.sup.util.Resources;
 import com.unascribed.sup.puppet.opengl.window.MessageDialogWindow;
 
 import java.io.File;
@@ -86,7 +87,7 @@ public class GLPuppet {
 				}
 				File desktop = new File(getApplicationsDir(), "com.unascribed.sup.desktop");
 				try (FileOutputStream fos = new FileOutputStream(desktop);
-						InputStream is = GLPuppet.class.getClassLoader().getResourceAsStream("com/unascribed/sup/assets/unsup.desktop")) {
+						InputStream is = Resources.open("assets/unsup.desktop")) {
 					Util.copy(is, fos);
 					// if your linux system isn't configured to use UTF-8 then i can't help you
 					fos.write(icon.getAbsolutePath().getBytes(StandardCharsets.UTF_8));

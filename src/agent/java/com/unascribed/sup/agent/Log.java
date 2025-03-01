@@ -7,7 +7,7 @@ import java.io.PrintStream;
 import java.text.SimpleDateFormat;
 import java.util.Date;
 
-import com.unascribed.sup.SysProps;
+import com.unascribed.sup.data.SysProps;
 import com.unascribed.sup.pieces.NullPrintStream;
 
 /**
