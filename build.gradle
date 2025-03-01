@@ -1,6 +1,7 @@
 buildscript {
 	repositories {
 		mavenCentral()
+		maven { url 'https://repo.sleeping.town' }
 	}
 	dependencies {
 		classpath 'org.ow2.asm:asm:9.7.1'
@@ -8,6 +9,8 @@ buildscript {
 		classpath 'org.ow2.asm:asm-commons:9.7.1'
 		// just used for shrinking. i've used proguard a lot and trust it
 		classpath 'com.guardsquare:proguard-gradle:7.6.1'
+		// for patching
+		classpath 'com.unascribed:nilloader:1.3.4'
 	}
 }
 
@@ -22,6 +25,10 @@ import com.unascribed.sup.PlatDetect;
 import com.unascribed.sup.PlatDetect.OSType;
 import com.unascribed.sup.PlatDetect.ArchType;
 import com.unascribed.sup.build.JarAmender;
+import com.unascribed.sup.build.transformer.JarTransformer;
+import java.nio.file.Files;
+import java.nio.file.StandardCopyOption;
+
 
 ext {
 	platforms = OSType.values().collect { os ->
@@ -47,6 +54,14 @@ repositories {
 	mavenCentral()
 	maven { url 'https://repo.sleeping.town' }
 	maven { url 'https://repo.unascribed.com' }
+	exclusiveContent {
+		forRepository {
+			flatDir { dirs '.gradle/transformed' }
+		}
+		filter {
+			includeGroup 'transformed'
+		}
+	}
 }
 
 sourceSets {
@@ -64,6 +79,7 @@ sourceSets {
 configurations {
 	shade
 	implementation.extendsFrom shade
+	transform
 	ogldep
 	compileOnly.extendsFrom ogldep
 	oglnative
@@ -75,16 +91,24 @@ dependencies {
 			transitive = false
 		}
 	}
+	def trans = {
+		def dep = transform(it) { transitive = false }
+		shade "transformed:${dep.name}:${dep.version}"
+	}
 
 	shade 'com.grack:nanojson:1.9'
 	shade 'net.i2p.crypto:eddsa:0.3.0'
-	shade('com.squareup.okhttp3:okhttp:4.12.0') {
-		exclude group: 'org.jetbrains'
-		exclude module: 'kotlin-stdlib-common'
-	}
+	
+	trans 'com.squareup.okhttp3:okhttp:4.12.0'
+	
 	shadeCis 'com.squareup.okhttp3:okhttp-brotli:4.12.0'
 	shadeCis 'com.squareup.okhttp3:okhttp-dnsoverhttps:4.12.0'
 	shadeCis 'com.squareup.okhttp3:okhttp-tls:4.12.0'
+	
+	shadeCis 'org.jetbrains.kotlin:kotlin-stdlib:1.9.10'
+	shadeCis 'com.squareup.okio:okio:3.6.0'
+	shadeCis 'com.squareup.okio:okio-jvm:3.6.0'
+	
 	shadeCis 'com.moandjiezana.toml:toml4j:0.7.2'
 	shadeCis 'org.brotli:dec:0.1.2'
 	shade 'com.unascribed:flexver-java:1.1.1'
@@ -93,6 +117,14 @@ dependencies {
 	def lwjglv = '3.3.6'
 	lwjgl(it, lwjglv, 'glfw', 'opengl', 'freetype')
 	ogldep "org.lwjgl:lwjgl-harfbuzz:${lwjglv}"
+}
+
+configurations.transform.resolve().each { f ->
+	def outdir = project.file('.gradle/transformed')
+	outdir.mkdirs()
+	def out = new File(outdir, f.name)
+	Files.copy(f.toPath(), out.toPath(), StandardCopyOption.REPLACE_EXISTING)
+	JarTransformer.transform(out)
 }
 
 jar {
@@ -169,9 +201,51 @@ task proguard(type: proguard.gradle.ProGuardTask) {
 	verbose
 }
 
+task extractPublicSuffix(type: Copy) {
+	inputs.files configurations.shade.resolve()
+	outputs.dir 'build/tmp/publicsuffix'
+	configurations.shade.resolve().each { f ->
+		from zipTree(f)
+	}
+	
+	include '**/publicsuffixes.gz'
+	includeEmptyDirs false
+	
+	into 'build/tmp/publicsuffix'
+}
+
+task popPublicSuffix(type: Exec) {
+	def in = 'build/tmp/publicsuffix/okhttp3/internal/publicsuffix/publicsuffixes.gz'
+	inputs.file(in)
+	outputs.file 'build/tmp/publicsuffix/okhttp3/internal/publicsuffix/publicsuffixes'
+
+	dependsOn extractPublicSuffix
+	
+	commandLine 'gunzip', '-k', in
+}
+
+task brotliPublicSuffix(type: Exec) {
+	def in = 'build/tmp/publicsuffix/okhttp3/internal/publicsuffix/publicsuffixes'
+	inputs.file(in)
+	outputs.file 'build/tmp/publicsuffix/okhttp3/internal/publicsuffix/publicsuffixes.br'
+
+	dependsOn popPublicSuffix
+	
+	if (project.hasProperty('unsup.ci')) {
+		environment 'LD_LIBRARY_PATH', './.ci'
+		commandLine './.ci/brotli', '-Zk', in
+	} else {
+		commandLine 'brotli', '-Zk', in
+	}
+}
+
 task proguardJar(type: Jar) {
 	dependsOn proguard
+	dependsOn brotliPublicSuffix
 	from(zipTree('build/tmp/proguard.jar'))
+	from('build/tmp/publicsuffix/okhttp3/internal/publicsuffix/publicsuffixes.br') {
+		into 'com/unascribed/sup/lib/okhttp3/internal/publicsuffix'
+	}
 	
 	from(fileTree('build/tmp/depjars')) {
 		into 'com/unascribed/sup/jars'
@@ -181,6 +255,7 @@ task proguardJar(type: Jar) {
 	exclude 'com/unascribed/sup/lib/okhttp3/internal/platform/Android*'
 	
 	exclude 'META-INF/**'
+	exclude '**/publicsuffixes.gz'
 	exclude '**/*.kotlin_metadata'
 	exclude '**/*.kotlin_builtins'
 	exclude '**/*.ttc'
