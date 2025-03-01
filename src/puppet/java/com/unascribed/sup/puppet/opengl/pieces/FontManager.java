@@ -34,9 +34,9 @@ public class FontManager {
 	
 	public enum Face {
 		REGULAR("FiraGO.zip.br!FiraGO-Regular.ttf", "NotoSansCJK-Regular.ttc"),
-		BOLD("FiraGO.zip.br!FiraGO-Bold.ttf.br", "NotoSansCJK-Bold.ttc"),
-		ITALIC("FiraGO.zip.br!FiraGO-Italic.ttf.br", "NotoSansCJK-Regular.ttc"),
-		BOLDITALIC("FiraGO.zip.br!FiraGO-BoldItalic.ttf.br", "NotoSansCJK-Bold.ttc"),
+		BOLD("FiraGO.zip.br!FiraGO-Bold.ttf", "NotoSansCJK-Bold.ttc"),
+		ITALIC("FiraGO.zip.br!FiraGO-Italic.ttf", "NotoSansCJK-Regular.ttc"),
+		BOLDITALIC("FiraGO.zip.br!FiraGO-BoldItalic.ttf", "NotoSansCJK-Bold.ttc"),
 		;
 		public final String[] filenames;
 
