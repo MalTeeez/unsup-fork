@@ -218,6 +218,12 @@ public class RequestHelper {
 						e);
 				}
 				throw new IOException("Failed to retrieve "+url, e);
+			} catch (Retry e) {
+				throw e;
+			} catch (Throwable e) {
+				// fallback... OkHttp likes to rethrow off-thread exceptions without wrapping
+				// we want to at least add context
+				throw new IOException("Failed to retrieve "+url, e);
 			}
 		});
 	}
@@ -341,6 +347,12 @@ public class RequestHelper {
 			} catch (InterruptedIOException e) {
 				throw new Retry("Connection to "+url.getHost()+" timed out",
 						e);
+			} catch (IOException e) {
+				throw e;
+			} catch (Throwable e) {
+				// fallback... OkHttp likes to rethrow off-thread exceptions without wrapping
+				// we want to at least add context
+				throw new IOException("Failed to retrieve "+url, e);
 			}
 		});
 	}

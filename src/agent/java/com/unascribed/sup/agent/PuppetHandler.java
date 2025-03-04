@@ -241,6 +241,7 @@ public class PuppetHandler {
 					ProcessBuilder bldr = new ProcessBuilder(args);
 					bldr.environment().put("_JAVA_AWT_WM_NONREPARENTING", "1");
 					bldr.environment().put("NO_AWT_MITSHM", "1");
+					bldr.environment().put("__GL_THREADED_OPTIMIZATIONS", "0");
 					p = bldr.start();
 				} catch (Throwable t) {
 					Log.warn("Failed to summon a puppet.", t);
