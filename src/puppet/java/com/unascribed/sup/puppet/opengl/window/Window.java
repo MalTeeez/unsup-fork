@@ -29,6 +29,7 @@ import java.util.concurrent.atomic.AtomicInteger;
 import org.lwjgl.glfw.GLFWImage;
 import org.lwjgl.opengl.EXTFramebufferBlit;
 import org.lwjgl.opengl.GL;
+import org.lwjgl.opengl.KHRDebug;
 import org.lwjgl.system.JNI;
 import org.lwjgl.system.Library;
 import org.lwjgl.system.Platform;
@@ -266,6 +267,12 @@ public abstract class Window {
 				long cgl = macGetCGL();
 				macLockCGL(cgl);
 				GL.createCapabilities();
+				
+				if (Platform.get() == Platform.WINDOWS && "NVIDIA Corporation".equals(glGetString(GL_VENDOR)) && GL.getCapabilities().GL_KHR_debug) {
+					// force Windows nVidia to disable "Threaded Optimizations"
+					// https://github.com/CaffeineMC/sodium/blob/fe5fe6cf2184741bbf85da8a183dc145ff06b288/common/src/workarounds/java/net/caffeinemc/mods/sodium/client/compatibility/workarounds/nvidia/NvidiaWorkarounds.java#L125
+					glEnable(KHRDebug.GL_DEBUG_OUTPUT_SYNCHRONOUS);
+				}
 				
 				scratchTex = glGenTextures();
 				glBindTexture(GL_TEXTURE_2D, scratchTex);
