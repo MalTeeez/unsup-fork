@@ -389,7 +389,7 @@ public class PuppetHandler {
 
 	public static void sendConfig() {
 		for (ColorChoice cc : ColorChoice.values()) {
-			tellPuppet(":color="+cc.name()+":"+Agent.config.get("colors."+(cc.name().toLowerCase(Locale.ROOT)), Bases.intToHex(cc.defaultValue)));
+			tellPuppet(":color="+cc.name()+":"+Agent.config.get("colors."+cc.configName, Bases.intToHex(cc.defaultValue)));
 		}
 		for (String k : Agent.config.keySet()) {
 			if (k.startsWith("strings.")) {

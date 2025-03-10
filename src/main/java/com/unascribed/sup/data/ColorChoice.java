@@ -22,27 +22,29 @@ package com.unascribed.sup.data;
 import java.util.function.ToIntFunction;
 
 public enum ColorChoice {
-	BACKGROUND(0x000000),
-	TITLE(0xFFFFFF),
-	SUBTITLE(0xAAAAAA),
-	PROGRESS(0xFF0000),
-	PROGRESSTRACK(0xAAAAAA),
-	DIALOG(0xFFFFFF),
-	BUTTON(0xFFFF00),
-	BUTTONTEXT(0x000000),
+	BACKGROUND(0x000000, "background"),
+	TITLE(0xFFFFFF, "title"),
+	SUBTITLE(0xAAAAAA, "subtitle"),
+	PROGRESS(0xFF0000, "progress"),
+	PROGRESSTRACK(0xAAAAAA, "progress_track"),
+	DIALOG(0xFFFFFF, "dialog"),
+	BUTTON(0xFFFF00, "button"),
+	BUTTONTEXT(0x000000, "button_text"),
 	
-	QUESTION(0xFF00FF),
-	INFO(0x00FFFF),
-	WARNING(0xFFFF00),
-	ERROR(0xFF0000),
+	QUESTION(0xFF00FF, "question"),
+	INFO(0x00FFFF, "info"),
+	WARNING(0xFFFF00, "warning"),
+	ERROR(0xFF0000, "error"),
 	;
 	
 	public static ToIntFunction<ColorChoice> delegate = c -> c.defaultValue;
 	
 	public final int defaultValue;
+	public final String configName;
 
-	ColorChoice(int defaultValue) {
+	ColorChoice(int defaultValue, String configName) {
 		this.defaultValue = defaultValue;
+		this.configName = configName;
 	}
 
 	public static int[] createLookup() {
