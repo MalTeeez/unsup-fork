@@ -60,6 +60,10 @@ public class SysProps {
 	 * Wrap execution of the Puppet in this command.
 	 */
 	public static final String PUPPET_WRAPPER_COMMAND = System.getProperty("unsup.puppet.wrapperCommand");
+	/**
+	 * Pass all -Dorg.lwjgl.* arguments through to the Puppet. DO NOT USE TO APPLY GLFW-WAYLAND-MINECRAFT.
+	 */
+	public static final boolean PUPPET_PASS_ALL_LWJGL_ARGS = Boolean.getBoolean("unsup.puppet.passAllLwjglArgs");
 	
 	/**
 	 * Set which mode the Puppet will use, or auto to automatically choose one.

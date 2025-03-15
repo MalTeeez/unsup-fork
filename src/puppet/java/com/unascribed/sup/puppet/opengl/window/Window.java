@@ -21,13 +21,13 @@ package com.unascribed.sup.puppet.opengl.window;
 
 import java.nio.Buffer;
 import java.nio.ByteBuffer;
+import java.util.Collections;
 import java.util.HashMap;
 import java.util.Map;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicInteger;
 
 import org.lwjgl.glfw.GLFWImage;
-import org.lwjgl.opengl.EXTFramebufferBlit;
 import org.lwjgl.opengl.GL;
 import org.lwjgl.opengl.KHRDebug;
 import org.lwjgl.system.JNI;
@@ -48,9 +48,7 @@ import static org.lwjgl.system.MemoryUtil.*;
 
 public abstract class Window {
 	
-	private static final Map<Class<? extends Window>, AtomicInteger> threadNumbers = new HashMap<>();
-	
-	private static boolean slowYapped = false;
+	private static final Map<Class<? extends Window>, AtomicInteger> threadNumbers = Collections.synchronizedMap(new HashMap<>());
 	
 	private static final boolean MACOS = Platform.get() == Platform.MACOSX;
 	private static final boolean OS_HAS_BROKEN_BUFFER_SWAP = Platform.get() == Platform.WINDOWS || MACOS;
@@ -60,7 +58,7 @@ public abstract class Window {
 	protected long handle;
 	protected int width, height;
 	protected int fbWidth, fbHeight;
-	protected double dpiScaleX, dpiScaleY;
+	protected double dpiScale;
 	
 	protected double mouseX, mouseY;
 	protected boolean mouseClicked;
@@ -74,10 +72,10 @@ public abstract class Window {
 	
 	private long timeShown;
 	private boolean honorNeedsRender = false;
-	private boolean buffersSynced = false;
 	
 	private Thread renderThread;
 	
+	protected boolean enforceSize = true;
 	protected boolean updateDpiScaleByFramebuffer = true;
 	protected long clickCursor;
 	
@@ -89,8 +87,7 @@ public abstract class Window {
 		this.width = width;
 		this.height = height;
 		
-		this.dpiScaleX = dpiScale;
-		this.dpiScaleY = dpiScale;
+		this.dpiScale = dpiScale;
 		
 		glfwWindowHint(GLFW_CLIENT_API, GLFW_OPENGL_API);
 		glfwWindowHint(GLFW_CONTEXT_VERSION_MAJOR, 1);
@@ -120,6 +117,11 @@ public abstract class Window {
 		if (handle == 0) {
 			throw new RuntimeException("Failed to create GLFW window: "+GLPuppet.getGLFWErrorDescription());
 		}
+		if (enforceSize) {
+			glfwSetWindowAspectRatio(handle, width, height);
+			glfwSetWindowSizeLimits(handle, physW, physH, physW, physH);
+		}
+		Puppet.log("DEBUG", "Created window of size "+physW+"x"+physH);
 		
 		clickCursor = glfwCreateStandardCursor(GLFW_POINTING_HAND_CURSOR);
 		
@@ -133,28 +135,40 @@ public abstract class Window {
 			glfwSetWindowContentScaleCallback(handle, (window, xscale, yscale) -> {
 				synchronized (this) {
 					needsFullRedraw = true;
+					updateScale("content scale update", xscale, yscale);
 				}
 			});
+			if (glfwGetPlatform() == GLFW_PLATFORM_WIN32) {
+				updateDpiScaleByFramebuffer = false;
+			}
 		}
 		
 		glfwSetFramebufferSizeCallback(handle, (window, newWidth, newHeight) -> {
 			synchronized (this) {
-				fbWidth = newWidth;
-				fbHeight = newHeight;
+				Puppet.log("DEBUG", "Framebuffer size updated - "+newWidth+"x"+newHeight);
+				this.fbWidth = newWidth;
+				this.fbHeight = newHeight;
 				needsFullRedraw = true;
 			}
 		});
 		
 		glfwSetWindowSizeCallback(handle, (window, newWidth, newHeight) -> {
 			synchronized (this) {
+				Puppet.log("DEBUG", "Window size updated - "+newWidth+"x"+newHeight);
+				double effectiveScale = dpiScale;
+				if (!updateDpiScaleByFramebuffer) {
+					effectiveScale = this.dpiScale;
+				}
+				this.width = (int) (newWidth/effectiveScale);
+				this.height = (int) (newHeight/effectiveScale);
 				needsFullRedraw = true;
 			}
 		});
 
 		glfwSetCursorPosCallback(handle, (window, xpos, ypos) -> {
 			synchronized (this) {
-				mouseX = xpos/dpiScale;
-				mouseY = ypos/dpiScale;
+				mouseX = xpos/this.dpiScale;
+				mouseY = ypos/this.dpiScale;
 				onMouseMove(mouseX, mouseY);
 			}
 		});
@@ -196,6 +210,7 @@ public abstract class Window {
 			int[] y = new int[1];
 			int[] w = new int[1];
 			int[] h = new int[1];
+			
 			if (parent == null) {
 				long monitor = glfwGetPrimaryMonitor();
 				glfwGetMonitorWorkarea(monitor, x, y, w, h);
@@ -205,6 +220,7 @@ public abstract class Window {
 					glfwGetWindowSize(parent.handle, w, h);
 				}
 			}
+			
 			glfwSetWindowPos(handle, x[0]+(w[0]-physW)/2, y[0]+(h[0]-physH)/2);
 		}
 		
@@ -214,8 +230,7 @@ public abstract class Window {
 			glfwGetWindowContentScale(handle, xs, ys);
 			
 			if (xs[0] != 1 || ys[0] != 1) {
-				dpiScaleX = dpiScale*xs[0];
-				dpiScaleY = dpiScale*ys[0];
+				updateScale("initial content scale update", dpiScale*xs[0], dpiScale*ys[0]);
 			}
 		}
 		
@@ -239,6 +254,18 @@ public abstract class Window {
 		glfwMakeContextCurrent(NULL);
 	}
 	
+	private void updateScale(String why, double x, double y) {
+		double min = Math.min(x, y);
+		if (Math.abs(dpiScale-min) > 0.025) {
+			Puppet.log("DEBUG", "Updating DPI scale to "+pct(min)+" (chosen from "+pct(x)+"x"+pct(y)+") from "+pct(dpiScale)+" because of "+why);
+			dpiScale = min;
+		}
+	}
+	
+	private String pct(double d) {
+		return String.format("%.1f%%", d*100);
+	}
+
 	protected abstract void setupGL();
 	
 	protected abstract void onMouseMove(double x, double y);
@@ -271,6 +298,7 @@ public abstract class Window {
 				if (Platform.get() == Platform.WINDOWS && "NVIDIA Corporation".equals(glGetString(GL_VENDOR)) && GL.getCapabilities().GL_KHR_debug) {
 					// force Windows nVidia to disable "Threaded Optimizations"
 					// https://github.com/CaffeineMC/sodium/blob/fe5fe6cf2184741bbf85da8a183dc145ff06b288/common/src/workarounds/java/net/caffeinemc/mods/sodium/client/compatibility/workarounds/nvidia/NvidiaWorkarounds.java#L125
+					Puppet.log("DEBUG", "Applying Windows nVidia Threaded Optimizations workaround");
 					glEnable(KHRDebug.GL_DEBUG_OUTPUT_SYNCHRONOUS);
 				}
 				
@@ -330,6 +358,7 @@ public abstract class Window {
 					glfwGetFramebufferSize(handle, fbw, fbh);
 					fbWidth = fbw[0];
 					fbHeight = fbh[0];
+					Puppet.log("DEBUG", "Grabbing framebuffer size in render - "+fbWidth+"x"+fbHeight);
 				}
 				
 				glMatrixMode(GL_PROJECTION);
@@ -340,11 +369,10 @@ public abstract class Window {
 				glLoadIdentity();
 				glTranslatef(0, 0, -200);
 				if (updateDpiScaleByFramebuffer) {
-					dpiScaleX = (fbWidth/(double)width);
-					dpiScaleY = (fbHeight/(double)height);
+					updateScale("per-frame framebuffer size check", fbWidth/(double)width, fbHeight/(double)height);
 				}
-				glScaled(dpiScaleX, dpiScaleY, 1);
-				font.dpiScale = dpiScaleX;
+				glScaled(dpiScale, dpiScale, 1);
+				font.dpiScale = dpiScale;
 				
 				glDisable(GL_TEXTURE_2D);
 				
@@ -359,37 +387,7 @@ public abstract class Window {
 			}
 		}
 		if (rendered) {
-			buffersSynced = false;
 			glfwSwapBuffers(handle);
-		} else {
-			if (!buffersSynced) {
-				glReadBuffer(GL_BACK);
-				glDrawBuffer(GL_FRONT);
-
-				int fbWidth, fbHeight;
-				synchronized (this) {
-					fbWidth = this.fbWidth;
-					fbHeight = this.fbHeight;
-				}
-				
-				if (GL.getCapabilities().GL_EXT_framebuffer_blit) {
-					EXTFramebufferBlit.glBlitFramebufferEXT(0, 0, fbWidth, fbHeight, 0, 0, fbWidth, fbHeight, GL_COLOR_BUFFER_BIT, GL_NEAREST);
-				} else {
-					if (!slowYapped) {
-						slowYapped = true;
-						Puppet.log("DEBUG", "Using ReadPixels/DrawPixels to copy framebuffer data (this is slow and bad)");
-					}
-					ByteBuffer buf = memAlloc(fbWidth*fbHeight*4);
-					glReadPixels(0, 0, fbWidth, fbHeight, GL_RGBA, GL_UNSIGNED_BYTE, buf);
-					glDrawPixels(fbWidth, fbHeight, GL_RGBA, GL_UNSIGNED_BYTE, buf);
-					memFree(buf);
-				}
-				
-				glReadBuffer(GL_BACK);
-				glDrawBuffer(GL_BACK);
-				
-				buffersSynced = true;
-			}
 		}
 		macUnlockCGL(cgl);
 		return rendered;

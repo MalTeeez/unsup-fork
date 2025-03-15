@@ -158,6 +158,13 @@ public class PuppetHandler {
 							args.add("-D"+prop+"="+v);
 						}
 					}
+					if (SysProps.PUPPET_PASS_ALL_LWJGL_ARGS) {
+						for (String k : System.getProperties().stringPropertyNames()) {
+							if (k.startsWith("org.lwjgl.")) {
+								args.add("-D"+k+"="+System.getProperty(k));
+							}
+						}
+					}
 					List<String> cp = new ArrayList<>();
 					cp.add(ourPath.getAbsolutePath());
 					if (SysProps.PUPPET_MODE != PuppetMode.SWING) {
@@ -370,7 +377,7 @@ public class PuppetHandler {
 			Log.debug("Got "+fname+" from cache");
 		}
 		if (needsDownload) {
-			Log.debug("Downloading "+fname+" from unsup.y2k.diy...");
+			Log.info("Downloading "+fname+" from unsup.y2k.diy...");
 			String dlBase = "https://unsup.y2k.diy/assets/v1/"+url;
 			URI dl = URI.create(dlBase+".jar.br");
 			URI sig = URI.create(dlBase+".sig");

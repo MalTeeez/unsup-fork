@@ -267,12 +267,14 @@ public class GLPuppet {
 				String prop = System.getProperty(key);
 				if (prop != null) {
 					try {
+						Puppet.log("DEBUG", "Discovered scale from sysprop "+key);
 						return OptionalDouble.of(parseScale(prop));
 					} catch (NumberFormatException e) {}
 				}
 				String env = System.getenv(key);
 				if (env != null) {
 					try {
+						Puppet.log("DEBUG", "Discovered scale from envvar "+key);
 						return OptionalDouble.of(parseScale(env));
 					} catch (NumberFormatException e) {}
 				}

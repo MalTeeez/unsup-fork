@@ -43,6 +43,11 @@ public class Log {
 		File logTarget = new File("logs");
 		if (!logTarget.isDirectory()) {
 			logTarget = new File(".");
+		} else {
+			// to avoid confusion with a later-created logs dir
+			new File("unsup.log").delete();
+			new File("unsup.log.1").delete();
+			new File("unsup.log.2").delete();
 		}
 		File logFile = new File(logTarget, "unsup.log");
 		File oldLogFile = new File(logTarget, "unsup.log.1");

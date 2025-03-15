@@ -101,6 +101,8 @@ public class FlavorDialogWindow extends Window {
 				selectedFlavors.add(grp.choices.get(0).id);
 			}
 		}
+		
+		this.enforceSize = false;
 	}
 	
 	@Override
@@ -161,14 +163,6 @@ public class FlavorDialogWindow extends Window {
 		glfwSetWindowCloseCallback(handle, unused -> {
 			Puppet.reportCloseRequest();
 			close();
-		});
-		glfwSetWindowSizeCallback(handle, (window, newWidth, newHeight) -> {
-			synchronized (this) {
-				this.width = (int) (newWidth/dpiScale);
-				this.height = (int) (newHeight/dpiScale);
-				needsLeftRedraw = true;
-				needsRightRedraw = true;
-			}
 		});
 		glfwSetWindowSizeLimits(handle, (int)(400*dpiScale), (int)(200*dpiScale), GLFW_DONT_CARE, GLFW_DONT_CARE);
 		glfwSetWindowFocusCallback(handle, (window, focus) -> {
