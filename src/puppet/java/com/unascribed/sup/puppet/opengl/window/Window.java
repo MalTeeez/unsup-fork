@@ -19,7 +19,6 @@
 
 package com.unascribed.sup.puppet.opengl.window;
 
-import java.nio.Buffer;
 import java.nio.ByteBuffer;
 import java.util.Collections;
 import java.util.HashMap;
@@ -40,6 +39,7 @@ import com.unascribed.sup.puppet.Puppet;
 import com.unascribed.sup.puppet.opengl.GLPuppet;
 import com.unascribed.sup.puppet.opengl.pieces.FontManager;
 import com.unascribed.sup.puppet.opengl.pieces.OpenGLDebug;
+import com.unascribed.sup.util.SuppressFBWarnings;
 
 import static com.unascribed.sup.puppet.WindowIcons.*;
 import static com.unascribed.sup.puppet.opengl.util.GL.*;
@@ -167,8 +167,13 @@ public abstract class Window {
 
 		glfwSetCursorPosCallback(handle, (window, xpos, ypos) -> {
 			synchronized (this) {
-				mouseX = xpos/this.dpiScale;
-				mouseY = ypos/this.dpiScale;
+				double sc = 1;
+				if (glfwGetPlatform() == GLFW_PLATFORM_WIN32) {
+					// can you say leaky abstraction?
+					sc = this.dpiScale;
+				}
+				mouseX = xpos/sc;
+				mouseY = ypos/sc;
 				onMouseMove(mouseX, mouseY);
 			}
 		});
@@ -190,8 +195,8 @@ public abstract class Window {
 				ByteBuffer highresPx = memAlloc(highres.getPixelData().length);
 				lowresPx.put(lowres.getPixelData());
 				highresPx.put(highres.getPixelData());
-				((Buffer)lowresPx).flip();
-				((Buffer)highresPx).flip();
+				lowresPx.flip();
+				highresPx.flip();
 				
 				GLFWImage.Buffer buffer = GLFWImage.malloc(2);
 				buffer.get(0)
@@ -403,7 +408,9 @@ public abstract class Window {
 		// Only to find it's a simple-ass mistake
 		// GLFW please add checking for this
 		Puppet.runOnMainThread(() -> {
-			glfwHideWindow(handle);
+			synchronized (this) {
+				glfwHideWindow(handle);
+			}
 		});
 	}
 	
@@ -413,9 +420,11 @@ public abstract class Window {
 	
 	// https://github.com/glfw/glfw/issues/1997
 	
-	private static SharedLibrary CoreOpenGL;
-	private static long CGLGetCurrentContext, CGLLockContext, CGLUnlockContext;
+	@SuppressFBWarnings("NM_FIELD_NAMING_CONVENTION")
+	private static volatile SharedLibrary CoreOpenGL;
+	private static volatile long CGLGetCurrentContext, CGLLockContext, CGLUnlockContext;
 	
+	@SuppressFBWarnings("DMI_HARDCODED_ABSOLUTE_FILENAME")
 	private static long macGetCGL() {
 		if (MACOS) {
 			if (CGLGetCurrentContext == 0) {
