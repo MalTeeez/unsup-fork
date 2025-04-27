@@ -25,10 +25,10 @@ import java.util.Map;
 
 public class Translate {
 
-	static final Map<String, String> strings = new HashMap<>();
+	private static final Map<String, BasicFormat> strings = new HashMap<>();
 
 	public static void addTranslation(String key, String value) {
-		strings.put(key, value);
+		strings.put(key, BasicFormat.parse(value));
 	}
 
 	@SuppressWarnings("unlikely-arg-type")
@@ -45,7 +45,7 @@ public class Translate {
 				}
 			}
 		}
-		return String.format(strings.getOrDefault(split[0], key).replace("%n", "\n"), args);
+		return strings.getOrDefault(split[0], BasicFormat.literal(key)).format(args);
 	}
 
 	public static String[] format(String[] keys) {

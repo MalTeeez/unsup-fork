@@ -163,7 +163,7 @@ public class Puppet {
 						}
 						case "string": {
 							String[] spl = arg.split(":", 2);
-							Translate.strings.put(spl[0], spl[1]);
+							Translate.addTranslation(spl[0], spl[1]);
 							continue;
 						}
 						case "belay": {
