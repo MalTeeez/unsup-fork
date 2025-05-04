@@ -648,7 +648,8 @@ public class Agent {
 		AtomicLong progress = new AtomicLong();
 		Runnable updateProgress = () -> PuppetHandler.updateProgress((int)((progress.get()*1000)/progressDenomf));
 		PuppetHandler.updateTitle(bootstrapping ? "title.bootstrapping" : "title.updating", true);
-		ExecutorService svc = Executors.newFixedThreadPool(6);
+		Log.debug("Using "+SysProps.DOWNLOAD_WORKERS+" download worker"+(SysProps.DOWNLOAD_WORKERS == 1 ? "" : "s"));
+		ExecutorService svc = Executors.newFixedThreadPool(SysProps.DOWNLOAD_WORKERS);
 		Set<String> files = new HashSet<>();
 		List<Future<?>> futures = new ArrayList<>();
 		Map<FilePlan, DownloadedFile> downloads = new IdentityHashMap<>();

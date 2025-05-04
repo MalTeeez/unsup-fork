@@ -43,6 +43,10 @@ public class SysProps {
 	 * Exit the Agent if the Puppet crashes.
 	 */
 	public static final boolean ABORT_ON_PUPPET_CRASH = Boolean.getBoolean("unsup.abortOnPuppetCrash");
+	/**
+	 * The number of downloads to perform in parallel.
+	 */
+	public static final int DOWNLOAD_WORKERS = Integer.getInteger("unsup.downloadWorkers", 6);
 	
 	/**
 	 * Override the language rather than using the one detected by Java.
