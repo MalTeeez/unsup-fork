@@ -117,6 +117,11 @@ public class SwingPuppet {
 	private static Font font, fontBold, fontItalic, fontBoldItalic;
 	
 	public static PuppetDelegate start() {
+		if (GraphicsEnvironment.isHeadless()) {
+			Puppet.log("ERROR", "AWT is headless");
+			return null;
+		}
+		
 		SwingHelper.fixSwing();
 		
 		MetalLookAndFeel.setCurrentTheme(new OceanTheme());
