@@ -97,6 +97,12 @@ public class Log {
 		fileStream.println(line);
 	}
 	
+	public synchronized static void puppetStderr(String line) {
+		line = "puppet: "+line;
+		System.out.println(line);
+		fileStream.println(line);
+	}
+	
 
 	
 	public static void debug(String msg)                          { log("DEBUG", msg); }

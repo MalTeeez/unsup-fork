@@ -21,14 +21,20 @@ package com.unascribed.sup.puppet;
 
 import java.util.Arrays;
 import java.util.HashMap;
+import java.util.HashSet;
 import java.util.Map;
+import java.util.Set;
 
 public class Translate {
 
 	private static final Map<String, BasicFormat> strings = new HashMap<>();
+	private static final Set<String> brandedStrings = new HashSet<>();
 
 	public static void addTranslation(String key, String value) {
 		strings.put(key, BasicFormat.parse(value));
+		if (key.endsWith(".branded")) {
+			brandedStrings.add(key.substring(0, key.length()-8));
+		}
 	}
 
 	@SuppressWarnings("unlikely-arg-type")
@@ -45,7 +51,15 @@ public class Translate {
 				}
 			}
 		}
-		return strings.getOrDefault(split[0], BasicFormat.literal(key)).format(args);
+		String k = split[0];
+		if (Puppet.modpackName != null && brandedStrings.contains(k)) {
+			k = k+".branded";
+			Object[] newArgs = new Object[args.length+1];
+			System.arraycopy(args, 0, newArgs, 1, args.length);
+			newArgs[0] = Puppet.modpackName;
+			args = newArgs;
+		}
+		return strings.getOrDefault(k, BasicFormat.literal(key)).format(args);
 	}
 
 	public static String[] format(String[] keys) {

@@ -102,7 +102,7 @@ public class GLPuppet {
 				new File(".unsup-tmp").mkdirs();
 				File icon = new File(".unsup-tmp/icon.png");
 				try (FileOutputStream fos = new FileOutputStream(icon)) {
-					fos.write(QDPNG.write(WindowIcons.highres));
+					fos.write(QDPNG.write(Puppet.icon == null ? WindowIcons.highres : Puppet.icon));
 				}
 				File desktop = new File(getApplicationsDir(), "com.unascribed.sup.desktop");
 				try (FileOutputStream fos = new FileOutputStream(desktop);
@@ -126,7 +126,7 @@ public class GLPuppet {
 			@Override
 			public void build() {
 				Puppet.runOnMainThread(() -> {
-					mainWindow.create(null, "unsup v"+Util.VERSION, 480, 80, dpiScale);
+					mainWindow.create(null, Translate.format("dialog.progress.title", Util.VERSION), 480, 80, dpiScale);
 					buildLatch.release();
 				});
 			}

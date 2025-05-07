@@ -74,7 +74,7 @@ public enum HashFunction {
 		boolean unsupported;
 		String emptyHash;
 		try {
-			emptyHash = Bases.bytesToHex(createMessageDigest().digest());
+			emptyHash = Bases.bytesToHex(supplier.get().digest());
 			unsupported = false;
 		} catch (UnsupportedOperationException e) {
 			Log.warn("This JRE does not support "+name);
@@ -91,11 +91,13 @@ public enum HashFunction {
 	
 	public MessageDigest createMessageDigest() {
 		if (unsupported) throw unsupported();
+		checkSecureHashEnforcement();
 		return supplier.get();
 	}
-	
+
 	public String emptyHash() {
 		if (unsupported) throw unsupported();
+		checkSecureHashEnforcement();
 		return emptyHash;
 	}
 
@@ -120,9 +122,16 @@ public enum HashFunction {
 		return name;
 	}
 	
+	void checkSecureHashEnforcement() {
+		if (insecure && Agent.enforceSecureHashes) {
+			throw new IllegalArgumentException("Attempted to use insecure hash function "+name+" when enforce_secure_hashes=true");
+		}
+	}
+	
 	public static HashFunction byName(String name) {
 		if (!BY_NAME.containsKey(name)) throw new IllegalArgumentException("No hash function with name "+name);
 		HashFunction func = BY_NAME.get(name);
+		func.checkSecureHashEnforcement();
 		if (func != null && func.insecure() && !func.hasWarned) {
 			func.hasWarned = true;
 			if (Agent.packSig != null) {

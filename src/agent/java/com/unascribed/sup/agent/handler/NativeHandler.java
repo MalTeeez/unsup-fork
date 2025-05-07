@@ -53,7 +53,7 @@ public class NativeHandler extends AbstractFormatHandler {
 		int code;
 	}
 	
-	public static CheckResult check(URI src, boolean autoaccept) throws IOException, JsonParserException, URISyntaxException {
+	public static CheckResult check(URI src, boolean autoaccept, boolean forceFlavorDefaults) throws IOException, JsonParserException, URISyntaxException {
 		Log.info("Loading unsup-format manifest from "+src);
 		JsonObject manifest = RequestHelper.loadJson(src, 32*K, src.resolve("manifest.sig"));
 		checkManifestFlavor(manifest, "root", it -> it == 1);
@@ -121,7 +121,7 @@ public class NativeHandler extends AbstractFormatHandler {
 					unpickedGroups.add(grp);
 				}
 			}
-			ourFlavors = handleFlavorSelection(ourFlavors, unpickedGroups, newState);
+			ourFlavors = handleFlavorSelection(ourFlavors, unpickedGroups, newState, forceFlavorDefaults);
 		} else {
 			JsonArray theirFlavors = manifest.getArray("flavors");
 			if (theirFlavors != null) {
@@ -155,7 +155,7 @@ public class NativeHandler extends AbstractFormatHandler {
 					}
 				}
 				unpickedGroups.add(grp);
-				ourFlavors = handleFlavorSelection(ourFlavors, unpickedGroups, newState);
+				ourFlavors = handleFlavorSelection(ourFlavors, unpickedGroups, newState, forceFlavorDefaults);
 			}
 		}
 		UpdatePlan<FileToDownloadWithCode> bootstrapPlan = null;

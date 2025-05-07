@@ -28,6 +28,7 @@ import java.io.FileOutputStream;
 import java.io.IOException;
 import java.io.InputStream;
 import java.io.InterruptedIOException;
+import java.io.OutputStream;
 import java.net.SocketTimeoutException;
 import java.net.URI;
 import java.net.URISyntaxException;
@@ -35,7 +36,6 @@ import java.net.ConnectException;
 import java.net.UnknownHostException;
 import java.nio.charset.StandardCharsets;
 import java.security.MessageDigest;
-import java.security.SignatureException;
 import java.util.Arrays;
 import java.util.HashSet;
 import java.util.Set;
@@ -55,6 +55,7 @@ import com.unascribed.sup.agent.Agent;
 import com.unascribed.sup.agent.Log;
 import com.unascribed.sup.agent.data.HashFunction;
 import com.unascribed.sup.agent.signing.SigProvider;
+import com.unascribed.sup.pieces.NullOutputStream;
 import com.unascribed.sup.util.Bases;
 
 import okhttp3.HttpUrl;
@@ -87,24 +88,34 @@ public class RequestHelper {
 	}
 	
 	public static byte[] loadAndVerify(URI src, int sizeLimit, URI sigUrl) throws IOException {
-		return loadAndVerify(src, sizeLimit, sigUrl, Agent.packSig);
+		return loadAndVerify(src, sizeLimit, sigUrl, Agent.packSig, Agent.altPackSig);
 	}
 	
-	public static byte[] loadAndVerify(URI src, int sizeLimit, URI sigUrl, SigProvider key) throws IOException {
+	public static byte[] loadAndVerify(URI src, int sizeLimit, URI sigUrl, SigProvider... keys) throws IOException {
 		byte[] resp = downloadToMemory(src, sizeLimit);
 		if (resp == null) {
 			throw new IOException(src+" is larger than "+(sizeLimit/K)+"K, refusing to continue downloading");
 		}
-		if (key != null && sigUrl != null) {
-			try {
-				byte[] sigResp = downloadToMemory(sigUrl, 512);
-				if (!key.verify(resp, sigResp)) {
-					throw new SignatureException("Signature is invalid");
-				} else {
-					Log.debug("Signature for "+src+" (retrieved from "+sigUrl+") is valid");
+		if (sigUrl != null) {
+			boolean anyVerified = false;
+			byte[] sigResp = null;
+			for (SigProvider key : keys) {
+				if (key != null) {
+					try {
+						if (sigResp == null) {
+							sigResp = downloadToMemory(sigUrl, 512);
+						}
+						if (key.verify(resp, sigResp)) {
+							anyVerified = true;
+							Log.debug("Signature for "+src+" (retrieved from "+sigUrl+") is valid");
+						}
+					} catch (Throwable t) {
+						throw new IOException("Failed to validate signature for "+src, t);
+					}
 				}
-			} catch (Throwable t) {
-				throw new IOException("Failed to validate signature for "+src, t);
+			}
+			if (sigResp != null && !anyVerified) {
+				throw new IOException("Failed to validate signature for "+src);
 			}
 		}
 		return resp;
@@ -304,8 +315,8 @@ public class RequestHelper {
 	}
 	
 	public static DownloadedFile downloadToFile(URI url, File dir, long size, LongConsumer addProgress, Runnable updateProgress, HashFunction hashFunc, boolean hostile) throws IOException {
-		File file = File.createTempFile("download", "", dir);
-		Agent.cleanup.add(file::delete);
+		File file = dir == null ? null : File.createTempFile("download", "", dir);
+		if (file != null) Agent.cleanup.add(file::delete);
 		return withRetries(10, () -> {
 			try {
 				long readTotal = 0;
@@ -313,7 +324,7 @@ public class RequestHelper {
 				MessageDigest digest = hashFunc == null ? null : hashFunc.createMessageDigest();
 				try (InputStream in = get(url, hostile)) {
 					byte[] buf = new byte[16384];
-					try (FileOutputStream out = new FileOutputStream(file)) {
+					try (OutputStream out = file == null ? NullOutputStream.INSTANCE : new FileOutputStream(file)) {
 						while (true) {
 							int read = in.read(buf);
 							if (read == -1) break;

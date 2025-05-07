@@ -20,12 +20,15 @@
 package com.unascribed.sup.puppet;
 
 import java.io.BufferedInputStream;
+import java.io.ByteArrayInputStream;
 import java.io.ByteArrayOutputStream;
 import java.io.IOException;
+import java.io.InputStream;
 import java.io.PrintWriter;
 import java.io.StringWriter;
 import java.nio.charset.StandardCharsets;
 import java.util.ArrayList;
+import java.util.Base64;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Locale;
@@ -37,8 +40,11 @@ import java.util.concurrent.LinkedBlockingQueue;
 import java.util.concurrent.ScheduledExecutorService;
 import java.util.concurrent.ScheduledFuture;
 import java.util.concurrent.TimeUnit;
+import java.util.zip.GZIPInputStream;
 
 import javax.annotation.NotNull;
+
+import org.brotli.dec.BrotliInputStream;
 
 import com.unascribed.sup.data.AlertMessageType;
 import com.unascribed.sup.data.ColorChoice;
@@ -49,14 +55,24 @@ import com.unascribed.sup.data.SysProps.PuppetMode;
 import com.unascribed.sup.puppet.opengl.GLPuppet;
 import com.unascribed.sup.puppet.swing.SwingPuppet;
 
+import me.saharnooby.qoi.QOIDecoder;
+import me.saharnooby.qoi.QOIImage;
+
 public class Puppet {
-	
+
 	public static final ScheduledExecutorService sched = Executors.newSingleThreadScheduledExecutor(r -> new Thread(r, "Scheduler"));
 	public static final ExecutorService slow = Executors.newCachedThreadPool(r -> new Thread(r, "Slow Lane"));
 	private static final int[] colors = ColorChoice.createLookup();
 	
 	private static final BlockingQueue<Runnable> mainThreadWorkQueue = new LinkedBlockingQueue<>();
 	private static final Thread mainThread = Thread.currentThread();
+	
+	public static String modpackName = null;
+	public static QOIImage icon = null;
+	
+	public static int flavorDialogWidth = 600;
+	public static int flavorDialogHeight = 400;
+	public static double flavorDialogBias = 0.4;
 	
 	public static volatile boolean exitOnDone = true;
 	
@@ -164,6 +180,50 @@ public class Puppet {
 						case "string": {
 							String[] spl = arg.split(":", 2);
 							Translate.addTranslation(spl[0], spl[1]);
+							continue;
+						}
+						case "icon": {
+							byte[] data;
+							try {
+								data = Base64.getDecoder().decode(arg);
+							} catch (Throwable t) {
+								log("ERROR", "Failed to load branding image - invalid Base64", t);
+								continue;
+							}
+							InputStreamWrapper[] codecs = {
+								BrotliInputStream::new,
+								GZIPInputStream::new,
+								is -> is
+							};
+							List<Throwable> suppressed = new ArrayList<>();
+							for (int i = 0; i < codecs.length; i++) {
+								try {
+									icon = QOIDecoder.decode(codecs[i].wrap(new ByteArrayInputStream(data)), 4);
+									break;
+								} catch (Throwable t) {
+									if (i == codecs.length-1) {
+										suppressed.forEach(t::addSuppressed);
+										log("ERROR", "Failed to load branding image - are you sure it's in QOI{,.br,.gz} format?", t);
+										continue;
+									} else {
+										suppressed.add(t);
+									}
+								}
+							}
+							continue;
+						}
+						case "modpackName": {
+							modpackName = arg;
+							continue;
+						}
+						case "flavorDialogGeom": {
+							String[] spl = arg.split("x", 2);
+							flavorDialogWidth = Integer.parseInt(spl[0]);
+							flavorDialogHeight = Integer.parseInt(spl[1]);
+							continue;
+						}
+						case "flavorDialogBias": {
+							flavorDialogBias = Math.max(0.15, Math.min(0.85, Double.parseDouble(arg)));
 							continue;
 						}
 						case "belay": {
@@ -365,6 +425,10 @@ public class Puppet {
 		log(flavor, msg);
 	}
 	
+	public static String maybeBranded(String langPrefix) {
+		return modpackName == null ? langPrefix+".title" : langPrefix+".branded.title";
+	}
+	
 	public static void reportCloseRequest() {
 		System.out.println("closeRequested");
 	}
@@ -391,6 +455,10 @@ public class Puppet {
 
 	public static int getColor(ColorChoice choice) {
 		return colors[choice.ordinal()];
+	}
+	
+	public interface InputStreamWrapper {
+		InputStream wrap(InputStream is) throws IOException;
 	}
 
 }

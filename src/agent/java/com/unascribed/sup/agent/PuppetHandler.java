@@ -276,7 +276,7 @@ public class PuppetHandler {
 							int idx = line.indexOf('|');
 							Log.log(line.substring(0, idx), "puppet", line.substring(idx+1));
 						} else {
-							System.err.println("puppet: "+line);
+							Log.puppetStderr(line);
 						}
 					}
 				} catch (IOException e) {}
@@ -403,6 +403,14 @@ public class PuppetHandler {
 				tellPuppet(":string="+k.substring(8)+":"+Agent.config.get(k));
 			}
 		}
+		if (Agent.config.containsKey("branding.modpack_name")) {
+			tellPuppet(":modpackName="+Agent.config.get("branding.modpack_name"));
+		}
+		if (Agent.config.containsKey("branding.icon")) {
+			tellPuppet(":icon="+Agent.config.get("branding.icon"));
+		}
+		tellPuppet(":flavorDialogGeom="+Agent.config.get("flavor_dialog_geom", "600x400"));
+		tellPuppet(":flavorDialogBias="+Agent.config.get("flavor_dialog_bias", "0.5"));
 	}
 
 	public static void tellPuppet(String order) {

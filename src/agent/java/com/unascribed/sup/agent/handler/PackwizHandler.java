@@ -61,7 +61,7 @@ import com.unascribed.sup.util.Iterables;
 
 public class PackwizHandler extends AbstractFormatHandler {
 	
-	public static CheckResult check(URI src, boolean autoaccept) throws IOException, URISyntaxException {
+	public static CheckResult check(URI src, boolean autoaccept, boolean forceFlavorDefaults) throws IOException, URISyntaxException {
 		Version ourVersion = Version.fromJson(Agent.state.getObject("current_version"));
 		Toml pack = RequestHelper.loadToml(src, 4*K, src.resolve("unsup.sig"));
 		String fmt = pack.getString("pack-format");
@@ -409,7 +409,7 @@ public class PackwizHandler extends AbstractFormatHandler {
 			if (changeFlavors) {
 				ourFlavors.clear();
 			}
-			ourFlavors = handleFlavorSelection(ourFlavors, unpickedGroups, newState);
+			ourFlavors = handleFlavorSelection(ourFlavors, unpickedGroups, newState, forceFlavorDefaults);
 			
 			for (Future<Metafile> future : metafileFutures) {
 				Metafile mf;

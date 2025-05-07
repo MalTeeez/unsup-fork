@@ -324,7 +324,7 @@ public class SwingPuppet {
 	}
 
 	private static void buildUi() {
-		frame = new JFrame("unsup v"+Util.VERSION);
+		frame = new JFrame(Translate.format("dialog.progress.title", Util.VERSION));
 		frame.setIconImages(logos);
 		frame.setLocationRelativeTo(null);
 		frame.setDefaultCloseOperation(WindowConstants.DO_NOTHING_ON_CLOSE);
@@ -825,9 +825,9 @@ public class SwingPuppet {
 			}
 		});
 		split.setDividerSize(4);
-		split.setSize(854, 480);
-		split.setPreferredSize(new Dimension(854, 480));
-		split.setDividerLocation(0.4);
+		split.setSize(Puppet.flavorDialogWidth, Puppet.flavorDialogHeight);
+		split.setPreferredSize(new Dimension(Puppet.flavorDialogWidth, Puppet.flavorDialogHeight));
+		split.setDividerLocation(Puppet.flavorDialogBias);
 		split.setBackground(getColor(ColorChoice.BACKGROUND));
 		split.setForeground(getColor(ColorChoice.DIALOG));
 		split.setBorder(null);

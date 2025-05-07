@@ -191,24 +191,38 @@ public abstract class Window {
 		glfwMakeContextCurrent(handle);
 		if (glfwGetPlatform() != GLFW_PLATFORM_WAYLAND) {
 			if (glfwGetPlatform() != GLFW_PLATFORM_COCOA) {
-				ByteBuffer lowresPx = memAlloc(lowres.getPixelData().length);
-				ByteBuffer highresPx = memAlloc(highres.getPixelData().length);
-				lowresPx.put(lowres.getPixelData());
-				highresPx.put(highres.getPixelData());
-				lowresPx.flip();
-				highresPx.flip();
-				
-				GLFWImage.Buffer buffer = GLFWImage.malloc(2);
-				buffer.get(0)
-					.width(lowres.getWidth()).height(lowres.getHeight())
-					.pixels(lowresPx);
-				buffer.get(1)
-					.width(highres.getWidth()).height(highres.getHeight())
-					.pixels(highresPx);
-				glfwSetWindowIcon(handle, buffer);
-				memFree(buffer);
-				memFree(lowresPx);
-				memFree(highresPx);
+				if (Puppet.icon != null) {
+					ByteBuffer px = memAlloc(highres.getPixelData().length);
+					px.put(Puppet.icon.getPixelData());
+					px.flip();
+					
+					GLFWImage.Buffer buffer = GLFWImage.malloc(1);
+					buffer.get(0)
+						.width(Puppet.icon.getWidth()).height(Puppet.icon.getHeight())
+						.pixels(px);
+					glfwSetWindowIcon(handle, buffer);
+					memFree(buffer);
+					memFree(px);
+				} else {
+					ByteBuffer lowresPx = memAlloc(lowres.getPixelData().length);
+					ByteBuffer highresPx = memAlloc(highres.getPixelData().length);
+					lowresPx.put(lowres.getPixelData());
+					highresPx.put(highres.getPixelData());
+					lowresPx.flip();
+					highresPx.flip();
+					
+					GLFWImage.Buffer buffer = GLFWImage.malloc(2);
+					buffer.get(0)
+						.width(lowres.getWidth()).height(lowres.getHeight())
+						.pixels(lowresPx);
+					buffer.get(1)
+						.width(highres.getWidth()).height(highres.getHeight())
+						.pixels(highresPx);
+					glfwSetWindowIcon(handle, buffer);
+					memFree(buffer);
+					memFree(lowresPx);
+					memFree(highresPx);
+				}
 			}
 			
 			int[] x = new int[1];

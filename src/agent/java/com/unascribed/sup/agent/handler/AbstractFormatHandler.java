@@ -105,6 +105,7 @@ public abstract class AbstractFormatHandler {
 		public final Map<String, F> files = NullRejectingMap.create();
 		public final Map<String, FileState> expectedState = NullRejectingMap.create();
 		public final JsonObject newState;
+		public boolean skipStateApplication = false;
 		
 		public UpdatePlan(boolean isBootstrap, JsonObject newState) {
 			this.isBootstrap = isBootstrap;
@@ -115,7 +116,7 @@ public abstract class AbstractFormatHandler {
 	public static class CheckResult {
 		public final Version ourVersion;
 		public final Version theirVersion;
-		public final UpdatePlan<?> plan;
+		public UpdatePlan<?> plan;
 		public final Map<String, String> componentVersions;
 		
 		public CheckResult(Version ourVersion, Version theirVersion, UpdatePlan<?> plan, Map<String, String> componentVersions) {
@@ -126,7 +127,7 @@ public abstract class AbstractFormatHandler {
 		}
 	}
 	
-	protected static JsonArray handleFlavorSelection(JsonArray ourFlavors, List<FlavorGroup> unpickedGroups, JsonObject newState) {
+	protected static JsonArray handleFlavorSelection(JsonArray ourFlavors, List<FlavorGroup> unpickedGroups, JsonObject newState, boolean forceDefault) {
 		if (!unpickedGroups.isEmpty()) {
 			ourFlavors = new JsonArray(ourFlavors == null ? Collections.emptyList() : ourFlavors);
 			if (PuppetHandler.puppetOut != null) {
@@ -137,6 +138,9 @@ public abstract class AbstractFormatHandler {
 					if (grp.defChoice != null) {
 						Log.info("Selecting default choice "+grp.defChoiceName+" for flavor group "+grp.name);
 						ourFlavors.add(grp.defChoice);
+					} else if (forceDefault) {
+						Log.debug("Forced to select first choice "+grp.choices.get(0).name+" as default for flavor group "+grp.name);
+						ourFlavors.add(grp.choices.get(0).id);
 					} else {
 						Log.error("No choice provided for flavor group "+grp.name+" ("+grp.id+")");
 						Agent.exit(Agent.EXIT_CONFIG_ERROR);

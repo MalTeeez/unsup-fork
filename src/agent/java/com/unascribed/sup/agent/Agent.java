@@ -39,9 +39,11 @@ import java.util.Arrays;
 import java.util.EnumMap;
 import java.util.HashSet;
 import java.util.IdentityHashMap;
+import java.util.Iterator;
 import java.util.List;
 import java.util.Locale;
 import java.util.Map;
+import java.util.Objects;
 import java.util.Set;
 import java.util.concurrent.ExecutionException;
 import java.util.concurrent.ExecutorService;
@@ -50,6 +52,7 @@ import java.util.concurrent.Future;
 import java.util.concurrent.ThreadLocalRandom;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicLong;
+import java.util.function.Consumer;
 import java.util.function.Function;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
@@ -79,7 +82,9 @@ import com.unascribed.sup.agent.util.RequestHelper.Retry;
 import com.unascribed.sup.data.AlertMessageType;
 import com.unascribed.sup.data.ConflictType;
 import com.unascribed.sup.data.SourceFormat;
+import com.unascribed.sup.data.SysPropDefs;
 import com.unascribed.sup.data.SysProps;
+import com.unascribed.sup.data.SysProps.Behavior;
 import com.unascribed.sup.pieces.ExceptableRunnable;
 import com.unascribed.sup.util.Resources;
 import com.unascribed.sup.util.Strings;
@@ -106,12 +111,17 @@ public class Agent {
 	public static List<ExceptableRunnable> cleanup = new ArrayList<>();
 	public static QDIni config;
 	
+	public static boolean enforceSecureHashes = false;
 	public static boolean useEnvs = false;
 	public static String detectedEnv;
 	public static Set<String> validEnvs;
+	public static Behavior behavior = Behavior.MANUAL;
+	
+	private static SourceFormat fmt;
+	private static URI src;
 	
 	public static final SigProvider unsupSig = SigProvider.of("signify RWTSwM40VCzVER3YWt55m4Fvsg0sjZLEICikuU3cD91gR/2lii/jk67B");
-	public static SigProvider packSig;
+	public static SigProvider packSig, altPackSig;
 	
 	// read by the Unsup class when it loads
 	// be careful not to load that class until this is all initialized
@@ -138,61 +148,44 @@ public class Agent {
 		try {
 			Log.init();
 			Log.info((standalone ? "Starting in standalone mode" : "Launch hijack successful")+". unsup v"+Util.VERSION);
-			if (!loadConfig()) {
-				Log.warn("Cannot find a config file, giving up.");
-				// by returning but not exiting, we yield control to the program whose launch we hijacked, if any
-				return;
-			}
-			if (!SysProps.IGNORE_ENVS && config.getBoolean("use_envs", false)) {
-				useEnvs = true;
-				detectEnv(config.get("force_env", arg));
+			if (!preinit(arg)) return;
+			
+			if (config.getBoolean("server_authority", false)) {
+				Log.info("Performing pre-update to check for a new config");
+				if (checkForUpdate(fmt, src,
+						true,
+						false,
+						true,
+						false,
+						res -> {
+					res.componentVersions.clear();
+					if (res.plan != null) {
+						res.plan.skipStateApplication = true;
+						if (!res.plan.files.containsKey("unsup.ini")) {
+							Log.warn("This manifest does not appear to contain an unsup.ini. There is no reason for server_authority to be enabled!");
+							res.plan = null;
+							return;
+						}
+						deleteNonMatchingKeys(res.plan.expectedState, "unsup.ini");
+						deleteNonMatchingKeys(res.plan.files, "unsup.ini");
+					}
+				})) {
+					Log.info("Reinitializing with newly updated config");
+					destroyOkHttp();
+					if (!preinit(arg)) return;
+				} else {
+					Log.info("No config update. Proceeding as normal.");
+				}
 			}
 			
 			boolean noGui = determineNoGui();
-			
-			SourceFormat fmt = config.getEnum("source_format", SourceFormat.class, null);
-			URI src;
-			try {
-				src = new URI(config.get("source"));
-			} catch (URISyntaxException e) {
-				Log.error("Config error: source URL is malformed! "+e.getMessage()+". Exiting.");
-				exit(EXIT_CONFIG_ERROR);
-				return;
-			}
-			
-			setupOkHttp();
-			
 			if (!noGui) {
 				PuppetHandler.create();
 				cleanup.add(PuppetHandler::destroy);
 			}
 			
-			if (config.containsKey("public_key")) {
-				try {
-					packSig = SigProvider.parse(config.get("public_key"));
-					cleanup.add(() -> packSig = null);
-				} catch (Throwable t) {
-					Log.error("Config file error: public_key is not valid at "+config.getBlame("public_key")+"! Exiting.", t);
-					exit(EXIT_CONFIG_ERROR);
-					return;
-				}
-			}
-			
 			if (config.getBoolean("update_mmc_pack", false)) {
 				MMCUpdater.scan();
-			}
-			
-			stateFile = new File(".unsup-state.json");
-			if (stateFile.exists()) {
-				try (InputStream in = new FileInputStream(stateFile)) {
-					state = JsonParser.object().from(in);
-				} catch (Exception e) {
-					Log.error("Couldn't load state file! Exiting.", e);
-					exit(EXIT_CONSISTENCY_ERROR);
-					return;
-				}
-			} else {
-				state = new JsonObject();
 			}
 			
 			PuppetHandler.sendConfig();
@@ -210,7 +203,13 @@ public class Agent {
 			}
 			PuppetHandler.tellPuppet("[openTimeout]"+delay+":visible=true");
 			
-			checkForUpdate(fmt, src, SysProps.DISABLE_RECONCILIATION, false);
+			checkForUpdate(fmt, src,
+					!behavior.promptUpdates(),
+					SysProps.DRY_RUN,
+					false,
+					false,
+					res -> {}
+				);
 
 			if (awaitingExit) Agent.blockForever();
 
@@ -229,6 +228,9 @@ public class Agent {
 				}
 			}
 			
+			if (SysProps.DRY_RUN) {
+				Log.warn("Performed a dry run, per your request. No files in the working directory were changed!");
+			}
 			if (updatedComponents) {
 				Log.info("A component update has been applied - exiting for game restart.");
 				exit(EXIT_SUCCESS);
@@ -260,17 +262,84 @@ public class Agent {
 
 	// "step" methods, called only once, exist to turn premain() into a logical overview that can be
 	// drilled down into as necessary
+
+	private static boolean preinit(String arg) {
+		if (!loadConfig()) {
+			Log.warn("Cannot find a config file, giving up.");
+			// by returning but not exiting, we yield control to the program whose launch we hijacked, if any
+			return false;
+		}
+		if (!SysProps.IGNORE_ENVS && config.getBoolean("use_envs", false)) {
+			useEnvs = true;
+			detectEnv(config.get("force_env", arg));
+		}
+		
+		enforceSecureHashes = config.getBoolean("enforce_secure_hashes", false);
+		
+		fmt = config.getEnum("source_format", SourceFormat.class, null);
+		try {
+			src = new URI(config.get("source"));
+		} catch (URISyntaxException e) {
+			Log.error("Config error: source URL is malformed! "+e.getMessage()+". Exiting.");
+			exit(EXIT_CONFIG_ERROR);
+			return false;
+		}
+		
+		setupOkHttp();
+		
+		if (config.containsKey("public_key")) {
+			packSig = parsePackSig(config.get("public_key"));
+			cleanup.add(() -> packSig = null);
+			if (config.containsKey("alt_public_key")) {
+				packSig = parsePackSig(config.get("alt_public_key"));
+				cleanup.add(() -> altPackSig = null);
+			}
+		}
+		
+		stateFile = new File(".unsup-state.json");
+		if (stateFile.exists()) {
+			try (InputStream in = new FileInputStream(stateFile)) {
+				state = JsonParser.object().from(in);
+			} catch (Exception e) {
+				Log.error("Couldn't load state file! Exiting.", e);
+				exit(EXIT_CONSISTENCY_ERROR);
+				return false;
+			}
+		} else {
+			state = new JsonObject();
+		}
+		
+		if (System.getProperty(SysPropDefs.DISABLE_RECONCILIATION) != null || System.getProperty(SysPropDefs.BEHAVIOR) != null) {
+			behavior = SysProps.BEHAVIOR;
+		} else {
+			behavior = config.getEnum("behavior", Behavior.class, Behavior.MANUAL);
+		}
+		return true;
+	}
 	
+	private static SigProvider parsePackSig(String string) {
+		try {
+			return SigProvider.parse(config.get("public_key"));
+		} catch (Throwable t) {
+			Log.error("Config file error: public_key is not valid at "+config.getBlame("public_key")+"! Exiting.", t);
+			exit(EXIT_CONFIG_ERROR);
+			return null;
+		}
+	}
+
 	private static boolean loadConfig() {
 		File configFile = new File("unsup.ini");
 		if (configFile.exists()) {
 			try {
 				config = QDIni.load(configFile);
+				checkForbiddenKey("strings.dialog.progress.title");
+				checkForbiddenKey("strings.dialog.progress.title.branded");
 				cleanup.add(() -> config = null);
 				Log.debug("Found and loaded unsup.ini. What secrets does it hold?");
 			} catch (Exception e) {
 				Log.error("Found unsup.ini, but couldn't parse it! Exiting.", e);
 				exit(EXIT_CONFIG_ERROR);
+				return false;
 			}
 			checkRequiredKeys("version", "source_format", "source");
 			int version = config.getInt("version", -1);
@@ -312,6 +381,13 @@ public class Agent {
 		}
 	}
 	
+	private static void checkForbiddenKey(String key) {
+		if (config.containsKey(key)) {
+			Log.error("Attempt to override a forbidden key: "+key);
+			exit(EXIT_CONFIG_ERROR);
+		}
+	}
+
 	private static void checkRequiredKeys(String... requiredKeys) {
 		for (String req : requiredKeys) {
 			if (!config.containsKey(req)) {
@@ -460,7 +536,15 @@ public class Agent {
 				.build();
 	}
 	
-	private static boolean checkForUpdate(SourceFormat fmt, URI src, boolean autoaccept, boolean reentering) {
+	private static void destroyOkHttp() {
+		if (okhttp != null) {
+			okhttp.dispatcher().executorService().shutdown();
+			okhttp.connectionPool().evictAll();
+			okhttp = null;
+		}
+	}
+	
+	private static boolean checkForUpdate(SourceFormat fmt, URI src, boolean autoaccept, boolean dryRun, boolean forceFlavorDefaults, boolean reentering, Consumer<CheckResult> modifier) {
 		PuppetHandler.updateTitle("title.checking", false);
 		try {
 			CheckResult res = null;
@@ -475,30 +559,31 @@ public class Agent {
 				for (String s : src.getRawSchemeSpecificPart().split(";")) {
 					JsonObject thisState = mergeStates.getObject(s, new JsonObject());
 					state = thisState;
-					if (checkForUpdate(fmt, new URI(s), autoaccept, true)) {
+					if (checkForUpdate(fmt, new URI(s), autoaccept, dryRun, forceFlavorDefaults, true, modifier)) {
 						// if the user has accepted an update, then accept the rest of them implicitly
 						autoaccept = true;
 					}
 					mergeStates.put(s, state);
 				}
 				state = realState;
-				saveState();
+				if (!dryRun) saveState();
 				return true;
 			} else {
 				Log.debug("Retrieving from "+src+" in "+fmt+" format");
 				if (fmt == SourceFormat.UNSUP) {
-					res = NativeHandler.check(src, autoaccept);
+					res = NativeHandler.check(src, autoaccept, forceFlavorDefaults);
 				} else if (fmt == SourceFormat.PACKWIZ) {
-					res = PackwizHandler.check(src, autoaccept);
+					res = PackwizHandler.check(src, autoaccept, forceFlavorDefaults);
 				} else {
 					throw new AssertionError();
 				}
 			}
 			if (res != null) {
 				sourceVersion = res.ourVersion.name;
+				modifier.accept(res);
 				if (res.plan != null) {
-					applyUpdate(res);
-					if (!reentering) saveState();
+					applyUpdate(res, dryRun);
+					if (!reentering && !dryRun) saveState();
 					return true;
 				}
 			}
@@ -518,7 +603,7 @@ public class Agent {
 		}
 	}
 	
-	private static void applyUpdate(CheckResult res) throws IOException {
+	private static void applyUpdate(CheckResult res, boolean dryRun) throws IOException {
 		UpdatePlan<?> plan = res.plan;
 		boolean bootstrapping = plan.isBootstrap;
 		Log.debug("Alright, so here's what I'm thinking:");
@@ -610,7 +695,7 @@ public class Agent {
 			}
 			if (conflictType != ConflictType.NO_CONFLICT) {
 				AlertOption resp;
-				if (SysProps.DISABLE_RECONCILIATION) {
+				if (!behavior.promptConflicts()) {
 					resp = AlertOption.YES;
 				} else if (conflictPreload.containsKey(conflictType)) {
 					resp = conflictPreload.get(conflictType);
@@ -634,14 +719,14 @@ public class Agent {
 					exit(EXIT_USER_REQUEST);
 					return;
 				}
-				if (dest.exists() && !SysProps.DISABLE_RECONCILIATION) {
+				if (dest.exists() && behavior.promptConflicts()) {
 					moveAside.add(path);
 				}
 			}
 			progressDenom += (to.size == -1 ? 1 : to.size);
 		}
-		File tmp = new File(".unsup-tmp");
-		if (!tmp.exists()) {
+		File tmp = dryRun ? null : new File(".unsup-tmp");
+		if (tmp != null && !tmp.exists()) {
 			tmp.mkdirs();
 		}
 		final long progressDenomf = progressDenom;
@@ -744,65 +829,69 @@ public class Agent {
 			}
 		}
 		PuppetHandler.updateTitle(bootstrapping ? "title.bootstrapping" : "title.updating", false);
-		synchronized (dangerMutex) {
-			PuppetHandler.updateSubtitle("subtitle.applying");
-			for (int pass = 0; pass < 2; pass++) {
-				for (Map.Entry<String, ? extends FilePlan> en : plan.files.entrySet()) {
-					String path = en.getKey();
-					FilePlan f = en.getValue();
-					FileState to = f.state;
-					DownloadedFile df = downloads.get(f);
-					if (df == null && to.size != 0) {
-						// Conflict dialog was rejected, skip this file.
-						continue;
-					}
-					File dest = new File(path);
-					if (!dest.getAbsolutePath().startsWith(wd.getAbsolutePath()+File.separator))
-						throw new IOException("Refusing to download to a file outside of working directory");
-					Path destPath;
-					try {
-						destPath = dest.toPath();
-					} catch (InvalidPathException e) {
-						if (pass == 0) Log.error("Destination file path "+dest+" is not valid on this OS/filesystem/charset combination!", e);
-						continue;
-					}
-					if (pass == 1 && dest.getParentFile() != null) Files.createDirectories(dest.getParentFile().toPath());
-					if (pass == 0 && moveAside.contains(path)) {
-						Log.debug("Displacing "+path);
-						Files.move(destPath, destPath.resolveSibling(destPath.getFileName().toString()+".orig"), StandardCopyOption.REPLACE_EXISTING);
-					}
-					if (to.size == 0) {
-						if (to.hash == null) {
-							if (pass == 0 && Files.exists(destPath)) {
-								Log.info("Deleting "+path);
-								Files.delete(destPath);
-							}
-						} else if (dest.exists()) {
-							if (pass == 1) {
-								Log.debug("Blanking "+path);
-								try (FileOutputStream fos = new FileOutputStream(dest)) {
-									// open and then immediately close the file to overwrite it with nothing
+		if (!dryRun) {
+			synchronized (dangerMutex) {
+				PuppetHandler.updateSubtitle("subtitle.applying");
+				for (int pass = 0; pass < 2; pass++) {
+					for (Map.Entry<String, ? extends FilePlan> en : plan.files.entrySet()) {
+						String path = en.getKey();
+						FilePlan f = en.getValue();
+						FileState to = f.state;
+						DownloadedFile df = downloads.get(f);
+						if (df == null && to.size != 0) {
+							// Conflict dialog was rejected, skip this file.
+							continue;
+						}
+						File dest = new File(path);
+						if (!dest.getAbsolutePath().startsWith(wd.getAbsolutePath()+File.separator))
+							throw new IOException("Refusing to download to a file outside of working directory");
+						Path destPath;
+						try {
+							destPath = dest.toPath();
+						} catch (InvalidPathException e) {
+							if (pass == 0) Log.error("Destination file path "+dest+" is not valid on this OS/filesystem/charset combination!", e);
+							continue;
+						}
+						if (pass == 1 && dest.getParentFile() != null) Files.createDirectories(dest.getParentFile().toPath());
+						if (pass == 0 && moveAside.contains(path)) {
+							Log.debug("Displacing "+path);
+							Files.move(destPath, destPath.resolveSibling(destPath.getFileName().toString()+".orig"), StandardCopyOption.REPLACE_EXISTING);
+						}
+						if (to.size == 0) {
+							if (to.hash == null) {
+								if (pass == 0 && Files.exists(destPath)) {
+									Log.info("Deleting "+path);
+									Files.delete(destPath);
+								}
+							} else if (dest.exists()) {
+								if (pass == 1) {
+									Log.debug("Blanking "+path);
+									try (FileOutputStream fos = new FileOutputStream(dest)) {
+										// open and then immediately close the file to overwrite it with nothing
+									}
+								}
+							} else {
+								if (pass == 1) {
+									Log.debug("Touching "+path);
+									dest.createNewFile();
 								}
 							}
-						} else {
-							if (pass == 1) {
-								Log.debug("Touching "+path);
-								dest.createNewFile();
-							}
+						} else if (pass == 1) {
+							Log.debug("Applying "+path);
+							assert df != null;
+							Files.move(df.file.toPath(), destPath, StandardCopyOption.REPLACE_EXISTING);
 						}
-					} else if (pass == 1) {
-						Log.debug("Applying "+path);
-						assert df != null;
-						Files.move(df.file.toPath(), destPath, StandardCopyOption.REPLACE_EXISTING);
-					}
-			}
-			}
-			state = plan.newState;
-			state.put("current_version", res.theirVersion.toJson());
-			try {
-				updatedComponents = MMCUpdater.apply(res.componentVersions);
-			} catch (Throwable t) {
-				Log.warn("Failed to apply component updates", t);
+				}
+				}
+				if (!plan.skipStateApplication) {
+					state = plan.newState;
+					state.put("current_version", res.theirVersion.toJson());
+				}
+				try {
+					updatedComponents = MMCUpdater.apply(res.componentVersions);
+				} catch (Throwable t) {
+					Log.warn("Failed to apply component updates", t);
+				}
 			}
 		}
 		Log.info("Update successful!");
@@ -908,10 +997,7 @@ public class Agent {
 				er.run();
 			} catch (Throwable t) {}
 		}
-		if (okhttp != null) {
-			okhttp.dispatcher().executorService().shutdown();
-			okhttp.connectionPool().evictAll();
-		}
+		destroyOkHttp();
 		cleanup = null;
 	}
 	
@@ -941,6 +1027,15 @@ public class Agent {
 			try {
 				Thread.sleep(Integer.MAX_VALUE);
 			} catch (InterruptedException e) {}
+		}
+	}
+
+	private static <K, V> void deleteNonMatchingKeys(Map<K, V> map, K key) {
+		Iterator<Map.Entry<K, V>> iter = map.entrySet().iterator();
+		while (iter.hasNext()) {
+			if (!Objects.equals(iter.next().getKey(), key)) {
+				iter.remove();
+			}
 		}
 	}
 	

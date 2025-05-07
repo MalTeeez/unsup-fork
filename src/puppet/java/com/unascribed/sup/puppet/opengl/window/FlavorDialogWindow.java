@@ -173,7 +173,7 @@ public class FlavorDialogWindow extends Window {
 	}
 	
 	public void create(Window parent, double dpiScale) {
-		create(parent, Translate.format("dialog.flavors.title"), 600, 400, dpiScale);
+		create(parent, Translate.format("dialog.flavors.title"), Puppet.flavorDialogWidth, Puppet.flavorDialogHeight, dpiScale);
 	}
 	
 	@Override
@@ -245,7 +245,7 @@ public class FlavorDialogWindow extends Window {
 		float y = 20-scroll;
 		float startY = y;
 		
-		float leftArea = width*0.45f;
+		float leftArea = (float)(width*(Puppet.flavorDialogBias+0.05));
 		float rightArea = (width-leftArea)-12;
 		
 		boolean focused = glfwGetWindowAttrib(handle, GLFW_FOCUSED) == GLFW_TRUE;
