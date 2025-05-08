@@ -50,7 +50,7 @@ steps:
       - '.gradle-user'
       - 'buildSrc/build'
 - name: build
-  image: gradle:8.12.1-jdk21
+  image: gradle:8.14-jdk17
   environment:
     TERM: dumb
     GRADLE_USER_HOME: ./.gradle-user
