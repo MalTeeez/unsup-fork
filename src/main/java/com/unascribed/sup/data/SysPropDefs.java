@@ -22,7 +22,7 @@ package com.unascribed.sup.data;
 public class SysPropDefs {
 
 	/**
-	 * Enable or disable debug mode.
+	 * {@value}: Enable or disable debug mode.
 	 * <ul>
 	 * <li><b>true</b>: Enable verbose log output, disable some "friendly" output options, and enable some
 	 * inconvenient debugging behaviors. Debug output is always printed to the unsup.log regardless
@@ -33,7 +33,7 @@ public class SysPropDefs {
 	 */
 	public static final String DEBUG = "unsup.debug";
 	/**
-	 * <ul>
+	 * {@value}: <ul>
 	 * <li><b>true</b>: Attempt to launch the Puppet even in standalone mode.</li>
 	 * <li><b>false</b>: Only launch the Puppet in agent mode.</li>
 	 * </ul>
@@ -41,13 +41,14 @@ public class SysPropDefs {
 	 */
 	public static final String GUI_IN_STANDALONE = "unsup.guiInStandalone";
 	/**
+	 * {@value}
 	 * @deprecated (Since 1.1-beta1) Setting to {@code true} is equivalent to setting {@link #BEHAVIOR} to auto.
 	 * @since 0.3.0-pre1
 	 */
 	@Deprecated
 	public static final String DISABLE_RECONCILIATION = "unsup.disableReconciliation";
 	/**
-	 * <ul>
+	 * {@value}: <ul>
 	 * <li><b>true</b>: Pretend use_envs is set to false. This will cause unsup to download all
 	 * files regardless of their configured environment.</li>
 	 * <li><b>false</b>: Honor use_envs.</li>
@@ -56,7 +57,7 @@ public class SysPropDefs {
 	 */
 	public static final String IGNORE_ENVS = "unsup.ignoreEnvs";
 	/**
-	 * <ul>
+	 * {@value}: <ul>
 	 * <li><b>true</b>: Exit the Agent if the Puppet crashes. Only useful when debugging the Puppet.</li>
 	 * <li><b>false</b>: Continue without a GUI if the Puppet crashes.</li>
 	 * </ul>
@@ -64,7 +65,7 @@ public class SysPropDefs {
 	 */
 	public static final String ABORT_ON_PUPPET_CRASH = "unsup.abortOnPuppetCrash";
 	/**
-	 * The number of downloads to perform in parallel. Defaults to 6, a reasonable tradeoff on most
+	 * {@value}: The number of downloads to perform in parallel. Defaults to 6, a reasonable tradeoff on most
 	 * computers and most internet connections. People with slow connections or computers may want
 	 * to reduce this to 1.
 	 * @since 1.1-beta1
@@ -72,7 +73,7 @@ public class SysPropDefs {
 	public static final String DOWNLOAD_WORKERS = "unsup.downloadWorkers";
 	
 	/**
-	 * Set how much control unsup should give to the user as to how updates should proceed.
+	 * {@value}: Set how much control unsup should give to the user as to how updates should proceed.
 	 * <ul>
 	 * <li><b>auto</b>: No control. All file conflicts are auto-accepted and updates are auto-applied.</li>
 	 * <li><b>semi</b>: Updates are auto-applied, but file conflicts still prompt the user.</li>
@@ -83,7 +84,7 @@ public class SysPropDefs {
 	public static final String BEHAVIOR = "unsup.behavior";
 
 	/**
-	 * <ul>
+	 * {@value}: <ul>
 	 * <li><b>true</b>: Do everything when updating except actually saving files to disk. Can be
 	 * used to verify the consistency of a manifest.</li>
 	 * <li><b>false</b>: Normal behavior.</li>
@@ -93,7 +94,7 @@ public class SysPropDefs {
 	public static final String DRY_RUN = "unsup.dryRun";
 	
 	/**
-	 * Override the language rather than using the one detected by Java.
+	 * {@value}: Override the language rather than using the one detected by Java.
 	 * <p>
 	 * Value should be an IETF BCP 47 language tag, or one of the special values:
 	 * <ul>
@@ -107,7 +108,7 @@ public class SysPropDefs {
 	
 	
 	/**
-	 * <ul>
+	 * {@value}: <ul>
 	 * <li><b>true</b>: Force open the flavor selection dialog. Packwiz mode only. Prefer setting
 	 * offer_change_flavors in unsup.ini for packs where the user may want to change flavors often.</li>
 	 * <li><b>false</b>: Normal behavior.</li>
@@ -118,12 +119,12 @@ public class SysPropDefs {
 	
 
 	/**
-	 * Wrap execution of the Puppet in this command. Only for debugging the Puppet.
+	 * {@value}: Wrap execution of the Puppet in this command. Only for debugging the Puppet.
 	 * @since 1.1-pre5
 	 */
 	public static final String PUPPET_WRAPPER_COMMAND = "unsup.puppet.wrapperCommand";
 	/**
-	 * <ul>
+	 * {@value}: <ul>
 	 * <li><b>true</b>: Pass all -Dorg.lwjgl.* system properties through to the Puppet. Useful on
 	 * some weird Linux distros. <b><i>Do not use to apply the glfw-wayland-minecraft hack fork!</i></b></li>
 	 * <li><b>false</b>: Only pass certain system properties through to the Puppet.</li>
@@ -133,7 +134,7 @@ public class SysPropDefs {
 	public static final String PUPPET_PASS_ALL_LWJGL_ARGS = "unsup.puppet.passAllLwjglArgs";
 	
 	/**
-	 * Set which mode the Puppet will use.
+	 * {@value}: Set which mode the Puppet will use.
 	 * <ul>
 	 * <li><b>auto</b>: Let unsup decide which implementation is best.</li>
 	 * <li><b>swing</b>: Force usage of the legacy Swing puppet.</li>
@@ -144,7 +145,7 @@ public class SysPropDefs {
 	public static final String PUPPET_MODE = "unsup.puppetMode";
 	
 	/**
-	 * Set which platform the OpenGL Puppet will use.
+	 * {@value}: Set which platform the OpenGL Puppet will use.
 	 * <ul>
 	 * <li><b>auto</b>: Let GLFW decide which implementation is best.</li>
 	 * <li><b>win32</b>: Force usage of the Windows platform.</li>
