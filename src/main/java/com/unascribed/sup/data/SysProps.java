@@ -38,7 +38,7 @@ public class SysProps {
 	public enum Behavior {
 		AUTO, SEMI, MANUAL;
 		
-		public boolean promptUpdates() { return this != MANUAL; }
+		public boolean promptUpdates() { return this == MANUAL; }
 		public boolean promptConflicts() { return this != AUTO; }
 	}
 	public static final String LANGUAGE = getProperty("unsup.language");
