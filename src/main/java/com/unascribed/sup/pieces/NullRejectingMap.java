@@ -82,6 +82,11 @@ public class NullRejectingMap<K, V> extends AbstractMap<K, V> {
 							}
 						};
 					}
+					
+					@Override
+					public void remove() {
+						delegateIter.remove();
+					}
 				};
 			}
 
@@ -94,9 +99,31 @@ public class NullRejectingMap<K, V> extends AbstractMap<K, V> {
 			public boolean addAll(Collection<? extends Entry<K, V>> c) {
 				return delegateSet.addAll(c);
 			}
+			
+			@Override
+			@SuppressWarnings("unlikely-arg-type")
+			public boolean remove(Object o) {
+				return delegateSet.remove(o);
+			}
+			
+			@Override
+			public void clear() {
+				delegateSet.clear();
+			}
+			
 		};
 	}
-
+	
+	@Override
+	public Set<K> keySet() {
+		return delegate.keySet();
+	}
+	
+	@Override
+	public Collection<V> values() {
+		return delegate.values();
+	}
+	
 	@Override
 	public V put(K key, V value) {
 		if (key == null) throw new IllegalArgumentException("Cannot assign a value to a null key: "+value);
@@ -104,9 +131,14 @@ public class NullRejectingMap<K, V> extends AbstractMap<K, V> {
 		return delegate.put(key, value);
 	}
 
-	@SuppressWarnings("unlikely-arg-type")
 	@Override
+	@SuppressWarnings("unlikely-arg-type")
 	public V remove(Object key) {
 		return delegate.remove(key);
+	}
+	
+	@Override
+	public void clear() {
+		delegate.clear();
 	}
 }

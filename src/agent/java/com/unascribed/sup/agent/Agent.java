@@ -39,7 +39,6 @@ import java.util.Arrays;
 import java.util.EnumMap;
 import java.util.HashSet;
 import java.util.IdentityHashMap;
-import java.util.Iterator;
 import java.util.List;
 import java.util.Locale;
 import java.util.Map;
@@ -1011,7 +1010,7 @@ public class Agent {
 	}
 
 	private static <K, V> void deleteNonMatchingKeys(Map<K, V> map, K key) {
-		Iterator<Map.Entry<K, V>> iter = map.entrySet().iterator();
+		var iter = map.entrySet().iterator();
 		while (iter.hasNext()) {
 			if (!Objects.equals(iter.next().getKey(), key)) {
 				iter.remove();
