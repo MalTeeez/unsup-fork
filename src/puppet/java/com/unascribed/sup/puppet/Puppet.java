@@ -168,21 +168,20 @@ public class Puppet {
 					String arg = eq == -1 ? "" : line.substring(eq+1);
 					Runnable r;
 					switch (order) {
-						case "build": {
+						case "build" -> {
 							r = del::build;
-							break;
 						}
-						case "color": {
+						case "color" -> {
 							String[] spl = arg.split(":", 2);
 							colors[ColorChoice.valueOf(spl[0]).ordinal()] = Integer.parseInt(spl[1], 16);
 							continue;
 						}
-						case "string": {
+						case "string" -> {
 							String[] spl = arg.split(":", 2);
 							Translate.addTranslation(spl[0], spl[1]);
 							continue;
 						}
-						case "icon": {
+						case "icon" -> {
 							byte[] data;
 							try {
 								data = Base64.getDecoder().decode(arg);
@@ -212,21 +211,21 @@ public class Puppet {
 							}
 							continue;
 						}
-						case "modpackName": {
+						case "modpackName" -> {
 							modpackName = arg;
 							continue;
 						}
-						case "flavorDialogGeom": {
+						case "flavorDialogGeom" -> {
 							String[] spl = arg.split("x", 2);
 							flavorDialogWidth = Integer.parseInt(spl[0]);
 							flavorDialogHeight = Integer.parseInt(spl[1]);
 							continue;
 						}
-						case "flavorDialogBias": {
+						case "flavorDialogBias" -> {
 							flavorDialogBias = Math.max(0.15, Math.min(0.85, Double.parseDouble(arg)));
 							continue;
 						}
-						case "belay": {
+						case "belay" -> {
 							r = () -> {
 								synchronized (orders) {
 									if (orders.containsKey(arg)) {
@@ -235,9 +234,8 @@ public class Puppet {
 									}
 								}
 							};
-							break;
 						}
-						case "expedite": {
+						case "expedite" -> {
 							r = () -> {
 								Runnable inner = null;
 								synchronized (orders) {
@@ -253,50 +251,41 @@ public class Puppet {
 								}
 								if (inner != null) inner.run();
 							};
-							break;
 						}
-						case "visible": {
+						case "visible" -> {
 							boolean b = Boolean.parseBoolean(arg);
 							r = () -> del.setVisible(b);
-							break;
 						}
-						case "exit": {
+						case "exit" -> {
 							r = () -> {
 								System.exit(0);
 							};
-							break;
 						}
-						case "mode": {
-							if ("ind".equals(arg)) {
-								r = del::setProgressIndeterminate;
-							} else if ("det".equals(arg)) {
-								r = del::setProgressDeterminate;
-							} else if ("done".equals(arg)) {
-								r = del::setDone;
-							} else {
-								Puppet.log("WARN", "Unknown mode "+arg+", expected ind, det, or done");
-								continue;
-							}
-							break;
+						case "mode" -> {
+                            switch (arg) {
+                                case "ind" -> r = del::setProgressIndeterminate;
+                                case "det" -> r = del::setProgressDeterminate;
+                                case "done" -> r = del::setDone;
+                                default -> {
+                                    Puppet.log("WARN", "Unknown mode " + arg + ", expected ind, det, or done");
+                                    continue;
+                                }
+                            }
 						}
-						case "prog": {
+						case "prog" -> {
 							int i = Integer.parseInt(arg);
 							r = () -> del.setProgress(i);
-							break;
 						}
-						case "title": {
+						case "title" -> {
 							r = () -> del.setTitle(arg);
-							break;
 						}
-						case "subtitle": {
+						case "subtitle" -> {
 							r = () -> del.setSubtitle(arg);
-							break;
 						}
-						case "downloading": {
+						case "downloading" -> {
 							r = () -> del.setDownloading(arg.split("\u001C"));
-							break;
 						}
-						case "alert": {
+						case "alert" -> {
 							String[] split = arg.split(":");
 							String title = split[0];
 							if ("$$changeFlavorsOffer".equals(title)) {
@@ -338,9 +327,8 @@ public class Puppet {
 									r = () -> del.openMessageDialog(name, title, body, messageType, options, Translate.format(def));
 								}
 							}
-							break;
 						}
-						case "pickFlavor": {
+						case "pickFlavor" -> {
 							String[] split = arg.split(":");
 							List<FlavorGroup> groups = new ArrayList<>();
 							for (String s : split[0].replace('\u001B', ':').split("\u001D")) {
@@ -360,9 +348,8 @@ public class Puppet {
 								groups.add(grp);
 							}
 							r = () -> del.openFlavorDialog(name, groups);
-							break;
 						}
-						default: {
+						default -> {
 							Puppet.log("WARN", "Unknown order "+order);
 							continue;
 						}

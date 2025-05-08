@@ -100,7 +100,7 @@ public class JThrobber extends JComponent {
 				if (hz > 240) hz = 240;
 				delayNs = TimeUnit.SECONDS.toNanos(1)/hz;
 			}
-			sched.schedule(() -> SwingUtilities.invokeLater(() -> repaint()), delayNs, TimeUnit.NANOSECONDS);
+			sched.schedule(() -> SwingUtilities.invokeLater(this::repaint), delayNs, TimeUnit.NANOSECONDS);
 		}
 	}
 	

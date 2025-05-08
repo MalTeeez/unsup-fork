@@ -26,16 +26,19 @@ import org.lwjgl.opengl.GL12;
 import org.lwjgl.opengl.GL13;
 
 import com.unascribed.sup.data.ColorChoice;
+import com.unascribed.sup.util.SuppressFBWarnings;
 
+// Yeah. That's the point
+@SuppressFBWarnings("HSM_HIDING_METHOD")
 public class GL extends GL13 {
 	
 	public static class State {
 		private int circleList;
 		public double glTranslationX, glTranslationY, glTranslationZ;
-		private List<double[]> matrixStack = new ArrayList<>();
+		private final List<double[]> matrixStack = new ArrayList<>();
 	}
 	
-	private static ThreadLocal<State> state = ThreadLocal.withInitial(State::new);
+	private static final ThreadLocal<State> state = ThreadLocal.withInitial(State::new);
 	
 	public static void glColor(ColorChoice choice) {
 		glColorPacked3i(choice.get());

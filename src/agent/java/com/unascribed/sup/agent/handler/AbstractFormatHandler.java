@@ -24,6 +24,7 @@ import java.util.Collections;
 import java.util.List;
 import java.util.Map;
 
+import com.github.bsideup.jabel.Desugar;
 import com.grack.nanojson.JsonArray;
 import com.grack.nanojson.JsonObject;
 import com.unascribed.sup.agent.Agent;
@@ -47,20 +48,11 @@ public abstract class AbstractFormatHandler {
 		public boolean hostile;
 		public boolean skip = false;
 	}
-	
-	public static class FileState {
+
+	@Desugar
+	public record FileState(HashFunction func, String hash, long size) {
 		public static final FileState EMPTY = new FileState(null, null, 0);
-		
-		public final HashFunction func;
-		public final String hash;
-		public final long size;
-		
-		public FileState(HashFunction func, String hash, long size) {
-			this.func = func;
-			this.hash = hash;
-			this.size = size;
-		}
-		
+
 		public boolean sizeMatches(long size) {
 			if (this.size == -1) return true;
 			return size == this.size;
@@ -68,36 +60,11 @@ public abstract class AbstractFormatHandler {
 
 		@Override
 		public String toString() {
-			String s = func+"("+hash+")";
+			String s = func + "(" + hash + ")";
 			if (size == -1) return s;
-			return s+" size "+size;
-		}
-		
-		@Override
-		public int hashCode() {
-			return func.hashCode()^hash.hashCode();
+			return s + " size " + size;
 		}
 
-		@Override
-		public boolean equals(Object obj) {
-			if (this == obj) return true;
-			if (obj == null) return false;
-			if (getClass() != obj.getClass()) return false;
-			FileState other = (FileState) obj;
-			if (func != other.func) return false;
-			if (hash == null) {
-				if (other.hash != null)
-					return false;
-			} else if (!hash.equals(other.hash))
-				return false;
-			if (size == -1 || other.size == -1)
-				return true;
-			if (size != other.size)
-				return false;
-			return true;
-		}
-		
-		
 	}
 	
 	public static class UpdatePlan<F extends FilePlan> {

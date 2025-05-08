@@ -106,7 +106,7 @@ public class FlavorDialogWindow extends Window {
 	}
 	
 	@Override
-	public void create(Window parent, String title, int width, int height, double dpiScale) {
+	public synchronized void create(Window parent, String title, int width, int height, double dpiScale) {
 		glfwWindowHint(GLFW_FOCUS_ON_SHOW, GLFW_TRUE);
 		glfwWindowHint(GLFW_RESIZABLE, GLFW_TRUE);
 		glfwWindowHint(GLFW_FLOATING, GLFW_TRUE);
@@ -555,9 +555,8 @@ public class FlavorDialogWindow extends Window {
 	private static final Set<String> breakElements = new HashSet<>(Arrays.asList("ul", "li", "h1", "h2", "h3", "br"));
 	
 	private void drawNode(NodeDrawState state, Node node) {
-		if (node instanceof Text) {
-			Text t = (Text)node;
-			float[] res = font.drawWrapped(state.face, state.baseX, state.x, state.y, state.size, state.maxWidth, t.getData());
+		if (node instanceof Text t) {
+            float[] res = font.drawWrapped(state.face, state.baseX, state.x, state.y, state.size, state.maxWidth, t.getData());
 			state.x = res[0];
 			state.y = res[1];
 		} else {
@@ -642,16 +641,16 @@ public class FlavorDialogWindow extends Window {
 		switch (cur) {
 			case BOLDITALIC: return cur;
 			case BOLD: {
-				switch (next) {
-					case ITALIC: return Face.BOLDITALIC;
-					default: return Face.BOLD;
-				}
+                return switch (next) {
+                    case ITALIC -> Face.BOLDITALIC;
+                    default -> Face.BOLD;
+                };
 			}
 			case ITALIC: {
-				switch (next) {
-					case BOLD: return Face.BOLDITALIC;
-					default: return Face.ITALIC;
-				}
+                return switch (next) {
+                    case BOLD -> Face.BOLDITALIC;
+                    default -> Face.ITALIC;
+                };
 			}
 			case REGULAR: {
 				return next;

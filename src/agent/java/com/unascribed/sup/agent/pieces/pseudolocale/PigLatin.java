@@ -31,7 +31,7 @@ public class PigLatin {
 	private static final Pattern VOWEL = Pattern.compile("[aAeEiIoOuU]");
 
 	public static String toPigLatin(String s) {
-		StringBuffer sb = new StringBuffer();
+		var sb = new StringBuffer();
 		Matcher m = WORD.matcher(s);
 		while (m.find()) {
 			String english = m.group().toLowerCase(Locale.ENGLISH);

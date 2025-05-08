@@ -104,7 +104,7 @@ public class MessageDialogWindow extends Window {
 	}
 	
 	@Override
-	public void create(Window parent, String title, int width, int height, double dpiScale) {
+	public synchronized void create(Window parent, String title, int width, int height, double dpiScale) {
 		glfwWindowHint(GLFW_FOCUS_ON_SHOW, GLFW_TRUE);
 		glfwWindowHint(GLFW_RESIZABLE, GLFW_FALSE);
 		glfwWindowHint(GLFW_FLOATING, GLFW_TRUE);
@@ -205,26 +205,25 @@ public class MessageDialogWindow extends Window {
 						i = Icon.FRAGILE;
 						color = ColorChoice.SUBTITLE;
 					} else {
-						switch (messageType) {
-							case QUESTION:
-								i = Icon.QUESTION;
-								color = ColorChoice.QUESTION;
-								break;
-							case INFO:
-								i = Icon.INFO;
-								color = ColorChoice.INFO;
-								break;
-							case WARN:
-								i = Icon.ALERT;
-								color = ColorChoice.WARNING;
-								break;
-							case ERROR:
-								i = Icon.ERROR;
-								color = ColorChoice.ERROR;
-								break;
-							case NONE:
-								throw new AssertionError();
-						}
+                        color = switch (messageType) {
+                            case QUESTION -> {
+                                i = Icon.QUESTION;
+                                yield ColorChoice.QUESTION;
+                            }
+                            case INFO -> {
+                                i = Icon.INFO;
+                                yield ColorChoice.INFO;
+                            }
+                            case WARN -> {
+                                i = Icon.ALERT;
+                                yield ColorChoice.WARNING;
+                            }
+                            case ERROR -> {
+                                i = Icon.ERROR;
+                                yield ColorChoice.ERROR;
+                            }
+                            case NONE -> throw new AssertionError();
+                        };
 					}
 					i.draw(ColorChoice.BACKGROUND, color);
 				glPopMatrix();

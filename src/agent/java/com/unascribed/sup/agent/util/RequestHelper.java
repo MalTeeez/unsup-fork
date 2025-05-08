@@ -46,6 +46,7 @@ import java.util.function.LongConsumer;
 import javax.net.ssl.SSLException;
 import javax.net.ssl.SSLHandshakeException;
 
+import com.github.bsideup.jabel.Desugar;
 import com.grack.nanojson.JsonObject;
 import com.grack.nanojson.JsonParser;
 import com.grack.nanojson.JsonParserException;
@@ -303,16 +304,12 @@ public class RequestHelper {
 			throw new IOException("Expected "+expectedHash+" from "+src+", but got "+hash);
 		return new Toml().read(new ByteArrayInputStream(data));
 	}
-	
-	public static class DownloadedFile {
-		/** null if no hash function was specified */
-		public final String hash;
-		public final File file;
-		public DownloadedFile(String hash, File file) {
-			this.hash = hash;
-			this.file = file;
-		}
-	}
+
+	/**
+	 * @param hash null if no hash function was specified
+	 */
+	@Desugar
+	public record DownloadedFile(String hash, File file) {}
 	
 	public static DownloadedFile downloadToFile(URI url, File dir, long size, LongConsumer addProgress, Runnable updateProgress, HashFunction hashFunc, boolean hostile) throws IOException {
 		File file = dir == null ? null : File.createTempFile("download", "", dir);
@@ -385,23 +382,21 @@ public class RequestHelper {
 	 * Closes the stream when done.
 	 */
 	private static byte[] collectLimited(InputStream in, int limit) throws IOException {
-		try {
-			ByteArrayOutputStream baos = new ByteArrayOutputStream();
-			int totalRead = 0;
-			byte[] buf = new byte[limit/4];
-			while (true) {
-				int read = in.read(buf);
-				if (read == -1) break;
-				totalRead += read;
-				if (totalRead > limit) {
-					return null;
-				}
-				baos.write(buf, 0, read);
-			}
-			return baos.toByteArray();
-		} finally {
-			in.close();
-		}
+        try (in) {
+            ByteArrayOutputStream baos = new ByteArrayOutputStream();
+            int totalRead = 0;
+            byte[] buf = new byte[limit / 4];
+            while (true) {
+                int read = in.read(buf);
+                if (read == -1) break;
+                totalRead += read;
+                if (totalRead > limit) {
+                    return null;
+                }
+                baos.write(buf, 0, read);
+            }
+            return baos.toByteArray();
+        }
 	}
 
 }

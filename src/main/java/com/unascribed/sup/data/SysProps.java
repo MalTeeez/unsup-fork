@@ -33,6 +33,7 @@ public class SysProps {
 	public static final boolean ABORT_ON_PUPPET_CRASH = getBoolean(SysPropDefs.ABORT_ON_PUPPET_CRASH);
 	public static final int DOWNLOAD_WORKERS = getInteger(SysPropDefs.DOWNLOAD_WORKERS, 6);
 	
+	@SuppressWarnings("deprecation")
 	public static final Behavior BEHAVIOR = Behavior.valueOf(getProperty(SysPropDefs.BEHAVIOR, getBoolean(SysPropDefs.DISABLE_RECONCILIATION) ? "auto" : "manual").toUpperCase(Locale.ROOT));
 	public enum Behavior {
 		AUTO, SEMI, MANUAL;

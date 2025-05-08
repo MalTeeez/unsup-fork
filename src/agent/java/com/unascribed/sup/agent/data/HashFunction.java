@@ -131,13 +131,15 @@ public enum HashFunction {
 	public static HashFunction byName(String name) {
 		if (!BY_NAME.containsKey(name)) throw new IllegalArgumentException("No hash function with name "+name);
 		HashFunction func = BY_NAME.get(name);
-		func.checkSecureHashEnforcement();
-		if (func != null && func.insecure() && !func.hasWarned) {
-			func.hasWarned = true;
-			if (Agent.packSig != null) {
-				Log.warn("Using insecure hash function "+func+" for a signed manifest! This is a very bad idea!");
-			} else {
-				Log.warn("Using insecure hash function "+func);
+		if (func != null) {
+			func.checkSecureHashEnforcement();
+			if (func.insecure() && !func.hasWarned) {
+				func.hasWarned = true;
+				if (Agent.packSig != null) {
+					Log.warn("Using insecure hash function "+func+" for a signed manifest! This is a very bad idea!");
+				} else {
+					Log.warn("Using insecure hash function "+func);
+				}
 			}
 		}
 		return func;

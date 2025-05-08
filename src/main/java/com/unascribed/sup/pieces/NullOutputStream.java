@@ -41,15 +41,7 @@ public class NullOutputStream extends OutputStream {
 	public void write(byte[] b, int off, int len) throws IOException {
 	}
 
-	@Override
-	public void flush() throws IOException {
-	}
-
-	@Override
-	public void close() throws IOException {
-	}
-	
-	@Override
+    @Override
 	public String toString() {
 		return "NullOutputStream.INSTANCE";
 	}

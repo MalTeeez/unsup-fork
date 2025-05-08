@@ -35,7 +35,7 @@ public class OpenGLDebug {
 	@SuppressWarnings("unused")
 	private static GLDebugMessageCallbackI callback;
 
-	private static Map<Integer, String> strings = new HashMap<>();
+	private static final Map<Integer, String> strings = new HashMap<>();
 	static {
 		strings.put(GL_DEBUG_SOURCE_API, "API");
 		strings.put(GL_DEBUG_SOURCE_WINDOW_SYSTEM, "Window System");
@@ -60,8 +60,8 @@ public class OpenGLDebug {
 			glEnable(GL_DEBUG_OUTPUT_SYNCHRONOUS);
 			glDebugMessageCallback(callback = (sourceId, typeId, id, severity, length, messagePtr, userParam) -> {
 				String message = memASCII(messagePtr);
-				String source = strings.containsKey(sourceId) ? strings.get(sourceId) : "Unknown";
-				String type = strings.containsKey(typeId) ? strings.get(typeId) : "Unknown";
+				String source = strings.getOrDefault(sourceId, "Unknown");
+				String type = strings.getOrDefault(typeId, "Unknown");
 				String flavor = "DEBUG";
 				if (severity == GL_DEBUG_SEVERITY_NOTIFICATION) {
 					if (sourceId == GL_DEBUG_SOURCE_SHADER_COMPILER && typeId == GL_DEBUG_TYPE_OTHER) {

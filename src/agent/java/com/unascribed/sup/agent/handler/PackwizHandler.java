@@ -110,7 +110,7 @@ public class PackwizHandler extends AbstractFormatHandler {
 			if (ourVersion == null) {
 				ourVersion = new Version("null", 0);
 			}
-			Version theirVersion = new Version(pack.getString("version"), ourVersion.code+1);
+			Version theirVersion = new Version(pack.getString("version"), ourVersion.code() +1);
 			JsonObject newState = new JsonObject(Agent.state);
 			pwstate = new JsonObject(pwstate);
 			newState.put("packwiz", pwstate);
@@ -120,8 +120,8 @@ public class PackwizHandler extends AbstractFormatHandler {
 			} else {
 				Log.info("Update available - only components have changed");
 			}
-			String body = "dialog.update.named¤"+ourVersion.name+"¤"+theirVersion.name;
-			if (ourVersion.name.equals(theirVersion.name)) {
+			String body = "dialog.update.named¤"+ ourVersion.name() +"¤"+ theirVersion.name();
+			if (ourVersion.name().equals(theirVersion.name())) {
 				body = "dialog.update.unnamed";
 			}
 			boolean bootstrapping = !pwstate.containsKey("lastIndexHash");
@@ -142,9 +142,8 @@ public class PackwizHandler extends AbstractFormatHandler {
 			List<FlavorGroup> unpickedGroups = new ArrayList<>();
 			Map<String, FlavorGroup> syntheticGroups = new HashMap<>();
 			for (Map.Entry<String, Object> en : pwstate.getObject("syntheticFlavorGroups", new JsonObject()).entrySet()) {
-				if (en.getValue() instanceof JsonObject) {
-					JsonObject obj = (JsonObject)en.getValue();
-					String id = obj.getString("id");
+				if (en.getValue() instanceof JsonObject obj) {
+                    String id = obj.getString("id");
 					if (id == null) continue;
 					String name = obj.getString("name");
 					String description = obj.getString("description");
@@ -155,9 +154,8 @@ public class PackwizHandler extends AbstractFormatHandler {
 					grp.description = description;
 					for (Object cele : choices) {
 						FlavorChoice c = new FlavorChoice();
-						if (cele instanceof JsonObject) {
-							JsonObject cobj = (JsonObject)cele;
-							c.id = cobj.getString("id");
+						if (cele instanceof JsonObject cobj) {
+                            c.id = cobj.getString("id");
 							if (c.id == null) continue;
 							c.name = cobj.getString("name");
 							c.description = cobj.getString("description");
@@ -179,9 +177,8 @@ public class PackwizHandler extends AbstractFormatHandler {
 				if (unsup != null) {
 					if (unsup.containsTable("flavor_groups")) {
 						flavors: for (Map.Entry<String, Object> en : unsup.getTable("flavor_groups").entrySet()) {
-							if (en.getValue() instanceof Toml) {
-								Toml group = (Toml)en.getValue();
-								String groupId = en.getKey();
+							if (en.getValue() instanceof Toml group) {
+                                String groupId = en.getKey();
 								String side = group.getString("side");
 								if (side != null && Agent.useEnvs && !side.equals("both") && !side.equals(Agent.detectedEnv)) {
 									Log.info("Skipping flavor group "+groupId+" as it's not eligible for env "+Agent.detectedEnv);
@@ -230,9 +227,8 @@ public class PackwizHandler extends AbstractFormatHandler {
 					}
 					if (unsup.containsTable("metafile")) {
 						for (Map.Entry<String, Object> en : unsup.getTable("metafile").entrySet()) {
-							if (en.getValue() instanceof Toml) {
-								Toml t = (Toml)en.getValue();
-								if (t.contains("flavors")) {
+							if (en.getValue() instanceof Toml t) {
+                                if (t.contains("flavors")) {
 									if (t.containsTableArray("flavors")) {
 										metafileFlavors.put(en.getKey(), t.getList("flavors").stream()
 												.map(String::valueOf)
@@ -481,15 +477,15 @@ public class PackwizHandler extends AbstractFormatHandler {
 			}
 			lastState = new JsonObject();
 			for (Map.Entry<String, FileState> en : plan.expectedState.entrySet()) {
-				if (en.getValue().hash == null) continue;
-				lastState.put(en.getKey(), en.getValue().func+":"+en.getValue().hash);
+				if (en.getValue().hash() == null) continue;
+				lastState.put(en.getKey(), en.getValue().func() +":"+ en.getValue().hash());
 			}
 			for (Map.Entry<String, FileState> en : postState.entrySet()) {
-				if (en.getValue().hash == null) {
+				if (en.getValue().hash() == null) {
 					lastState.remove(en.getKey());
 					continue;
 				}
-				lastState.put(en.getKey(), en.getValue().func+":"+en.getValue().hash);
+				lastState.put(en.getKey(), en.getValue().func() +":"+ en.getValue().hash());
 			}
 			pwstate.put("lastState", lastState);
 			return new CheckResult(ourVersion, theirVersion, plan, theirVers);
@@ -500,15 +496,15 @@ public class PackwizHandler extends AbstractFormatHandler {
 	}
 	
 	static HashFunction parseFunc(String str) {
-		switch (str) {
-			case "md5": return HashFunction.MD5;
-			case "sha1": return HashFunction.SHA1;
-			case "sha256": return HashFunction.SHA2_256;
-			case "sha384": return HashFunction.SHA2_384;
-			case "sha512": return HashFunction.SHA2_512;
-			case "murmur2": return HashFunction.MURMUR2_CF;
-			default: throw new IllegalArgumentException("Unknown packwiz hash function "+str);
-		}
+        return switch (str) {
+            case "md5" -> HashFunction.MD5;
+            case "sha1" -> HashFunction.SHA1;
+            case "sha256" -> HashFunction.SHA2_256;
+            case "sha384" -> HashFunction.SHA2_384;
+            case "sha512" -> HashFunction.SHA2_512;
+            case "murmur2" -> HashFunction.MURMUR2_CF;
+            default -> throw new IllegalArgumentException("Unknown packwiz hash function " + str);
+        };
 	}
 	
 }

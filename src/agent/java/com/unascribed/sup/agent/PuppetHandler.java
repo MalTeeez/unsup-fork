@@ -74,8 +74,8 @@ public class PuppetHandler {
 	private static int lastReportedProgress = 0;
 	private static long lastReportedProgressTime = 0;
 	
-	private static Map<String, String> alertResults = new HashMap<>();
-	private static Map<String, Latch> alertWaiters = new HashMap<>();
+	private static final Map<String, String> alertResults = new HashMap<>();
+	private static final Map<String, Latch> alertWaiters = new HashMap<>();
 	
 	private static final int crashId = ThreadLocalRandom.current().nextInt()&Integer.MAX_VALUE;
 	

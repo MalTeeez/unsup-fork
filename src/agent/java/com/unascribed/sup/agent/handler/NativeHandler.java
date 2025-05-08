@@ -62,7 +62,7 @@ public class NativeHandler extends AbstractFormatHandler {
 		Version theirVersion = Version.fromJson(manifest.getObject("versions").getObject("current"));
 		if (theirVersion == null) throw new IOException("Manifest is missing current version field");
 		if (System.getProperty("unsup.debug.overrideRemoteVersionCode") != null) {
-			theirVersion = new Version(theirVersion.name, Integer.getInteger("unsup.debug.overrideRemoteVersionCode", theirVersion.code));
+			theirVersion = new Version(theirVersion.name(), Integer.getInteger("unsup.debug.overrideRemoteVersionCode", theirVersion.code()));
 		}
 		JsonObject newState = new JsonObject(Agent.state);
 		JsonArray ourFlavors = Agent.state.getArray("flavors");
@@ -76,9 +76,8 @@ public class NativeHandler extends AbstractFormatHandler {
 		List<FlavorGroup> unpickedGroups = new ArrayList<>();
 		if (theirFlavorGroups != null) {
 			flavors: for (Object ele : theirFlavorGroups) {
-				if (ele instanceof JsonObject) {
-					JsonObject obj = (JsonObject)ele;
-					JsonArray envs = obj.getArray("envs");
+				if (ele instanceof JsonObject obj) {
+                    JsonArray envs = obj.getArray("envs");
 					if (envs != null && Agent.useEnvs && !Iterables.contains(envs, Agent.detectedEnv)) {
 						continue;
 					}
@@ -95,9 +94,8 @@ public class NativeHandler extends AbstractFormatHandler {
 					grp.description = description;
 					for (Object cele : choices) {
 						FlavorChoice c = new FlavorChoice();
-						if (cele instanceof JsonObject) {
-							JsonObject cobj = (JsonObject)cele;
-							c.id = cobj.getString("id");
+						if (cele instanceof JsonObject cobj) {
+                            c.id = cobj.getString("id");
 							if (c.id == null)
 								throw new IOException("A flavor choice in group "+id+" is missing an ID");
 							c.name = cobj.getString("name", c.id);
@@ -129,9 +127,8 @@ public class NativeHandler extends AbstractFormatHandler {
 				grp.id = "default";
 				grp.name = "Flavor";
 				for (Object ele : theirFlavors) {
-					if (ele instanceof JsonObject) {
-						JsonObject obj = (JsonObject)ele;
-						JsonArray envs = obj.getArray("envs");
+					if (ele instanceof JsonObject obj) {
+                        JsonArray envs = obj.getArray("envs");
 						if (envs != null && Agent.useEnvs && !Iterables.contains(envs, Agent.detectedEnv)) {
 							continue;
 						}
@@ -173,16 +170,15 @@ public class NativeHandler extends AbstractFormatHandler {
 				checkManifestFlavor(bootstrap, "bootstrap", it -> it == 1);
 				Version bootstrapVersion = Version.fromJson(bootstrap.getObject("version"));
 				if (bootstrapVersion == null) throw new IOException("Bootstrap manifest is missing version field");
-				if (bootstrapVersion.code < theirVersion.code) {
+				if (bootstrapVersion.code() < theirVersion.code()) {
 					Log.warn("Bootstrap manifest version "+bootstrapVersion+" is older than root manifest version "+theirVersion+", will have to perform extra updates");
 				}
 				HashFunction func = HashFunction.byName(bootstrap.getString("hash_function", DEFAULT_HASH_FUNCTION));
 				PuppetHandler.updateTitle("title.bootstrapping", false);
 				bootstrapPlan = new UpdatePlan<>(true, newState);
 				for (Object o : bootstrap.getArray("files")) {
-					if (!(o instanceof JsonObject)) throw new IOException("Entry "+o+" in files array is not an object");
-					JsonObject file = (JsonObject)o;
-					String path = file.getString("path");
+					if (!(o instanceof JsonObject file)) throw new IOException("Entry "+o+" in files array is not an object");
+                    String path = file.getString("path");
 					if (path == null) throw new IOException("Entry in files array is missing path");
 					String hash = file.getString("hash");
 					if (hash == null) throw new IOException(path+" in files array is missing hash");
@@ -212,7 +208,7 @@ public class NativeHandler extends AbstractFormatHandler {
 					ftd.state = new FileState(func, hash, size);
 					ftd.url = url;
 					ftd.fallbackUrl = fallbackUrl;
-					ftd.code = bootstrapVersion.code;
+					ftd.code = bootstrapVersion.code();
 					bootstrapPlan.files.put(path, ftd);
 					bootstrapPlan.expectedState.put(path, FileState.EMPTY);
 				}
@@ -221,12 +217,12 @@ public class NativeHandler extends AbstractFormatHandler {
 				ourVersion = new Version("null", 0);
 			}
 		}
-		if (theirVersion.code > ourVersion.code) {
+		if (theirVersion.code() > ourVersion.code()) {
 			if (!bootstrapping) {
 				Log.info("Update available! We have "+ourVersion+", they have "+theirVersion);
 				if (!autoaccept) {
 					AlertOption updateResp = PuppetHandler.openAlert("dialog.update.title",
-							"dialog.update.named¤"+ourVersion.name+"¤"+theirVersion.name,
+							"dialog.update.named¤"+ ourVersion.name() +"¤"+ theirVersion.name(),
 							AlertMessageType.QUESTION, AlertOptionType.YES_NO, AlertOption.YES);
 					if (updateResp == AlertOption.NO) {
 						Log.info("Ignoring update by user choice.");
@@ -242,17 +238,16 @@ public class NativeHandler extends AbstractFormatHandler {
 			PuppetHandler.updateTitle(bootstrapping ? "title.bootstrapping" : "title.updating", false);
 			PuppetHandler.updateSubtitle("subtitle.calculating");
 			boolean yappedAboutConsistency = false;
-			int updates = theirVersion.code-ourVersion.code;
+			int updates = theirVersion.code() - ourVersion.code();
 			for (int i = 0; i < updates; i++) {
-				int code = ourVersion.code+(i+1);
+				int code = ourVersion.code() +(i+1);
 				JsonObject ver = RequestHelper.loadJson(src.resolve(Util.uriOfPath("versions/"+code+".json")), 2*M,
 						src.resolve(Util.uriOfPath("versions/"+code+".sig")));
 				checkManifestFlavor(ver, "update", it -> it == 1);
 				HashFunction func = HashFunction.byName(ver.getString("hash_function", DEFAULT_HASH_FUNCTION));
 				for (Object o : ver.getArray("changes")) {
-					if (!(o instanceof JsonObject)) throw new IOException("Entry "+o+" in changes array is not an object");
-					JsonObject file = (JsonObject)o;
-					String path = file.getString("path");
+					if (!(o instanceof JsonObject file)) throw new IOException("Entry "+o+" in changes array is not an object");
+                    String path = file.getString("path");
 					if (path == null) throw new IOException("Entry in changes array is missing path");
 					String fromHash = file.getString("from_hash");
 					if (fromHash != null && fromHash.length() != func.sizeInHexChars())  throw new IOException(path+" in changes array from_hash "+fromHash+" is wrong length ("+fromHash.length()+" != "+func.sizeInHexChars()+")");
@@ -288,8 +283,8 @@ public class NativeHandler extends AbstractFormatHandler {
 					}
 					if (plan.files.containsKey(path)) {
 						FileToDownloadWithCode to = plan.files.get(path);
-						if (to.state.func == func) {
-							if (!Objects.equals(to.state.hash, fromHash) || to.state.size != fromSize) {
+						if (to.state.func() == func) {
+							if (!Objects.equals(to.state.hash(), fromHash) || to.state.size() != fromSize) {
 								throw new IOException("Bad update: "+path+" in "+to.code+" specified to become "+to.state+
 										", but "+code+" expects it to have been "+func+"("+fromHash+") size "+fromSize);
 							}
@@ -315,7 +310,7 @@ public class NativeHandler extends AbstractFormatHandler {
 			return new CheckResult(ourVersion, theirVersion, plan, Collections.emptyMap());
 		} else if (bootstrapPlan != null) {
 			return new CheckResult(ourVersion, theirVersion, bootstrapPlan, Collections.emptyMap());
-		} else if (ourVersion.code > theirVersion.code) {
+		} else if (ourVersion.code() > theirVersion.code()) {
 			Log.info("Remote version is older than local version, doing nothing");
 			return new CheckResult(ourVersion, theirVersion, null, Collections.emptyMap());
 		} else {

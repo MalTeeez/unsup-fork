@@ -44,6 +44,8 @@ import java.util.Set;
 import java.util.function.Function;
 import java.util.function.Supplier;
 
+import com.github.bsideup.jabel.Desugar;
+
 /**
  * A quick-and-dirty INI parser.
  */
@@ -72,18 +74,11 @@ public class QDIni {
 		String transformValueComment(String key, String value, String comment);
 		String transformValue(String key, String value);
 	}
-
-	private static class BlameString {
-		public final String value;
-		public final String file;
-		public final int line;
-		private BlameString(String value, String file, int line) {
-			this.value = value;
-			this.file = file;
-			this.line = line;
-		}
+	
+	@Desugar
+	private record BlameString(String value, String file, int line) {
 		public String blame() {
-			return "line "+line+" in "+file;
+			return "line " + line + " in " + file;
 		}
 	}
 	
@@ -126,7 +121,7 @@ public class QDIni {
 	
 	private List<String> unwrap(List<BlameString> list) {
 		if (list == null) return null;
-		return new AbstractList<String>() {
+		return new AbstractList<>() {
 
 			@Override
 			public String get(int index) {
@@ -178,11 +173,11 @@ public class QDIni {
 	}
 	
 	private boolean strictParseBoolean(String s) {
-		switch (s.toLowerCase(Locale.ROOT)) {
-			case "true": return true;
-			case "false": return false;
-			default: throw new IllegalArgumentException();
-		}
+        return switch (s.toLowerCase(Locale.ROOT)) {
+            case "true" -> true;
+            case "false" -> false;
+            default -> throw new IllegalArgumentException();
+        };
 	}
 	
 	public <E extends Enum<E>> E getEnum(String key, Class<E> clazz, E def) throws BadValueException {
@@ -220,12 +215,12 @@ public class QDIni {
 	}
 	
 	public Set<Map.Entry<String, List<String>>> entrySet() {
-		return new AbstractSet<Map.Entry<String, List<String>>>() {
+		return new AbstractSet<>() {
 
 			@Override
 			public Iterator<Map.Entry<String, List<String>>> iterator() {
-				Iterator<Map.Entry<String, List<BlameString>>> delegate = data.entrySet().iterator();
-				return new Iterator<Map.Entry<String, List<String>>>() {
+				var delegate = data.entrySet().iterator();
+				return new Iterator<>() {
 
 					@Override
 					public boolean hasNext() {
@@ -234,7 +229,7 @@ public class QDIni {
 
 					@Override
 					public Map.Entry<String, List<String>> next() {
-						Map.Entry<String, List<BlameString>> den = delegate.next();
+						var den = delegate.next();
 						return new AbstractMap.SimpleImmutableEntry<>(den.getKey(), unwrap(den.getValue()));
 					}
 				};
@@ -300,7 +295,7 @@ public class QDIni {
 	 * mapping that returns the last defined value for any given key.
 	 */
 	public Map<String, String> flatten() {
-		return new AbstractMap<String, String>() {
+		return new AbstractMap<>() {
 
 			@Override
 			public String get(Object key) {
@@ -324,12 +319,12 @@ public class QDIni {
 			
 			@Override
 			public Set<Entry<String, String>> entrySet() {
-				return new AbstractSet<Map.Entry<String,String>>() {
+				return new AbstractSet<>() {
 
 					@Override
 					public Iterator<Entry<String, String>> iterator() {
-						Iterator<Entry<String, List<String>>> delegate = QDIni.this.entrySet().iterator();
-						return new Iterator<Map.Entry<String,String>>() {
+						var delegate = QDIni.this.entrySet().iterator();
+						return new Iterator<>() {
 
 							@Override
 							public boolean hasNext() {
@@ -338,7 +333,7 @@ public class QDIni {
 
 							@Override
 							public Entry<String, String> next() {
-								Entry<String, List<String>> den = delegate.next();
+								var den = delegate.next();
 								return new SimpleImmutableEntry<>(den.getKey(), getLast(den.getValue()));
 							}
 						};
@@ -378,7 +373,7 @@ public class QDIni {
 	}
 
 	public static QDIni loadAndTransform(String fileName, Reader r, IniTransformer transformer, Writer w) throws IOException, SyntaxErrorException {
-		BufferedReader br = r instanceof BufferedReader ? (BufferedReader)r : new BufferedReader(r);
+		var br = r instanceof BufferedReader brr ? brr : new BufferedReader(r);
 		Map<String, List<BlameString>> data = new LinkedHashMap<>();
 		int lineNum = 1;
 		String path = "";

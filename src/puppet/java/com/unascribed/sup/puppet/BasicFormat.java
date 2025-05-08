@@ -5,23 +5,24 @@ import java.util.List;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 
+import com.github.bsideup.jabel.Desugar;
+
 public final class BasicFormat {
 	private static final Pattern PLACEHOLDER = Pattern.compile("%(?:([0-9+])\\$)?(.)");
 	
 	private interface Segment { void append(StringBuilder sb, Object[] args); }
-	
-	private static final class LiteralSegment implements Segment {
-		private final String str;
-		public LiteralSegment(String str) { this.str = str; }
+
+	@Desugar
+	private record LiteralSegment(String str) implements Segment {
 
 		@Override
 		public void append(StringBuilder sb, Object[] args) {
 			sb.append(str);
 		}
-		
+
 		@Override
 		public String toString() {
-			return "\""+str+"\"";
+			return "\"" + str + "\"";
 		}
 	}
 	

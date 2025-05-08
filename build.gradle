@@ -175,13 +175,6 @@ afterEvaluate {
 	}
 }
 
-
-sourceCompatibility = targetCompatibility = 8
-
-compileJava {
-	options.release = 8
-}
-
 repositories { 
 	mavenCentral()
 	maven { url 'https://repo.sleeping.town' }
@@ -207,6 +200,7 @@ sourceSets {
 	}
 }
 
+
 configurations {
 	shade
 	implementation.extendsFrom shade
@@ -215,6 +209,11 @@ configurations {
 	ogldep
 	compileOnly.extendsFrom ogldep
 	oglnative
+	jabel
+	compileOnly.extendsFrom jabel
+	annotationProcessor.extendsFrom jabel
+	agentAnnotationProcessor.extendsFrom jabel
+	puppetAnnotationProcessor.extendsFrom jabel
 }
 
 dependencies {
@@ -228,6 +227,8 @@ dependencies {
 		transformSrc(it+':sources') { transitive = false }
 		shade "transformed:${dep.name}:${dep.version}"
 	}
+
+	jabel 'com.github.bsideup.jabel:jabel-javac-plugin:1.0.0'
 
 	trans 'com.grack:nanojson:1.9'
 	shade 'net.i2p.crypto:eddsa:0.3.0'
@@ -250,6 +251,11 @@ dependencies {
 	def lwjglv = '3.3.6'
 	lwjgl(it, lwjglv, 'glfw', 'opengl', 'freetype')
 	ogldep "org.lwjgl:lwjgl-harfbuzz:${lwjglv}"
+}
+
+tasks.withType(JavaCompile) {
+	sourceCompatibility = 17
+	options.release = 8
 }
 
 configurations.transform.resolve().each { f ->

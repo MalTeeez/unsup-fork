@@ -22,7 +22,6 @@ package com.unascribed.sup.puppet.opengl.pieces;
 import java.io.ByteArrayOutputStream;
 import java.io.IOException;
 import java.io.InputStream;
-import java.nio.Buffer;
 import java.nio.ByteBuffer;
 import java.util.HashMap;
 import java.util.HashSet;
@@ -35,6 +34,7 @@ import org.lwjgl.PointerBuffer;
 import org.lwjgl.util.freetype.FT_Bitmap;
 import org.lwjgl.util.freetype.FT_Face;
 
+import com.github.bsideup.jabel.Desugar;
 import com.unascribed.sup.Util;
 import com.unascribed.sup.puppet.FontResources;
 import com.unascribed.sup.puppet.Puppet;
@@ -45,11 +45,11 @@ import static org.lwjgl.system.MemoryUtil.*;
 public class FontManager {
 	
 	public double dpiScale = 1;
-	private Map<String, FT_Face> ftFaces = new HashMap<>();
-	private long ftLibrary;
-	private FT_Bitmap scratchBitmap;
+	private final Map<String, FT_Face> ftFaces = new HashMap<>();
+	private final long ftLibrary;
+	private final FT_Bitmap scratchBitmap;
 	
-	private Map<CacheKey, CachedTexture> cachedTextures = new HashMap<>();
+	private final Map<CacheKey, CachedTexture> cachedTextures = new HashMap<>();
 	
 	public enum Face {
 		REGULAR("FiraGO.zip.br!FiraGO-Regular.ttf", "NotoSansCJK-Regular.ttc"),
@@ -248,7 +248,7 @@ public class FontManager {
 			}
 			ByteBuffer buf = memAlloc(baos.size());
 			buf.put(baos.toByteArray());
-			((Buffer)buf).flip();
+			buf.flip();
 			int error = FT_New_Memory_Face(ftLibrary, buf, 0, ftFacePtr);
 			if (error != 0) {
 				Puppet.log("WARN", "Failed to load font "+name+": "+FT_Error_String(error));
@@ -260,43 +260,9 @@ public class FontManager {
 			memFree(ftFacePtr);
 		}
 	}
-	
-	private static class CacheKey {
-		public final Face face;
-		public final float size;
-		public final int codepoint;
-		public CacheKey(Face face, float size, int codepoint) {
-			this.face = face;
-			this.size = size;
-			this.codepoint = codepoint;
-		}
-		@Override
-		public int hashCode() {
-			final int prime = 31;
-			int result = 1;
-			result = prime * result + codepoint;
-			result = prime * result + ((face == null) ? 0 : face.hashCode());
-			result = prime * result + Float.floatToIntBits(size);
-			return result;
-		}
-		@Override
-		public boolean equals(Object obj) {
-			if (this == obj)
-				return true;
-			if (obj == null)
-				return false;
-			if (getClass() != obj.getClass())
-				return false;
-			CacheKey other = (CacheKey) obj;
-			if (codepoint != other.codepoint)
-				return false;
-			if (face != other.face)
-				return false;
-			if (Float.floatToIntBits(size) != Float.floatToIntBits(other.size))
-				return false;
-			return true;
-		}
-	}
+
+	@Desugar
+	private record CacheKey(Face face, float size, int codepoint) {}
 	
 	private static class CachedTexture {
 		public int name, width, height, x, y;

@@ -31,7 +31,7 @@ public class Bases {
 	}
 	
 	public static String bytesToHex(byte[] bys, int ofs, int len) {
-		StringBuilder sb = new StringBuilder(bys.length*2);
+		var sb = new StringBuilder(bys.length*2);
 		for (int i = ofs; i < ofs+len; i++) {
 			int hi = ((bys[i]&0xF0)>>4);
 			int lo = bys[i]&0xF;
@@ -46,7 +46,7 @@ public class Bases {
 	}
 
 	public static String longToHex(long l) {
-		return intToHex((l>>32L)&0xFFFFFFFF)+intToHex(l&0xFFFFFFFF);
+		return intToHex((l >> 32L))+intToHex(l);
 	}
 
 	public static String intToHex(long i) {

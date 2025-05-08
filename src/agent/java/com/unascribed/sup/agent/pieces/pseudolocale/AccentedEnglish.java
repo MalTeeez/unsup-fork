@@ -26,6 +26,7 @@ import java.util.concurrent.ThreadLocalRandom;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 
+@SuppressWarnings("ALL")
 public class AccentedEnglish {
 
 	private static final int[][] replacementsLo = Arrays.stream("äāáǎàăåǻãǟǡǻȁȃȧᶏḁẚạảấầẩẫậắằẳẵặɑαάὰἀἁἂἃἆἇᾂᾃᾰᾱᾲᾳᾴᾶᾷⱥ|bьвЪБбβƀƃɓᵬᶀḃḅḇꞗ|cçςĉčċćĉċƈȼ¢ɕḉꞓꞔ|dďđ₫ðδ|eēéěèêĕėëęзεέэ℮|fƒ|ḡģǧĝğġǥǵɠᶃꞡ|ĥħђн|ıīíǐìĭîïίįΐι|jĵ|ƙκ|ŀļℓĺļľł|m₥мṁ|ńňŉηήийñлпπ|ōóŏòôõöőσøǿ|pρƥφ|qʠɋ|řŗгѓґя|śšŝșşƨ|țţťŧтτ|ūúǔùûũůųüǖǘǚǜύϋΰµцџ|ν|ẃẁẅŵшщωώ|xжẋ×|yỳŷчγ|zźżžƶȥʐᵶᶎẑẓẕⱬ"

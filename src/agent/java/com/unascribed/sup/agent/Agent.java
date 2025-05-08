@@ -263,6 +263,7 @@ public class Agent {
 	// "step" methods, called only once, exist to turn premain() into a logical overview that can be
 	// drilled down into as necessary
 
+	@SuppressWarnings("deprecation")
 	private static boolean preinit(String arg) {
 		if (!loadConfig()) {
 			Log.warn("Cannot find a config file, giving up.");
@@ -579,7 +580,7 @@ public class Agent {
 				}
 			}
 			if (res != null) {
-				sourceVersion = res.ourVersion.name;
+				sourceVersion = res.ourVersion.name();
 				modifier.accept(res);
 				if (res.plan != null) {
 					applyUpdate(res, dryRun);
@@ -654,42 +655,42 @@ public class Agent {
 			if (dest.exists()) {
 				boolean normalConflict = false;
 				long size = dest.length();
-				if (from.hash == null) {
-					if (to.sizeMatches(size) && to.hash.equals(RequestHelper.hash(to.func, dest))) {
+				if (from.hash() == null) {
+					if (to.sizeMatches(size) && to.hash().equals(RequestHelper.hash(to.func(), dest))) {
 						Log.info(path+" was created in this update and locally, but the local version matches the update. Skipping");
 						continue;
 					}
 					conflictType = ConflictType.LOCAL_AND_REMOTE_CREATED;
 				} else if (from.sizeMatches(size)) {
-					String hash = RequestHelper.hash(from.func, dest);
-					if (from.hash.equals(hash)) {
+					String hash = RequestHelper.hash(from.func(), dest);
+					if (from.hash().equals(hash)) {
 						Log.debug(path+" matches the expected from hash");
-					} else if (to.sizeMatches(size) && to.hash.equals(from.func == to.func ? hash : RequestHelper.hash(to.func, dest))) {
+					} else if (to.sizeMatches(size) && to.hash().equals(from.func() == to.func() ? hash : RequestHelper.hash(to.func(), dest))) {
 						Log.info(path+" matches the expected to hash, so has already been updated locally. Skipping");
 						continue;
 					} else {
-						Log.info("CONFLICT: "+path+" doesn't match the expected from hash ("+hash+" != "+from.hash+")");
+						Log.info("CONFLICT: "+path+" doesn't match the expected from hash ("+hash+" != "+ from.hash() +")");
 						normalConflict = true;
 					}
-				} else if (to.sizeMatches(size) && to.hash.equals(RequestHelper.hash(to.func, dest))) {
+				} else if (to.sizeMatches(size) && to.hash().equals(RequestHelper.hash(to.func(), dest))) {
 					Log.info(path+" matches the expected to hash, so has already been updated locally. Skipping");
 					continue;
 				} else {
-					Log.info("CONFLICT: "+path+" doesn't match the expected from size ("+size+" != "+from.size+")");
+					Log.info("CONFLICT: "+path+" doesn't match the expected from size ("+size+" != "+ from.size() +")");
 					normalConflict = true;
 				}
 				if (normalConflict) {
-					if (to.hash == null) {
+					if (to.hash() == null) {
 						conflictType = ConflictType.LOCAL_CHANGED_REMOTE_DELETED;
 					} else {
 						conflictType = ConflictType.LOCAL_AND_REMOTE_CHANGED;
 					}
 				}
 			} else {
-				if (to.hash == null) {
+				if (to.hash() == null) {
 					Log.info(path+" was deleted in this update, but it's already missing locally. Skipping");
 					continue;
-				} else if (from.hash != null) {
+				} else if (from.hash() != null) {
 					conflictType = ConflictType.LOCAL_DELETED_REMOTE_CHANGED;
 				}
 			}
@@ -723,7 +724,7 @@ public class Agent {
 					moveAside.add(path);
 				}
 			}
-			progressDenom += (to.size == -1 ? 1 : to.size);
+			progressDenom += (to.size() == -1 ? 1 : to.size());
 		}
 		File tmp = dryRun ? null : new File(".unsup-tmp");
 		if (tmp != null && !tmp.exists()) {
@@ -739,7 +740,7 @@ public class Agent {
 		List<Future<?>> futures = new ArrayList<>();
 		Map<FilePlan, DownloadedFile> downloads = new IdentityHashMap<>();
 		Runnable updateSubtitle = () -> {
-			if (files.size() == 0) {
+			if (files.isEmpty()) {
 				PuppetHandler.updateSubtitle("subtitle.downloading_indeterminate");
 			} else if (files.size() == 1) {
 				PuppetHandler.updateSubtitleDownloading(files.iterator().next());
@@ -759,7 +760,7 @@ public class Agent {
 				continue;
 			}
 			FileState to = f.state;
-			if (to.size == 0) {
+			if (to.size() == 0) {
 				continue;
 			}
 			futures.add(svc.submit(() -> {
@@ -786,14 +787,14 @@ public class Agent {
 							Log.info("Downloading "+path+" from "+describe(f.url));
 						}
 						df = downloadAndCheckHash(tmp, progress, updateProgress, path, f, f.url, to, contributedProgress);
-						if (to.size == -1) progress.incrementAndGet();
+						if (to.size() == -1) progress.incrementAndGet();
 					} catch (Throwable t) {
 						if (f.fallbackUrl != null) {
 							progress.addAndGet(-contributedProgress[0]);
 							contributedProgress[0] = 0;
 							Log.warn("Failed to download "+path+" from specified URL, trying again from "+describe(f.fallbackUrl), t);
 							df = downloadAndCheckHash(tmp, progress, updateProgress, path, f, f.fallbackUrl, to, contributedProgress);
-							if (to.size == -1) progress.incrementAndGet();
+							if (to.size() == -1) progress.incrementAndGet();
 						} else {
 							throw t;
 						}
@@ -838,7 +839,7 @@ public class Agent {
 						FilePlan f = en.getValue();
 						FileState to = f.state;
 						DownloadedFile df = downloads.get(f);
-						if (df == null && to.size != 0) {
+						if (df == null && to.size() != 0) {
 							// Conflict dialog was rejected, skip this file.
 							continue;
 						}
@@ -857,8 +858,8 @@ public class Agent {
 							Log.debug("Displacing "+path);
 							Files.move(destPath, destPath.resolveSibling(destPath.getFileName().toString()+".orig"), StandardCopyOption.REPLACE_EXISTING);
 						}
-						if (to.size == 0) {
-							if (to.hash == null) {
+						if (to.size() == 0) {
+							if (to.hash() == null) {
 								if (pass == 0 && Files.exists(destPath)) {
 									Log.info("Deleting "+path);
 									Files.delete(destPath);
@@ -879,7 +880,7 @@ public class Agent {
 						} else if (pass == 1) {
 							Log.debug("Applying "+path);
 							assert df != null;
-							Files.move(df.file.toPath(), destPath, StandardCopyOption.REPLACE_EXISTING);
+							Files.move(df.file().toPath(), destPath, StandardCopyOption.REPLACE_EXISTING);
 						}
 				}
 				}
@@ -902,7 +903,7 @@ public class Agent {
 
 	private static String ponder(FileState state) {
 		if (state == null) return "[MISSING. STATE DATA IS INCOMPLETE OR CORRUPT]";
-		if (state.hash == null) {
+		if (state.hash() == null) {
 			return "[deleted]";
 		}
 		return state.toString();
@@ -910,10 +911,10 @@ public class Agent {
 
 	private static DownloadedFile downloadAndCheckHash(File tmp, AtomicLong progress, Runnable updateProgress, String path, FilePlan f, URI url, FileState to, long[] contributedProgress) throws IOException {
 		return RequestHelper.withRetries(3, () -> {
-			DownloadedFile df = RequestHelper.downloadToFile(url, tmp, to.size, to.size == -1 ? l -> {} : l -> {contributedProgress[0]+=l;progress.addAndGet(l);},
-					updateProgress, to.func, f.hostile);
-			if (!df.hash.equals(to.hash)) {
-				throw new Retry("Hash mismatch on downloaded file for "+path+" from "+url+" - expected "+to.hash+", got "+df.hash,
+			DownloadedFile df = RequestHelper.downloadToFile(url, tmp, to.size(), to.size() == -1 ? l -> {} : l -> {contributedProgress[0]+=l;progress.addAndGet(l);},
+					updateProgress, to.func(), f.hostile);
+			if (!df.hash().equals(to.hash())) {
+				throw new Retry("Hash mismatch on downloaded file for "+path+" from "+url+" - expected "+ to.hash() +", got "+ df.hash(),
 						IOException::new);
 			}
 			return df;
@@ -934,39 +935,18 @@ public class Agent {
 		} else {
 			domain = host;
 		}
-		switch (domain) {
-			case "modrinth.com":
-				return "Modrinth";
-			
-			case "forgecdn.net":
-			case "curseforge.com":
-				return "CurseForge";
-			
-			case "github.com":
-			case "githubusercontent.com":
-			case "github.io":
-				return "GitHub";
-				
-			case "codeberg.org":
-				return "Codeberg";
-
-			case "planetminecraft.com":
-				return "Planet Minecraft";
-				
-			case "mcarchive.net":
-				return "MCArchive";
-			
-			case "archive.org":
-				return "Internet Archive";
-				
-			case "prismlauncher.org":
-				return "PrismLauncher";
-					
-			case "maven.org":
-				return "Maven Central";
-				
-			default: return host;
-		}
+        return switch (domain) {
+            case "modrinth.com" -> "Modrinth";
+            case "forgecdn.net", "curseforge.com" -> "CurseForge";
+            case "github.com", "githubusercontent.com", "github.io" -> "GitHub";
+            case "codeberg.org" -> "Codeberg";
+            case "planetminecraft.com" -> "Planet Minecraft";
+            case "mcarchive.net" -> "MCArchive";
+            case "archive.org" -> "Internet Archive";
+            case "prismlauncher.org" -> "PrismLauncher";
+            case "maven.org" -> "Maven Central";
+            default -> host;
+        };
 	}
 	
 	private static QDIni mergePreset(QDIni config, String presetName, boolean mustExist) {

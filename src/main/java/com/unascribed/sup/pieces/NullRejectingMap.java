@@ -43,8 +43,8 @@ public class NullRejectingMap<K, V> extends AbstractMap<K, V> {
 
 	@Override
 	public Set<Entry<K, V>> entrySet() {
-		Set<Entry<K, V>> delegateSet = delegate.entrySet();
-		return new AbstractSet<Map.Entry<K,V>>() {
+		var delegateSet = delegate.entrySet();
+		return new AbstractSet<>() {
 
 			@Override
 			public int size() {
@@ -53,8 +53,8 @@ public class NullRejectingMap<K, V> extends AbstractMap<K, V> {
 
 			@Override
 			public Iterator<Entry<K, V>> iterator() {
-				Iterator<Entry<K, V>> delegateIter = delegateSet.iterator();
-				return new Iterator<Map.Entry<K,V>>() {
+				var delegateIter = delegateSet.iterator();
+				return new Iterator<>() {
 					@Override
 					public boolean hasNext() {
 						return delegateIter.hasNext();
@@ -62,8 +62,8 @@ public class NullRejectingMap<K, V> extends AbstractMap<K, V> {
 					
 					@Override
 					public Entry<K, V> next() {
-						Entry<K, V> delegateEn = delegateIter.next();
-						return new Entry<K, V>() {
+						var delegateEn = delegateIter.next();
+						return new Entry<>() {
 
 							@Override
 							public K getKey() {

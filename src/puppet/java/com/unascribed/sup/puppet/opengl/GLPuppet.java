@@ -20,6 +20,7 @@
 package com.unascribed.sup.puppet.opengl;
 
 import org.lwjgl.PointerBuffer;
+import org.lwjgl.glfw.GLFW;
 import org.lwjgl.system.Configuration;
 import org.lwjgl.util.freetype.FreeType;
 
@@ -118,7 +119,7 @@ public class GLPuppet {
 		}
 		
 		Puppet.sched.scheduleWithFixedDelay(() -> {
-			Puppet.runOnMainThread(() -> glfwPollEvents());
+			Puppet.runOnMainThread(org.lwjgl.glfw.GLFW::glfwPollEvents);
 		}, 0, 30, TimeUnit.MILLISECONDS);
 		
 		return new PuppetDelegate() {
@@ -137,9 +138,7 @@ public class GLPuppet {
 					buildLatch.awaitUninterruptibly();
 					mainWindow.setVisible(visible);
 					if (visible) {
-						Puppet.runOnMainThread(() -> {
-							mainVisibleLatch.release();
-						});
+						Puppet.runOnMainThread(mainVisibleLatch::release);
 					}
 				});
 			}

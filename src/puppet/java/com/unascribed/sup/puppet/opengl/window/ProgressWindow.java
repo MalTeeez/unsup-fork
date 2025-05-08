@@ -58,7 +58,7 @@ public class ProgressWindow extends Window {
 	private boolean enterPressed;
 	
 	@Override
-	public void create(Window parent, String title, int width, int height, double dpiScale) {
+	public synchronized void create(Window parent, String title, int width, int height, double dpiScale) {
 		glfwWindowHint(GLFW_FOCUS_ON_SHOW, GLFW_FALSE);
 		glfwWindowHint(GLFW_RESIZABLE, GLFW_FALSE);
 		glfwWindowHint(GLFW_FLOATING, GLFW_FALSE);

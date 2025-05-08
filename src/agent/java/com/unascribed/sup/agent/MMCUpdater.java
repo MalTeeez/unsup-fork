@@ -198,9 +198,8 @@ public class MMCUpdater {
 				if (mmcPack.getInt("formatVersion", 0) == 1) {
 					boolean changed = false;
 					for (Object o : mmcPack.getArray("components", new JsonArray())) {
-						if (o instanceof JsonObject) {
-							JsonObject jo = (JsonObject)o;
-							JsonObject res = cb.apply(jo);
+						if (o instanceof JsonObject jo) {
+                            JsonObject res = cb.apply(jo);
 							if (res != null) {
 								changed = true;
 								if (jo != res) {

@@ -147,9 +147,7 @@ public class SwingPuppet {
 			
 			@Override
 			public void build() {
-				invokeLater(() -> {
-					buildUi();
-				});
+				invokeLater(SwingPuppet::buildUi);
 			}
 			
 			@Override
@@ -236,15 +234,14 @@ public class SwingPuppet {
 			@Override
 			public void openMessageDialog(String name, String title, String body, AlertMessageType messageType, String[] options, String def) {
 				invokeLater(() -> {
-					int swingType = JOptionPane.PLAIN_MESSAGE;
-					switch (messageType) {
-						case ERROR: swingType = JOptionPane.ERROR_MESSAGE; break;
-						case INFO: swingType = JOptionPane.INFORMATION_MESSAGE; break;
-						case NONE: swingType = JOptionPane.PLAIN_MESSAGE; break;
-						case QUESTION: swingType = JOptionPane.QUESTION_MESSAGE; break;
-						case WARN: swingType = JOptionPane.WARNING_MESSAGE; break;
-					}
-					SwingPuppet.openMessageDialog(name, title, body, swingType, options);
+					int swingType = switch (messageType) {
+                        case ERROR -> JOptionPane.ERROR_MESSAGE;
+                        case INFO -> JOptionPane.INFORMATION_MESSAGE;
+                        case NONE -> JOptionPane.PLAIN_MESSAGE;
+                        case QUESTION -> JOptionPane.QUESTION_MESSAGE;
+                        case WARN -> JOptionPane.WARNING_MESSAGE;
+                    };
+                    SwingPuppet.openMessageDialog(name, title, body, swingType, options);
 				});
 			}
 			
@@ -298,14 +295,11 @@ public class SwingPuppet {
 	}
 
 	private static ColorSpace getAwtColorSpace(QOIColorSpace colorSpace) {
-		switch (colorSpace) {
-			case SRGB:
-				return ColorSpace.getInstance(ColorSpace.CS_sRGB);
-			case LINEAR:
-				return ColorSpace.getInstance(ColorSpace.CS_LINEAR_RGB);
-			default:
-				throw new RuntimeException();
-		}
+        return switch (colorSpace) {
+            case SRGB -> ColorSpace.getInstance(ColorSpace.CS_sRGB);
+            case LINEAR -> ColorSpace.getInstance(ColorSpace.CS_LINEAR_RGB);
+            default -> throw new RuntimeException();
+        };
 	}
 
 	private static Font loadFont(String name, int style) {
