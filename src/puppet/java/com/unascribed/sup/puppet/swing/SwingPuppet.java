@@ -234,14 +234,13 @@ public class SwingPuppet {
 			@Override
 			public void openMessageDialog(String name, String title, String body, AlertMessageType messageType, String[] options, String def) {
 				invokeLater(() -> {
-					int swingType = switch (messageType) {
-												case ERROR -> JOptionPane.ERROR_MESSAGE;
-												case INFO -> JOptionPane.INFORMATION_MESSAGE;
-												case NONE -> JOptionPane.PLAIN_MESSAGE;
-												case QUESTION -> JOptionPane.QUESTION_MESSAGE;
-												case WARN -> JOptionPane.WARNING_MESSAGE;
-										};
-										SwingPuppet.openMessageDialog(name, title, body, swingType, options);
+					SwingPuppet.openMessageDialog(name, title, body, switch (messageType) {
+						case ERROR -> JOptionPane.ERROR_MESSAGE;
+						case INFO -> JOptionPane.INFORMATION_MESSAGE;
+						case NONE -> JOptionPane.PLAIN_MESSAGE;
+						case QUESTION -> JOptionPane.QUESTION_MESSAGE;
+						case WARN -> JOptionPane.WARNING_MESSAGE;
+					}, options);
 				});
 			}
 			
