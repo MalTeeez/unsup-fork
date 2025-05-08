@@ -48,7 +48,7 @@ auth="Authorization: token $FORGEJO_KEY"
 curl -s -X DELETE -H "$auth" $apibase/releases/tags/SNAPSHOT >/dev/null
 curl -s -X DELETE -H "$auth" $apibase/tags/SNAPSHOT >/dev/null
 
-lasttag=$(curl -s '$apibase/releases?draft=false&pre-release=true&page=1&limit=1' |jq -r '.[0].tag_name')
+lasttag=$(curl -s "$apibase/releases?draft=false&pre-release=true&page=1&limit=1" |jq -r '.[0].tag_name')
 
 resp=$(curl -s -X POST -H 'Content-Type: application/json' -H "$auth" $apibase/releases --data-raw "
 {
