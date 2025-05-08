@@ -62,12 +62,12 @@ import com.unascribed.sup.util.Iterables;
 public class PackwizHandler extends AbstractFormatHandler {
 	
 	public static CheckResult check(URI src, boolean autoaccept, boolean forceFlavorDefaults) throws IOException, URISyntaxException {
-		Version ourVersion = Version.fromJson(Agent.state.getObject("current_version"));
+		var ourVersion = Version.fromJson(Agent.state.getObject("current_version"));
 		Toml pack = RequestHelper.loadToml(src, 4*K, src.resolve("unsup.sig"));
-		String fmt = pack.getString("pack-format");
+		var fmt = pack.getString("pack-format");
 		if (!fmt.equals("unsup-packwiz") && (!fmt.startsWith("packwiz:") || FlexVerComparator.compare("packwiz:1.1.0", fmt) < 0))
 			throw new IOException("Cannot read unknown pack-format "+fmt);
-		JsonObject pwstate = Agent.state.getObject("packwiz");
+		var pwstate = Agent.state.getObject("packwiz");
 		if (pwstate == null) {
 			pwstate = new JsonObject();
 			Agent.state.put("packwiz", pwstate);
@@ -110,8 +110,8 @@ public class PackwizHandler extends AbstractFormatHandler {
 			if (ourVersion == null) {
 				ourVersion = new Version("null", 0);
 			}
-			Version theirVersion = new Version(pack.getString("version"), ourVersion.code() +1);
-			JsonObject newState = new JsonObject(Agent.state);
+			var theirVersion = new Version(pack.getString("version"), ourVersion.code() +1);
+			var newState = new JsonObject(Agent.state);
 			pwstate = new JsonObject(pwstate);
 			newState.put("packwiz", pwstate);
 			
@@ -143,19 +143,19 @@ public class PackwizHandler extends AbstractFormatHandler {
 			Map<String, FlavorGroup> syntheticGroups = new HashMap<>();
 			for (Map.Entry<String, Object> en : pwstate.getObject("syntheticFlavorGroups", new JsonObject()).entrySet()) {
 				if (en.getValue() instanceof JsonObject obj) {
-                    String id = obj.getString("id");
+					var id = obj.getString("id");
 					if (id == null) continue;
-					String name = obj.getString("name");
-					String description = obj.getString("description");
-					JsonArray choices = obj.getArray("choices");
-					FlavorGroup grp = new FlavorGroup();
+					var name = obj.getString("name");
+					var description = obj.getString("description");
+					var choices = obj.getArray("choices");
+					var grp = new FlavorGroup();
 					grp.id = id;
 					grp.name = name;
 					grp.description = description;
 					for (Object cele : choices) {
 						FlavorChoice c = new FlavorChoice();
 						if (cele instanceof JsonObject cobj) {
-                            c.id = cobj.getString("id");
+														c.id = cobj.getString("id");
 							if (c.id == null) continue;
 							c.name = cobj.getString("name");
 							c.description = cobj.getString("description");
@@ -178,14 +178,14 @@ public class PackwizHandler extends AbstractFormatHandler {
 					if (unsup.containsTable("flavor_groups")) {
 						flavors: for (Map.Entry<String, Object> en : unsup.getTable("flavor_groups").entrySet()) {
 							if (en.getValue() instanceof Toml group) {
-                                String groupId = en.getKey();
-								String side = group.getString("side");
+								String groupId = en.getKey();
+								var side = group.getString("side");
 								if (side != null && Agent.useEnvs && !side.equals("both") && !side.equals(Agent.detectedEnv)) {
 									Log.info("Skipping flavor group "+groupId+" as it's not eligible for env "+Agent.detectedEnv);
 									continue;
 								}
-								String groupName = group.getString("name", groupId);
-								String groupDescription = group.getString("description", "flavor.default_description");
+								var groupName = group.getString("name", groupId);
+								var groupDescription = group.getString("description", "flavor.default_description");
 								String defChoice = Agent.config.get("flavors."+groupId);
 								FlavorGroup grp = new FlavorGroup();
 								grp.id = groupId;
@@ -228,7 +228,7 @@ public class PackwizHandler extends AbstractFormatHandler {
 					if (unsup.containsTable("metafile")) {
 						for (Map.Entry<String, Object> en : unsup.getTable("metafile").entrySet()) {
 							if (en.getValue() instanceof Toml t) {
-                                if (t.contains("flavors")) {
+								if (t.contains("flavors")) {
 									if (t.containsTableArray("flavors")) {
 										metafileFlavors.put(en.getKey(), t.getList("flavors").stream()
 												.map(String::valueOf)
@@ -496,15 +496,15 @@ public class PackwizHandler extends AbstractFormatHandler {
 	}
 	
 	static HashFunction parseFunc(String str) {
-        return switch (str) {
-            case "md5" -> HashFunction.MD5;
-            case "sha1" -> HashFunction.SHA1;
-            case "sha256" -> HashFunction.SHA2_256;
-            case "sha384" -> HashFunction.SHA2_384;
-            case "sha512" -> HashFunction.SHA2_512;
-            case "murmur2" -> HashFunction.MURMUR2_CF;
-            default -> throw new IllegalArgumentException("Unknown packwiz hash function " + str);
-        };
+		return switch (str) {
+			case "md5" -> HashFunction.MD5;
+			case "sha1" -> HashFunction.SHA1;
+			case "sha256" -> HashFunction.SHA2_256;
+			case "sha384" -> HashFunction.SHA2_384;
+			case "sha512" -> HashFunction.SHA2_512;
+			case "murmur2" -> HashFunction.MURMUR2_CF;
+			default -> throw new IllegalArgumentException("Unknown packwiz hash function " + str);
+		};
 	}
 	
 }

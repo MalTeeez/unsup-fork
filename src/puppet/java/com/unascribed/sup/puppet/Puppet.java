@@ -262,15 +262,15 @@ public class Puppet {
 							};
 						}
 						case "mode" -> {
-                            switch (arg) {
-                                case "ind" -> r = del::setProgressIndeterminate;
-                                case "det" -> r = del::setProgressDeterminate;
-                                case "done" -> r = del::setDone;
-                                default -> {
-                                    Puppet.log("WARN", "Unknown mode " + arg + ", expected ind, det, or done");
-                                    continue;
-                                }
-                            }
+							switch (arg) {
+								case "ind" -> r = del::setProgressIndeterminate;
+								case "det" -> r = del::setProgressDeterminate;
+								case "done" -> r = del::setDone;
+								default -> {
+								    Puppet.log("WARN", "Unknown mode " + arg + ", expected ind, det, or done");
+								    continue;
+								}
+							}
 						}
 						case "prog" -> {
 							int i = Integer.parseInt(arg);
@@ -303,27 +303,20 @@ public class Puppet {
 									r = () -> del.openChoiceDialog(name, title, body, options, optionTypeStr);
 								} else {
 									AlertMessageType messageType = AlertMessageType.valueOf(messageTypeStr.toUpperCase(Locale.ROOT));
-									String[] options;
-									switch (optionTypeStr) {
-										case "yesno":
-											options = new String[]{"option.yes", "option.no"};
-											break;
-										case "yesnocancel":
-											options = new String[]{"option.yes", "option.no", "option.cancel"};
-											break;
-										case "okcancel":
-											options = new String[]{"option.ok", "option.cancel"};
-											break;
-										case "yesnotoallcancel":
-											options = new String[]{"option.yes_to_all", "option.yes", "option.no_to_all", "option.no", "option.cancel"};
-											break;
-										default:
-											Puppet.log("WARN", "Unknown dialog option type "+optionTypeStr+", defaulting to ok");
-											// fallthru
-										case "ok":
-											options = new String[]{"option.ok"};
-											break;
-									}
+									String[] options = switch (optionTypeStr) {
+										case "yesno" ->
+											new String[]{"option.yes", "option.no"};
+										case "yesnocancel" ->
+											new String[]{"option.yes", "option.no", "option.cancel"};
+										case "okcancel" ->
+											new String[]{"option.ok", "option.cancel"};
+										case "yesnotoallcancel" ->
+											new String[]{"option.yes_to_all", "option.yes", "option.no_to_all", "option.no", "option.cancel"};
+										case "ok" ->
+											new String[]{"option.ok"};
+										default ->
+											throw new IllegalArgumentException("Unknown option type "+optionTypeStr);
+									};
 									r = () -> del.openMessageDialog(name, title, body, messageType, options, Translate.format(def));
 								}
 							}

@@ -199,7 +199,7 @@ public class MMCUpdater {
 					boolean changed = false;
 					for (Object o : mmcPack.getArray("components", new JsonArray())) {
 						if (o instanceof JsonObject jo) {
-                            JsonObject res = cb.apply(jo);
+							JsonObject res = cb.apply(jo);
 							if (res != null) {
 								changed = true;
 								if (jo != res) {

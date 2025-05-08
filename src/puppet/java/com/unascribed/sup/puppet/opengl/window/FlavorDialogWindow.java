@@ -556,7 +556,7 @@ public class FlavorDialogWindow extends Window {
 	
 	private void drawNode(NodeDrawState state, Node node) {
 		if (node instanceof Text t) {
-            float[] res = font.drawWrapped(state.face, state.baseX, state.x, state.y, state.size, state.maxWidth, t.getData());
+			float[] res = font.drawWrapped(state.face, state.baseX, state.x, state.y, state.size, state.maxWidth, t.getData());
 			state.x = res[0];
 			state.y = res[1];
 		} else {
@@ -568,7 +568,7 @@ public class FlavorDialogWindow extends Window {
 				}
 			}
 			switch (tagName) {
-				case "h1": {
+				case "h1" -> {
 					NodeDrawState nw = state.clone();
 					nw.y += 8;
 					nw.size = 28;
@@ -576,9 +576,8 @@ public class FlavorDialogWindow extends Window {
 					drawChildren(nw, node);
 					state.y = nw.y+32;
 					state.x = state.baseX;
-					break;
 				}
-				case "h2": {
+				case "h2" -> {
 					NodeDrawState nw = state.clone();
 					nw.y += 6;
 					nw.size = 20;
@@ -586,9 +585,8 @@ public class FlavorDialogWindow extends Window {
 					drawChildren(nw, node);
 					state.y = nw.y+32;
 					state.x = state.baseX;
-					break;
 				}
-				case "h3": {
+				case "h3" -> {
 					NodeDrawState nw = state.clone();
 					nw.y += 4;
 					nw.size = 18;
@@ -596,9 +594,8 @@ public class FlavorDialogWindow extends Window {
 					drawChildren(nw, node);
 					state.y = nw.y+32;
 					state.x = state.baseX;
-					break;
 				}
-				case "ul": {
+				case "ul" -> {
 					NodeDrawState nw = state.clone();
 					nw.y += 16;
 					nw.baseX += 24;
@@ -606,59 +603,46 @@ public class FlavorDialogWindow extends Window {
 					drawChildren(nw, node);
 					state.y = nw.y+32;
 					state.x = state.baseX;
-					break;
 				}
-				case "li": {
+				case "li" -> {
 					drawCircle(state.x-8, state.y-(state.size/3), 6);
 					drawChildren(state, node);
-					break;
 				}
-				case "b": case "strong": {
+				case "b", "strong" -> {
 					NodeDrawState nw = state.clone();
 					nw.face = approach(nw.face, Face.BOLD);
 					drawChildren(nw, node);
 					state.y = nw.y;
 					state.x = nw.x;
-					break;
 				}
-				case "i": case "em": {
+				case "i", "em" -> {
 					NodeDrawState nw = state.clone();
 					nw.face = approach(nw.face, Face.ITALIC);
 					drawChildren(nw, node);
 					state.y = nw.y;
 					state.x = nw.x;
-					break;
 				}
-				default: {
+				default -> {
 					drawChildren(state, node);
-					break;
 				}
 			}
 		}
 	}
 
 	private Face approach(Face cur, Face next) {
-		switch (cur) {
-			case BOLDITALIC: return cur;
-			case BOLD: {
-                return switch (next) {
-                    case ITALIC -> Face.BOLDITALIC;
-                    default -> Face.BOLD;
-                };
-			}
-			case ITALIC: {
-                return switch (next) {
-                    case BOLD -> Face.BOLDITALIC;
-                    default -> Face.ITALIC;
-                };
-			}
-			case REGULAR: {
-				return next;
-			}
-			default: {
-				return cur;
-			}
-		}
+		return switch (cur) {
+			case BOLDITALIC -> cur;
+			case BOLD -> switch (next) {
+				case ITALIC -> Face.BOLDITALIC;
+				default -> Face.BOLD;
+			};
+			case ITALIC -> switch (next) {
+				case BOLD -> Face.BOLDITALIC;
+				default -> Face.ITALIC;
+			};
+			case REGULAR -> next;
+			default -> cur;
+		};
 	}
 
 	private void drawChildren(NodeDrawState state, Node node) {

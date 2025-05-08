@@ -173,11 +173,11 @@ public class QDIni {
 	}
 	
 	private boolean strictParseBoolean(String s) {
-        return switch (s.toLowerCase(Locale.ROOT)) {
-            case "true" -> true;
-            case "false" -> false;
-            default -> throw new IllegalArgumentException();
-        };
+		return switch (s.toLowerCase(Locale.ROOT)) {
+			case "true" -> true;
+			case "false" -> false;
+			default -> throw new IllegalArgumentException();
+		};
 	}
 	
 	public <E extends Enum<E>> E getEnum(String key, Class<E> clazz, E def) throws BadValueException {

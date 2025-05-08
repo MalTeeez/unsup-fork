@@ -935,18 +935,18 @@ public class Agent {
 		} else {
 			domain = host;
 		}
-        return switch (domain) {
-            case "modrinth.com" -> "Modrinth";
-            case "forgecdn.net", "curseforge.com" -> "CurseForge";
-            case "github.com", "githubusercontent.com", "github.io" -> "GitHub";
-            case "codeberg.org" -> "Codeberg";
-            case "planetminecraft.com" -> "Planet Minecraft";
-            case "mcarchive.net" -> "MCArchive";
-            case "archive.org" -> "Internet Archive";
-            case "prismlauncher.org" -> "PrismLauncher";
-            case "maven.org" -> "Maven Central";
-            default -> host;
-        };
+		return switch (domain) {
+			case "modrinth.com" -> "Modrinth";
+			case "forgecdn.net", "curseforge.com" -> "CurseForge";
+			case "github.com", "githubusercontent.com", "github.io" -> "GitHub";
+			case "codeberg.org" -> "Codeberg";
+			case "planetminecraft.com" -> "Planet Minecraft";
+			case "mcarchive.net" -> "MCArchive";
+			case "archive.org" -> "Internet Archive";
+			case "prismlauncher.org" -> "PrismLauncher";
+			case "maven.org" -> "Maven Central";
+			default -> host;
+		};
 	}
 	
 	private static QDIni mergePreset(QDIni config, String presetName, boolean mustExist) {

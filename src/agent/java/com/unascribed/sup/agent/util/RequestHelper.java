@@ -382,21 +382,21 @@ public class RequestHelper {
 	 * Closes the stream when done.
 	 */
 	private static byte[] collectLimited(InputStream in, int limit) throws IOException {
-        try (in) {
-            ByteArrayOutputStream baos = new ByteArrayOutputStream();
-            int totalRead = 0;
-            byte[] buf = new byte[limit / 4];
-            while (true) {
-                int read = in.read(buf);
-                if (read == -1) break;
-                totalRead += read;
-                if (totalRead > limit) {
-                    return null;
-                }
-                baos.write(buf, 0, read);
-            }
-            return baos.toByteArray();
-        }
+		try (in) {
+			ByteArrayOutputStream baos = new ByteArrayOutputStream();
+			int totalRead = 0;
+			byte[] buf = new byte[limit / 4];
+			while (true) {
+				int read = in.read(buf);
+				if (read == -1) break;
+				totalRead += read;
+				if (totalRead > limit) {
+						return null;
+				}
+				baos.write(buf, 0, read);
+			}
+			return baos.toByteArray();
+		}
 	}
 
 }

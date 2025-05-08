@@ -77,25 +77,25 @@ public class NativeHandler extends AbstractFormatHandler {
 		if (theirFlavorGroups != null) {
 			flavors: for (Object ele : theirFlavorGroups) {
 				if (ele instanceof JsonObject obj) {
-                    JsonArray envs = obj.getArray("envs");
+					JsonArray envs = obj.getArray("envs");
 					if (envs != null && Agent.useEnvs && !Iterables.contains(envs, Agent.detectedEnv)) {
 						continue;
 					}
-					String id = obj.getString("id");
+					var id = obj.getString("id");
 					if (id == null)
 						throw new IOException("A flavor group is missing an ID");
-					String name = obj.getString("name", id);
-					String description = obj.getString("description", "flavor.default_description");
+					var name = obj.getString("name", id);
+					var description = obj.getString("description", "flavor.default_description");
 					String defChoice = Agent.config.get("flavors."+id);
-					JsonArray choices = obj.getArray("choices");
+					var choices = obj.getArray("choices");
 					FlavorGroup grp = new FlavorGroup();
 					grp.id = id;
 					grp.name = name;
 					grp.description = description;
 					for (Object cele : choices) {
-						FlavorChoice c = new FlavorChoice();
+						var c = new FlavorChoice();
 						if (cele instanceof JsonObject cobj) {
-                            c.id = cobj.getString("id");
+							c.id = cobj.getString("id");
 							if (c.id == null)
 								throw new IOException("A flavor choice in group "+id+" is missing an ID");
 							c.name = cobj.getString("name", c.id);
@@ -128,7 +128,7 @@ public class NativeHandler extends AbstractFormatHandler {
 				grp.name = "Flavor";
 				for (Object ele : theirFlavors) {
 					if (ele instanceof JsonObject obj) {
-                        JsonArray envs = obj.getArray("envs");
+						JsonArray envs = obj.getArray("envs");
 						if (envs != null && Agent.useEnvs && !Iterables.contains(envs, Agent.detectedEnv)) {
 							continue;
 						}
@@ -178,9 +178,9 @@ public class NativeHandler extends AbstractFormatHandler {
 				bootstrapPlan = new UpdatePlan<>(true, newState);
 				for (Object o : bootstrap.getArray("files")) {
 					if (!(o instanceof JsonObject file)) throw new IOException("Entry "+o+" in files array is not an object");
-                    String path = file.getString("path");
+					var path = file.getString("path");
 					if (path == null) throw new IOException("Entry in files array is missing path");
-					String hash = file.getString("hash");
+					var hash = file.getString("hash");
 					if (hash == null) throw new IOException(path+" in files array is missing hash");
 					if (hash.length() != func.sizeInHexChars())  throw new IOException(path+" in files array hash "+hash+" is wrong length ("+hash.length()+" != "+func.sizeInHexChars()+")");
 					long size = file.getLong("size", -1);
@@ -247,14 +247,14 @@ public class NativeHandler extends AbstractFormatHandler {
 				HashFunction func = HashFunction.byName(ver.getString("hash_function", DEFAULT_HASH_FUNCTION));
 				for (Object o : ver.getArray("changes")) {
 					if (!(o instanceof JsonObject file)) throw new IOException("Entry "+o+" in changes array is not an object");
-                    String path = file.getString("path");
+					var path = file.getString("path");
 					if (path == null) throw new IOException("Entry in changes array is missing path");
-					String fromHash = file.getString("from_hash");
+					var fromHash = file.getString("from_hash");
 					if (fromHash != null && fromHash.length() != func.sizeInHexChars())  throw new IOException(path+" in changes array from_hash "+fromHash+" is wrong length ("+fromHash.length()+" != "+func.sizeInHexChars()+")");
 					long fromSize = file.getLong("from_size", -1);
 					if (fromSize < 0) throw new IOException(path+" in changes array has invalid or missing from_size");
 					if (fromSize == 0 && (fromHash != null && !fromHash.equals(func.emptyHash()))) throw new IOException(path+" from in changes array is empty file, but hash isn't the empty hash or null ("+fromHash+" != "+func.emptyHash()+")");
-					String toHash = file.getString("to_hash");
+					var toHash = file.getString("to_hash");
 					if (toHash != null && toHash.length() != func.sizeInHexChars())  throw new IOException(path+" in changes array to_hash "+toHash+" is wrong length ("+toHash.length()+" != "+func.sizeInHexChars()+")");
 					long toSize = file.getLong("to_size", -1);
 					if (toSize < 0) throw new IOException(path+" in changes array has invalid or missing toSize");
@@ -269,7 +269,7 @@ public class NativeHandler extends AbstractFormatHandler {
 						Log.info("Skipping "+path+" as it's not eligible for env "+Agent.detectedEnv);
 						continue;
 					}
-					JsonArray flavors = file.getArray("flavors");
+					var flavors = file.getArray("flavors");
 					if (flavors != null && !Iterables.intersects(flavors, ourFlavors)) {
 						Log.info("Skipping "+path+" as it's not eligible for our selected flavors");
 						continue;

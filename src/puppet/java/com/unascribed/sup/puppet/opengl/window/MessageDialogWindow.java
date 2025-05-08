@@ -205,25 +205,25 @@ public class MessageDialogWindow extends Window {
 						i = Icon.FRAGILE;
 						color = ColorChoice.SUBTITLE;
 					} else {
-                        color = switch (messageType) {
-                            case QUESTION -> {
-                                i = Icon.QUESTION;
-                                yield ColorChoice.QUESTION;
-                            }
-                            case INFO -> {
-                                i = Icon.INFO;
-                                yield ColorChoice.INFO;
-                            }
-                            case WARN -> {
-                                i = Icon.ALERT;
-                                yield ColorChoice.WARNING;
-                            }
-                            case ERROR -> {
-                                i = Icon.ERROR;
-                                yield ColorChoice.ERROR;
-                            }
-                            case NONE -> throw new AssertionError();
-                        };
+						switch (messageType) {
+							case QUESTION -> {
+								i = Icon.QUESTION;
+								color = ColorChoice.QUESTION;
+							}
+							case INFO -> {
+								i = Icon.INFO;
+								color = ColorChoice.INFO;
+							}
+							case WARN -> {
+								i = Icon.ALERT;
+								color = ColorChoice.WARNING;
+							}
+							case ERROR -> {
+								i = Icon.ERROR;
+								color = ColorChoice.ERROR;
+							}
+							case NONE -> throw new AssertionError();
+						};
 					}
 					i.draw(ColorChoice.BACKGROUND, color);
 				glPopMatrix();

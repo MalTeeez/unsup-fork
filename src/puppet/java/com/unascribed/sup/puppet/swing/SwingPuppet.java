@@ -235,13 +235,13 @@ public class SwingPuppet {
 			public void openMessageDialog(String name, String title, String body, AlertMessageType messageType, String[] options, String def) {
 				invokeLater(() -> {
 					int swingType = switch (messageType) {
-                        case ERROR -> JOptionPane.ERROR_MESSAGE;
-                        case INFO -> JOptionPane.INFORMATION_MESSAGE;
-                        case NONE -> JOptionPane.PLAIN_MESSAGE;
-                        case QUESTION -> JOptionPane.QUESTION_MESSAGE;
-                        case WARN -> JOptionPane.WARNING_MESSAGE;
-                    };
-                    SwingPuppet.openMessageDialog(name, title, body, swingType, options);
+												case ERROR -> JOptionPane.ERROR_MESSAGE;
+												case INFO -> JOptionPane.INFORMATION_MESSAGE;
+												case NONE -> JOptionPane.PLAIN_MESSAGE;
+												case QUESTION -> JOptionPane.QUESTION_MESSAGE;
+												case WARN -> JOptionPane.WARNING_MESSAGE;
+										};
+										SwingPuppet.openMessageDialog(name, title, body, swingType, options);
 				});
 			}
 			
@@ -295,11 +295,10 @@ public class SwingPuppet {
 	}
 
 	private static ColorSpace getAwtColorSpace(QOIColorSpace colorSpace) {
-        return switch (colorSpace) {
-            case SRGB -> ColorSpace.getInstance(ColorSpace.CS_sRGB);
-            case LINEAR -> ColorSpace.getInstance(ColorSpace.CS_LINEAR_RGB);
-            default -> throw new RuntimeException();
-        };
+		return ColorSpace.getInstance(switch (colorSpace) {
+			case SRGB -> ColorSpace.CS_sRGB;
+			case LINEAR -> ColorSpace.CS_LINEAR_RGB;
+		});
 	}
 
 	private static Font loadFont(String name, int style) {
