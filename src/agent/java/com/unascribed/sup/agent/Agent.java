@@ -161,7 +161,6 @@ public class Agent {
 					if (res.plan != null) {
 						res.plan.skipStateApplication = true;
 						if (!res.plan.files.containsKey("unsup.ini")) {
-							Log.warn("This manifest does not appear to contain an unsup.ini. There is no reason for server_authority to be enabled!");
 							res.plan = null;
 							return;
 						}
