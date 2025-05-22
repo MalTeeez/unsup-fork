@@ -74,6 +74,7 @@ steps:
       from_secret: forgejo_key
   depends_on: [build]
   commands:
+  - chmod +x ./update-snapshot-release.sh
   - ./update-snapshot-release.sh
 - name: update-cache
   image: meltwater/drone-cache
