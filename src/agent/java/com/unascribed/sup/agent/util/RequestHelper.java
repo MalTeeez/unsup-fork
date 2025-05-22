@@ -36,6 +36,11 @@ import java.net.ConnectException;
 import java.net.UnknownHostException;
 import java.nio.charset.StandardCharsets;
 import java.security.MessageDigest;
+import java.time.Instant;
+import java.time.ZonedDateTime;
+import java.time.format.DateTimeFormatter;
+import java.time.format.DateTimeParseException;
+import java.time.temporal.ChronoUnit;
 import java.util.Arrays;
 import java.util.HashSet;
 import java.util.Set;
@@ -189,6 +194,28 @@ public class RequestHelper {
 				}
 				Response res = Agent.okhttp.newCall(reqbldr.build()).execute();
 				if (res.code() != 200) {
+					if (res.code() == 429) {
+						int delay = 0;
+						String val = res.header("Retry-After");
+						if (val != null) {
+							try {
+								delay = Integer.parseInt(val);
+							} catch (NumberFormatException e) {
+								try {
+									var zdt = ZonedDateTime.parse(val, DateTimeFormatter.RFC_1123_DATE_TIME);
+									long l = Instant.now().until(zdt, ChronoUnit.SECONDS);
+									if (l < 0) l = 0;
+									if (l >= Integer.MAX_VALUE) l = Integer.MAX_VALUE;
+									delay = (int)l;
+								} catch (DateTimeParseException e2) {
+									Log.debug("Failed to parse Retry-After header: "+val, e2);
+								}
+							}
+						}
+						throw new Retry(url.getHost()+" asked us to back off (HTTP 429)",
+								new IOException(url.getHost()+" asked us to back off, but we're out of retries"))
+							.definedDelay(delay);
+					}
 					if (res.code() == 404 || res.code() == 410) throw new FileNotFoundException(url.toString());
 					byte[] b = RequestHelper.collectLimited(res.body().byteStream(), 512);
 					String s = b == null ? "(response too long)" : new String(b, StandardCharsets.UTF_8);
@@ -240,12 +267,19 @@ public class RequestHelper {
 		});
 	}
 	
-	public static final class Retry extends Exception {
+	public static class Retry extends Exception {
+		private int definedDelay = 0;
+		
 		public Retry(String msg, Function<String, Throwable> ifCantRetry) {
 			this(msg, ifCantRetry.apply(msg));
 		}
 		public Retry(String msg, Throwable ifCantRetry) {
 			super(msg, ifCantRetry);
+		}
+		
+		public Retry definedDelay(int definedDelay) {
+			this.definedDelay = definedDelay;
+			return this;
 		}
 	}
 	
@@ -255,7 +289,7 @@ public class RequestHelper {
 	
 	@SuppressWarnings("unchecked")
 	public static <T, E extends Throwable> T withRetries(int tries, RetryCallable<T, E> call) throws E {
-		int secs = 1;
+		int nextRetryDelay = 1;
 		while (true) {
 			boolean canRetry = tries > 0;
 			tries--;
@@ -263,12 +297,16 @@ public class RequestHelper {
 				return call.call();
 			} catch (Retry r) {
 				if (canRetry) {
-					Log.warn(r.getMessage()+". Trying again in "+secs+" second"+(secs == 1 ? "" : "s")
+					int delay = r.definedDelay;
+					if (delay == 0) {
+						delay = nextRetryDelay;
+						nextRetryDelay += (nextRetryDelay+2)/3;
+					}
+					Log.warn(r.getMessage()+". Trying again in "+delay+" second"+(delay == 1 ? "" : "s"+(r.definedDelay == 0 ? "" : " (as requested by server)"))
 							+", "+(tries == 0 ? "final retry" : tries+" retr"+(tries == 1 ? "y" : "ies")+" left"));
 					try {
-						TimeUnit.SECONDS.sleep(secs);
+						TimeUnit.SECONDS.sleep(delay);
 					} catch (InterruptedException ignore) {}
-					secs += (secs+2)/3;
 				} else {
 					throw (E)r.getCause();
 				}

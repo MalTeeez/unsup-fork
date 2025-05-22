@@ -90,6 +90,7 @@ license {
 		ini = 'HASH'
 		svg = 'XML'
 	}
+	exclude 'src/agent/java/uk/co/lucasweb/**'
 }
 
 task computeFileDates {
@@ -108,6 +109,8 @@ task computeFileDates {
 			include 'unsup-lowres.svg'
 			include 'update-snapshot-release.sh'
 			include 'gradle/verification-metadata.xml'
+			
+			exclude 'src/agent/java/uk/co/lucasweb/**'
 			
 			includeEmptyDirs false
 			
@@ -301,6 +304,7 @@ jar {
 			'okhttp3/': pfx+'okhttp3/',
 			'okio/': pfx+'okio/',
 			'org/brotli/dec/': pfx+'brotli/',
+			'uk/co/lucasweb/aws/v4/signer/': pfx+'awsv4/',
 		]
 		
 		mapfile.text = ""

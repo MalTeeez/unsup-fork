@@ -56,6 +56,7 @@ import java.util.function.Function;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 
+import com.github.bsideup.jabel.Desugar;
 import com.grack.nanojson.JsonObject;
 import com.grack.nanojson.JsonParser;
 import com.grack.nanojson.JsonWriter;
@@ -63,6 +64,10 @@ import com.unascribed.sup.Unsup;
 import com.unascribed.sup.Util;
 import com.unascribed.sup.agent.PuppetHandler.AlertOption;
 import com.unascribed.sup.agent.PuppetHandler.AlertOptionType;
+import com.unascribed.sup.agent.auth.AWS4Authorizer;
+import com.unascribed.sup.agent.auth.Authorizer;
+import com.unascribed.sup.agent.auth.BasicAuthorizer;
+import com.unascribed.sup.agent.auth.BearerAuthorizer;
 import com.unascribed.sup.agent.handler.NativeHandler;
 import com.unascribed.sup.agent.handler.PackwizHandler;
 import com.unascribed.sup.agent.handler.AbstractFormatHandler.CheckResult;
@@ -121,6 +126,11 @@ public class Agent {
 	
 	public static final SigProvider unsupSig = SigProvider.of("signify RWTSwM40VCzVER3YWt55m4Fvsg0sjZLEICikuU3cD91gR/2lii/jk67B");
 	public static SigProvider packSig, altPackSig;
+	
+	@Desugar
+	private record AuthorizerPair(String urlPrefix, Authorizer auth) {}
+	
+	private static final List<AuthorizerPair> authorizers = new ArrayList<>();
 	
 	// read by the Unsup class when it loads
 	// be careful not to load that class until this is all initialized
@@ -270,7 +280,7 @@ public class Agent {
 		}
 		if (!SysProps.IGNORE_ENVS && config.getBoolean("use_envs", false)) {
 			useEnvs = true;
-			detectEnv(config.get("force_env", arg));
+			detectEnv(arg == null ? config.get("force_env") : arg);
 		}
 		
 		enforceSecureHashes = config.getBoolean("enforce_secure_hashes", false);
@@ -282,6 +292,36 @@ public class Agent {
 			Log.error("Config error: source URL is malformed! "+e.getMessage()+". Exiting.");
 			exit(EXIT_CONFIG_ERROR);
 			return false;
+		}
+		
+		authorizers.clear();
+		for (String k : config.keySet()) {
+			String grp = "authorization.";
+			if (k.startsWith(grp)) {
+				String pfx = k.substring(grp.length());
+				String[] spl = config.get(k).split(" ", 2);
+				Authorizer a = switch (spl[0]) {
+					case "Basic" -> {
+						if (spl[1].contains(":")) {
+							yield BasicAuthorizer.fromStapled(spl[1]);
+						}
+						yield BasicAuthorizer.fromToken(spl[1]);
+					}
+					case "Bearer" -> new BearerAuthorizer(spl[1]);
+					case "AWS4-HMAC-SHA256" -> {
+						String[] pieces = spl[1].split(":", 3);
+						yield new AWS4Authorizer(pieces[0], pieces[1], pieces.length >= 3 ? pieces[2] : "us-east-1");
+					}
+					default -> null;
+				};
+				if (a != null) {
+					authorizers.add(new AuthorizerPair(pfx, a));
+				} else {
+					Log.error("Config error: authorizer for "+pfx+" is malformed! Exiting.");
+					exit(EXIT_CONFIG_ERROR);
+					return false;
+				}
+			}
 		}
 		
 		setupOkHttp();
@@ -375,6 +415,32 @@ public class Agent {
 			}
 			return true;
 		} else {
+			if (SysProps.BOOTSTRAP_URL != null) {
+				Log.info("No config found, bootstrapping from "+SysProps.BOOTSTRAP_URL);
+				SigProvider key = null;
+				if (SysProps.BOOTSTRAP_KEY != null) {
+					try {
+						key = SigProvider.parse(SysProps.BOOTSTRAP_KEY);
+					} catch (Exception e) {
+						Log.error("Failed to parse bootstrap key", e);
+						exit(EXIT_CONFIG_ERROR);
+						return false;
+					}
+				}
+				setupOkHttp();
+				int M = 1024*1024;
+				try {
+					var data = RequestHelper.loadAndVerify(new URI(SysProps.BOOTSTRAP_URL), 16*M, new URI(SysProps.BOOTSTRAP_URL+".sig"), key);
+					Files.write(configFile.toPath(), data);
+					Log.info("Successfully downloaded bootstrap config");
+					destroyOkHttp();
+					return loadConfig();
+				} catch (Exception e) {
+					Log.error("Failed to download bootstrap config", e);
+					exit(EXIT_CONFIG_ERROR);
+					return false;
+				}
+			}
 			Log.warn("No config file found? Doing nothing.");
 			return false;
 		}
@@ -485,9 +551,21 @@ public class Agent {
 			.readTimeout(15, TimeUnit.SECONDS)
 			.writeTimeout(15, TimeUnit.SECONDS)
 			.sslSocketFactory(certs.sslSocketFactory(), certs.trustManager())
+			.addInterceptor(chain -> {
+				String url = chain.request().url().toString();
+				var req = chain.request();
+				for (var en : authorizers) {
+					if (url.startsWith(en.urlPrefix())) {
+						var bldr = req.newBuilder();
+						en.auth().authorize(req, bldr);
+						req = bldr.build();
+					}
+				}
+				return chain.proceed(req);
+			})
 			.addInterceptor(BrotliInterceptor.INSTANCE)
 			.build();
-		switch (config.get("dns", "system")) {
+		switch (config == null ? "system" : config.get("dns", "system")) {
 			case "system":
 				Log.debug("Using system DNS for DNS queries");
 				dns = Dns.SYSTEM;

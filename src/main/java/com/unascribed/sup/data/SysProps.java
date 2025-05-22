@@ -43,6 +43,8 @@ public class SysProps {
 	}
 	public static final String LANGUAGE = getProperty("unsup.language");
 	public static final boolean DRY_RUN = getBoolean(SysPropDefs.DRY_RUN);
+	public static final String BOOTSTRAP_URL = getProperty(SysPropDefs.BOOTSTRAP_URL);
+	public static final String BOOTSTRAP_KEY = getProperty(SysPropDefs.BOOTSTRAP_KEY);
 	
 	
 	public static final boolean PACKWIZ_CHANGE_FLAVORS = getBoolean("unsup.packwiz.changeFlavors");

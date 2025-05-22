@@ -1,6 +1,6 @@
 /*
  * This file is part of unsup.
- * Copyright © 2023, 2025 Una Kearney
+ * Copyright © 2025 Una Kearney
  * https://git.sleeping.town/unascribed/unsup
  *
  * unsup is free software; you can redistribute it and/or modify it
@@ -105,6 +105,19 @@ public class SysPropDefs {
 	 * @since 1.1-pre1
 	 */
 	public static final String LANGUAGE = "unsup.language";
+
+	/**
+	 * {@value}: The URL to an unsup.ini to use if none is available in the working directory.
+	 * @since 1.1.3
+	 */
+	public static final String BOOTSTRAP_URL = "unsup.bootstrapUrl";
+
+	/**
+	 * {@value}: The public key to use to verify {@code ${unsup.bootstrapUrl}.sig}, in the same
+	 * format as {@code public_key} in the config.
+	 * @since 1.1.3
+	 */
+	public static final String BOOTSTRAP_KEY = "unsup.bootstrapKey";
 	
 	
 	/**

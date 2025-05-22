@@ -88,7 +88,7 @@ public class Log {
 			}
 			t.printStackTrace(fileStream);
 		}
-		log(tag, flavor, msg);
+		log(flavor, tag, msg);
 	}
 	
 	public synchronized static void log(String flavor, String tag, String msg) {

@@ -448,24 +448,26 @@ public class PackwizHandler extends AbstractFormatHandler {
 					continue;
 				}
 				String url = download.getString("url");
-				if (url != null) {
-					f.url = new URI(url);
-				} else {
-					String mode = download.getString("mode");
-					if (Bases.b64ToString("bWV0YWRhdGE6Y3Vyc2Vmb3JnZQ==").equals(mode)) {
-						// Not a virus. Trust me, I'm a dolphin
-						Toml tbl = metafile.getTable(Bases.b64ToString("dXBkYXRlLmN1cnNlZm9yZ2U="));
-						f.hostile = true;
-						String str = Long.toString(tbl.getLong(Bases.b64ToString("ZmlsZS1pZA==")));
-						int i = (str.length()+1)/2;
-						String l = str.substring(0, i);
-						String r = str.substring(i);
-						while (r.startsWith("0") && r.length() > 1) r = r.substring(1);
-						f.url = new URI(String.format(Bases.b64ToString("aHR0cHM6Ly9tZWRpYWZpbGV6LmZvcmdlY2RuLm5ldC9maWxlcy8lcy8lcy8="), l, r))
-								.resolve(URLEncoder.encode(metafile.getString(Bases.b64ToString("ZmlsZW5hbWU=")), "UTF-8"));
-					} else {
-						throw new IOException("Cannot update "+path+" - unrecognized download mode "+mode);
+				String mode = download.getString("mode");
+				if (Bases.b64ToString("bWV0YWRhdGE6Y3Vyc2Vmb3JnZQ==").equals(mode)) {
+					// Not a virus. Trust me, I'm a dolphin
+					Toml tbl = metafile.getTable(Bases.b64ToString("dXBkYXRlLmN1cnNlZm9yZ2U="));
+					f.hostile = true;
+					String str = Long.toString(tbl.getLong(Bases.b64ToString("ZmlsZS1pZA==")));
+					int i = (str.length()+1)/2;
+					String l = str.substring(0, i);
+					String r = str.substring(i);
+					while (r.startsWith("0") && r.length() > 1) r = r.substring(1);
+					f.url = new URI(String.format(Bases.b64ToString("aHR0cHM6Ly9tZWRpYWZpbGV6LmZvcmdlY2RuLm5ldC9maWxlcy8lcy8lcy8="), l, r))
+							.resolve(URLEncoder.encode(metafile.getString(Bases.b64ToString("ZmlsZW5hbWU=")), "UTF-8"));
+				} else if (url != null && !url.trim().isEmpty()) {
+					try {
+						f.url = new URI(url);
+					} catch (URISyntaxException e) {
+						throw new IOException("Cannot update "+path+" - malformed url "+url, e);
 					}
+				} else {
+					throw new IOException("Cannot update "+path+(mode != null ? " - unrecognized download mode "+mode : " - missing url and no download mode provided"));
 				}
 				plan.files.put(path, f);
 			}
