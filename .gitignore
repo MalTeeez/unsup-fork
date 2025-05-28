@@ -11,3 +11,4 @@ out
 .idea
 /run
 .unsup-tmp
+/ci-version.txt

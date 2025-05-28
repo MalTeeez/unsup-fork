@@ -62,18 +62,13 @@ steps:
       from_secret: maven_username
     ORG_GRADLE_PROJECT_SleepingTownPassword:
       from_secret: maven_password
+    FORGEJO_KEY:
+      from_secret: forgejo_key
   depends_on: [clone, restore-cache]
   commands:
   - gradle clean build publish -Punsup.ci --info
   - gradle --stop
   - rm -rf .gradle-user/daemon
-- name: release
-  image: linuxserver/yq:3.4.3
-  environment:
-    FORGEJO_KEY:
-      from_secret: forgejo_key
-  depends_on: [build]
-  commands:
   - chmod +x ./update-snapshot-release.sh
   - ./update-snapshot-release.sh
 - name: update-cache

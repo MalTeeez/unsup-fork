@@ -44,16 +44,9 @@ import com.unascribed.sup.build.JarAmender;
 import com.unascribed.sup.build.transformer.JarTransformer;
 import java.nio.file.Files;
 import java.nio.file.StandardCopyOption;
-
-def commit = providers.exec {
-	commandLine 'git', 'rev-parse', '--short=10', 'HEAD'
-}.standardOutput.asText.get().trim()
-def clean = providers.exec {
-	commandLine 'git', 'diff-index', 'HEAD'
-	ignoreExitValue = true
-}.standardOutput.asText.get().trim().isEmpty()
-
-def snapshotName = commit+(clean ? '' : '-dirty')
+import java.time.format.DateTimeFormatter;
+import java.time.temporal.ChronoUnit;
+import java.time.Instant;
 
 ext {
 	platforms = OSType.values().collect { os ->
@@ -61,12 +54,33 @@ ext {
 			os.lwjglName+arch.lwjglSuffix
 		}
 	}.flatten()
+	println 'Platforms: '+platforms
 }
 
 base {
 	group = 'com.unascribed'
 	archivesName = 'unsup'
-	version = project.hasProperty('unsup.release') ? project.getProperty('unsup.release') : '1.1-SNAPSHOT'
+	def verBase = '1.1'
+	if (project.hasProperty('unsup.release')) {
+		version = project.getProperty('unsup.release')
+		println 'Release build: '+version
+	} else if (project.hasProperty('unsup.ci')) {
+		version = "${verBase}-snap.${System.getenv('CI_PIPELINE_NUMBER')}+${System.getenv('CI_COMMIT_SHA').substring(0, 10)}"
+		println 'CI snapshot build: '+version
+		file('ci-version.txt').text = version
+	} else {
+		def commit = providers.exec {
+			commandLine 'git', 'rev-parse', '--short=10', 'HEAD'
+		}.standardOutput.asText.get().trim()
+		def clean = providers.exec {
+			commandLine 'git', 'diff-index', 'HEAD'
+			ignoreExitValue = true
+		}.standardOutput.asText.get().trim().isEmpty()
+
+		def snapshotName = commit+(clean ? '' : '-dirty')
+		version = "${verBase}-custom+${snapshotName}@${DateTimeFormatter.ISO_INSTANT.format(Instant.now().truncatedTo(ChronoUnit.SECONDS))}"
+		println 'Unknown custom build: '+version
+	}
 }
 
 license {
@@ -545,6 +559,18 @@ if (project.hasProperty("unsup.signifyKey")) {
 	}
 }
 
+def prismFile = file('build/libs/com.unascribed.unsup.json')
+
+task generatePrismComponent(type: Copy) {
+	inputs.property 'version', project.version
+
+	from('src/main/prism') {
+		expand 'version': project.version
+	}
+	
+	into 'build/libs'
+}
+
 publishing {
 	repositories {
 		maven {
@@ -563,6 +589,12 @@ publishing {
 			version = project.version
 
 			artifact proguardJar
+			if (project.hasProperty("unsup.ci") || project.hasProperty("unsup.release")) {
+				artifact(prismFile) {
+					builtBy generatePrismComponent
+					extension 'json'
+				}
+			}
 			if (project.hasProperty("unsup.ci") || project.hasProperty("unsup.signifyKey")) {
 				artifact(sigFile) {
 					builtBy sign
