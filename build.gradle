@@ -46,7 +46,7 @@ import java.nio.file.Files;
 import java.nio.file.StandardCopyOption;
 import java.time.format.DateTimeFormatter;
 import java.time.temporal.ChronoUnit;
-import java.time.Instant;
+import java.time.LocalDate;
 
 ext {
 	platforms = OSType.values().collect { os ->
@@ -78,7 +78,7 @@ base {
 		}.standardOutput.asText.get().trim().isEmpty()
 
 		def snapshotName = commit+(clean ? '' : '-dirty')
-		version = "${verBase}-custom+${snapshotName}@${DateTimeFormatter.ISO_INSTANT.format(Instant.now().truncatedTo(ChronoUnit.SECONDS))}"
+		version = "${verBase}-custom+${snapshotName}.${DateTimeFormatter.BASIC_ISO_DATE.format(LocalDate.now())}"
 		println 'Unknown custom build: '+version
 	}
 }
@@ -559,7 +559,7 @@ if (project.hasProperty("unsup.signifyKey")) {
 		dependsOn proguardJar
 		inputs.file proguardJar.archivePath
 		outputs.file sigFile
-		commandLine 'signify', '-S', '-s', project.getProperty("unsup.signifyKey"), '-m', proguardJar.archivePath.absolutePath, '-x', sigFile.absolutePath
+		commandLine 'signify', '-c', 'verify with keys/release.pub', '-S', '-s', project.getProperty("unsup.signifyKey"), '-m', proguardJar.archivePath.absolutePath, '-x', sigFile.absolutePath
 	}
 } else if (project.hasProperty("unsup.ci")) {
 	task sign(type: Exec) {
@@ -571,7 +571,7 @@ if (project.hasProperty("unsup.signifyKey")) {
 		dependsOn proguardJar
 		inputs.file proguardJar.archivePath
 		outputs.file sigFile
-		commandLine './.ci/signify-openbsd', '-S', '-s', '/tmp/signify.sec', '-m', proguardJar.archivePath.absolutePath, '-x', sigFile.absolutePath
+		commandLine './.ci/signify-openbsd', '-c', 'verify with keys/snapshot.pub', '-S', '-s', '/tmp/signify.sec', '-m', proguardJar.archivePath.absolutePath, '-x', sigFile.absolutePath
 	}
 }
 
@@ -596,6 +596,7 @@ publishing {
 			if (project.hasProperty("unsup.ci") || project.hasProperty("unsup.release")) {
 				artifact(prismFile) {
 					builtBy generatePrismComponent
+					classifier 'prism'
 					extension 'json'
 				}
 			}
