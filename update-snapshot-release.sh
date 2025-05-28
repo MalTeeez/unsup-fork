@@ -25,6 +25,7 @@ jq() {
 ./.ci/brotli -d .ci/jq.br
 
 latest=$(cat ci-version.txt)
+latestu=$(echo "$latest" | sed 's/+/%2B/g')
 apibase='https://git.sleeping.town/api/v1/repos/unascribed/unsup'
 auth="Authorization: token $FORGEJO_KEY"
 curl -s -X DELETE -H "$auth" $apibase/releases/tags/SNAPSHOT >/dev/null
@@ -50,10 +51,10 @@ if [[ -z "$relid" || "$relid" == "null" ]]; then
 fi
 
 echo 'Jar attach response:'
-curl --fail-with-body -s -X POST -H "$auth" "$apibase/releases/$relid/assets?name=unsup-$latest.jar" \
+curl --fail-with-body -s -X POST -H "$auth" "$apibase/releases/$relid/assets?name=unsup-$latestu.jar" \
 	-F "attachment=@build/libs/unsup-$latest.jar" |jq .
 echo 'Sig attach response:'
-curl --fail-with-body -s -X POST -H "$auth" "$apibase/releases/$relid/assets?name=unsup-$latest.jar.sig" \
+curl --fail-with-body -s -X POST -H "$auth" "$apibase/releases/$relid/assets?name=unsup-$latestu.jar.sig" \
 	-F "attachment=@build/libs/unsup-$latest.jar.sig" |jq .
 echo 'Component attach response:'
 curl --fail-with-body -s -X POST -H "$auth" "$apibase/releases/$relid/assets?name=com.unascribed.unsup.json" \
