@@ -524,10 +524,23 @@ ext.platforms.each { plat ->
 	generateBundles.dependsOn c
 }
 
+def prismFile = file('build/libs/com.unascribed.unsup.json')
+
+task generatePrismComponent(type: Copy) {
+	inputs.property 'version', project.version
+
+	from('src/main/prism') {
+		expand 'version': project.version
+	}
+	
+	into 'build/libs'
+}
+
 def sigFile = file('build/libs/unsup-'+version+'.jar.sig')
 
 if (project.hasProperty("unsup.signifyKey")) {
 	task sign(type: Exec) {
+		mustRunAfter generatePrismComponent
 		def pwCmd = project.getProperty("unsup.signifyPasswordCommand");
 		doFirst {
 			def pipe = new PipedInputStream()
@@ -548,6 +561,7 @@ if (project.hasProperty("unsup.signifyKey")) {
 	}
 } else if (project.hasProperty("unsup.ci")) {
 	task sign(type: Exec) {
+		mustRunAfter generatePrismComponent
 		doFirst {
 			new File('/tmp/signify.sec').text = System.getenv("SIGNIFY_KEY")+'\n'
 			standardInput new java.io.ByteArrayInputStream(System.getenv("SIGNIFY_PASSWORD").getBytes("UTF-8"))
@@ -557,18 +571,6 @@ if (project.hasProperty("unsup.signifyKey")) {
 		outputs.file sigFile
 		commandLine './.ci/signify-openbsd', '-S', '-s', '/tmp/signify.sec', '-m', proguardJar.archivePath.absolutePath, '-x', sigFile.absolutePath
 	}
-}
-
-def prismFile = file('build/libs/com.unascribed.unsup.json')
-
-task generatePrismComponent(type: Copy) {
-	inputs.property 'version', project.version
-
-	from('src/main/prism') {
-		expand 'version': project.version
-	}
-	
-	into 'build/libs'
 }
 
 publishing {
