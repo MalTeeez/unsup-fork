@@ -477,17 +477,26 @@ public class PackwizHandler extends AbstractFormatHandler {
 				plan.files.put(path, f);
 				postState.put(path, FileState.EMPTY);
 			}
+			var mfIter = metafileFiles.entrySet().iterator();
+			while (mfIter.hasNext()) {
+				var en = mfIter.next();
+				if (toDelete.contains(String.valueOf(en.getValue()))) {
+					mfIter.remove();
+				}
+			}
 			lastState = new JsonObject();
 			for (Map.Entry<String, FileState> en : plan.expectedState.entrySet()) {
+				if (toDelete.contains(en.getKey())) continue;
 				if (en.getValue().hash() == null) continue;
-				lastState.put(en.getKey(), en.getValue().func() +":"+ en.getValue().hash());
+				lastState.put(en.getKey(), en.getValue().func()+":"+ en.getValue().hash());
 			}
 			for (Map.Entry<String, FileState> en : postState.entrySet()) {
+				if (toDelete.contains(en.getKey())) continue;
 				if (en.getValue().hash() == null) {
 					lastState.remove(en.getKey());
 					continue;
 				}
-				lastState.put(en.getKey(), en.getValue().func() +":"+ en.getValue().hash());
+				lastState.put(en.getKey(), en.getValue().func()+":"+ en.getValue().hash());
 			}
 			pwstate.put("lastState", lastState);
 			return new CheckResult(ourVersion, theirVersion, plan, theirVers);
