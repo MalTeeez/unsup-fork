@@ -389,6 +389,8 @@ task proguard(type: proguard.gradle.ProGuardTask) {
 	dontwarn 'lombok.**'
 	dontwarn 'org.codehaus.mojo.animal_sniffer.**'
 	
+	dontnote
+	
 	keepattributes '*'
 	
 	verbose

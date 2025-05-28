@@ -17,6 +17,13 @@
 # You should have received a copy of the GNU Lesser General Public
 # License along with unsup; if not, see <https://www.gnu.org/licenses/>.
 #
+
+jq() {
+	./.ci/jq "$@"
+}
+
+./.ci/brotli -d .ci/jq.br
+
 latest=$(cat ci-version.txt)
 apibase='https://git.sleeping.town/api/v1/repos/unascribed/unsup'
 auth="Authorization: token $FORGEJO_KEY"
