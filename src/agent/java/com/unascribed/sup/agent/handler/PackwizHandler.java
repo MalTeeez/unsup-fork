@@ -19,6 +19,7 @@
 
 package com.unascribed.sup.agent.handler;
 
+import java.io.ByteArrayInputStream;
 import java.io.Closeable;
 import java.io.File;
 import java.io.FileNotFoundException;
@@ -335,7 +336,17 @@ public class PackwizHandler extends AbstractFormatHandler {
 									var ze = metafilesZip.getEntry(path);
 									if (ze != null) {
 										try (var in = metafilesZip.getInputStream(ze)) {
-											return new Metafile(name, path, hash, new Toml().read(in));
+											byte[] data = RequestHelper.collectLimited(in, 8*K);
+											if (data == null) throw new IOException("Size limit of 8K for "+path+" exceeded");
+											String computedHash = Bases.bytesToHex(func.createMessageDigest().digest(data));
+											if (computedHash.equals(hash)) {
+												if (SysProps.DEBUG_REQUESTS) {
+													Log.debug("Using "+path+" from metafiles zip");
+												}
+												return new Metafile(name, path, hash, new Toml().read(new ByteArrayInputStream(data)));
+											} else {
+												Log.warn(path+" file contents are incorrect in metafile zip (expected "+hash+", got "+computedHash+")");
+											}
 										}
 									} else {
 										Log.warn(path+" is missing from metafiles zip");
