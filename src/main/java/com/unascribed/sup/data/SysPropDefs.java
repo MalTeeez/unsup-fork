@@ -32,6 +32,17 @@ public class SysPropDefs {
 	 * @since 0.2.0-pre3
 	 */
 	public static final String DEBUG = "unsup.debug";
+
+	/**
+	 * {@value}: <ul>
+	 * <li><b>true</b>: Print every single request to the log at debug level, even internal
+	 * requests.</li>
+	 * <li><b>false</b>: Normal behavior.</li>
+	 * </ul>
+	 * @since 1.1.4
+	 */
+	public static final String DEBUG_REQUESTS = "unsup.debug.requests";
+	
 	/**
 	 * {@value}: <ul>
 	 * <li><b>true</b>: Attempt to launch the Puppet even in standalone mode.</li>

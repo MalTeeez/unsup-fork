@@ -146,6 +146,9 @@ public class PuppetHandler {
 						args.add(SysProps.PUPPET_WRAPPER_COMMAND);
 					}
 					args.add(java);
+					args.add("-XX:+UseG1GC");
+					args.add("-Xms1M");
+					args.add("-Xmx128M");
 					args.add("-XX:+IgnoreUnrecognizedVMOptions");
 					args.add("-XX:+UnlockDiagnosticVMOptions");
 					args.add("-Djbr.catch.SIGABRT=true");

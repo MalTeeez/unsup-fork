@@ -19,7 +19,10 @@
 
 package com.unascribed.sup.agent.handler;
 
+import java.io.Closeable;
+import java.io.File;
 import java.io.FileNotFoundException;
+import java.io.FileOutputStream;
 import java.io.IOException;
 import java.net.URI;
 import java.net.URISyntaxException;
@@ -36,6 +39,9 @@ import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
 import java.util.concurrent.Future;
 import java.util.stream.Collectors;
+import java.util.zip.ZipFile;
+
+import org.brotli.dec.BrotliInputStream;
 
 import com.grack.nanojson.JsonArray;
 import com.grack.nanojson.JsonObject;
@@ -62,448 +68,499 @@ import com.unascribed.sup.util.Iterables;
 public class PackwizHandler extends AbstractFormatHandler {
 	
 	public static CheckResult check(URI src, boolean autoaccept, boolean forceFlavorDefaults) throws IOException, URISyntaxException {
-		var ourVersion = Version.fromJson(Agent.state.getObject("current_version"));
-		Toml pack = RequestHelper.loadToml(src, 4*K, src.resolve("unsup.sig"));
-		var fmt = pack.getString("pack-format");
-		if (!fmt.equals("unsup-packwiz") && (!fmt.startsWith("packwiz:") || FlexVerComparator.compare("packwiz:1.1.0", fmt) < 0))
-			throw new IOException("Cannot read unknown pack-format "+fmt);
-		var pwstate = Agent.state.getObject("packwiz");
-		if (pwstate == null) {
-			pwstate = new JsonObject();
-			Agent.state.put("packwiz", pwstate);
-		}
-		Toml indexMeta = pack.getTable("index");
-		if (indexMeta == null)
-			throw new IOException("Malformed pack.toml: [index] table is missing");
-		HashFunction indexFunc = parseFunc(indexMeta.getString("hash-format"));
-		String indexDoublet = indexFunc+":"+indexMeta.getString("hash");
-		boolean hasIndexUpdate = !indexDoublet.equals(pwstate.getString("lastIndexHash"));
-		Map<String, String> theirVers = Collections.emptyMap();
-		boolean hasComponentUpdate = false;
-		if (!MMCUpdater.currentComponentVersions.isEmpty()) {
-			theirVers = new HashMap<>();
-			for (Map.Entry<String, Object> en : pack.getTable("versions").entrySet()) {
-				List<String> exp = MMCUpdater.componentShortnames.get(en.getKey());
-				if (exp != null) {
-					for (String s : exp) {
-						theirVers.put(s, String.valueOf(en.getValue()));
+		var cleanup = new Closeable[1];
+		var delete = new File[1];
+		try {
+			var ourVersion = Version.fromJson(Agent.state.getObject("current_version"));
+			Toml pack = RequestHelper.loadToml(src, 4*K, src.resolve("unsup.sig"));
+			var fmt = pack.getString("pack-format");
+			if (!fmt.equals("unsup-packwiz") && (!fmt.startsWith("packwiz:") || FlexVerComparator.compare("packwiz:1.1.0", fmt) < 0))
+				throw new IOException("Cannot read unknown pack-format "+fmt);
+			var pwstate = Agent.state.getObject("packwiz");
+			if (pwstate == null) {
+				pwstate = new JsonObject();
+				Agent.state.put("packwiz", pwstate);
+			}
+			Toml indexMeta = pack.getTable("index");
+			if (indexMeta == null)
+				throw new IOException("Malformed pack.toml: [index] table is missing");
+			HashFunction indexFunc = parseFunc(indexMeta.getString("hash-format"));
+			String indexDoublet = indexFunc+":"+indexMeta.getString("hash");
+			boolean hasIndexUpdate = !indexDoublet.equals(pwstate.getString("lastIndexHash"));
+			Map<String, String> theirVers = Collections.emptyMap();
+			boolean hasComponentUpdate = false;
+			if (!MMCUpdater.currentComponentVersions.isEmpty()) {
+				theirVers = new HashMap<>();
+				for (Map.Entry<String, Object> en : pack.getTable("versions").entrySet()) {
+					List<String> exp = MMCUpdater.componentShortnames.get(en.getKey());
+					if (exp != null) {
+						for (String s : exp) {
+							theirVers.put(s, String.valueOf(en.getValue()));
+						}
+					} else {
+						theirVers.put(en.getKey(), String.valueOf(en.getValue()));
+					}
+				}
+				for (Map.Entry<String, String> en : theirVers.entrySet()) {
+					String ours = MMCUpdater.currentComponentVersions.get(en.getKey());
+					if (ours != null && !ours.equals(en.getValue())) {
+						hasComponentUpdate = true;
+					}
+				}
+			}
+			boolean changeFlavors = SysProps.PACKWIZ_CHANGE_FLAVORS;
+			boolean actualUpdate = hasIndexUpdate || hasComponentUpdate;
+			if (!actualUpdate && Agent.config.getBoolean("offer_change_flavors", false)) {
+				if (PuppetHandler.openAlert("$$changeFlavorsOffer", "", AlertMessageType.NONE, AlertOptionType.YES_NO, AlertOption.NO) == AlertOption.YES) {
+					changeFlavors = true;
+				}
+			}
+			if (changeFlavors || actualUpdate) {
+				if (ourVersion == null) {
+					ourVersion = new Version("null", 0);
+				}
+				var theirVersion = new Version(pack.getString("version"), ourVersion.code() +1);
+				var newState = new JsonObject(Agent.state);
+				pwstate = new JsonObject(pwstate);
+				newState.put("packwiz", pwstate);
+				
+				if (hasIndexUpdate) {
+					Log.info("Update available - our index state is "+pwstate.getString("lastIndexHash")+", theirs is "+indexDoublet);
+				} else {
+					Log.info("Update available - only components have changed");
+				}
+				String body = "dialog.update.named¤"+ ourVersion.name() +"¤"+ theirVersion.name();
+				if (ourVersion.name().equals(theirVersion.name())) {
+					body = "dialog.update.unnamed";
+				}
+				boolean bootstrapping = !pwstate.containsKey("lastIndexHash");
+				if (!bootstrapping && actualUpdate && !autoaccept) {
+					AlertOption updateResp = PuppetHandler.openAlert("dialog.update.title",
+							body, AlertMessageType.QUESTION, AlertOptionType.YES_NO, AlertOption.YES);
+					if (updateResp == AlertOption.NO) {
+						Log.info("Ignoring update by user choice.");
+						return new CheckResult(ourVersion, theirVersion, null, Collections.emptyMap());
+					}
+				}
+				pwstate.put("lastIndexHash", indexDoublet);
+				PuppetHandler.updateTitle(bootstrapping ? "title.bootstrapping" : "title.updating", false);
+				PuppetHandler.updateSubtitle("subtitle.calculating");
+				Toml index = RequestHelper.loadToml(src.resolve(Util.uriOfPath(indexMeta.getString("file"))), 8*M,
+						indexFunc, indexMeta.getString("hash"));
+				Toml unsup = null;
+				List<FlavorGroup> unpickedGroups = new ArrayList<>();
+				Map<String, FlavorGroup> syntheticGroups = new HashMap<>();
+				for (Map.Entry<String, Object> en : pwstate.getObject("syntheticFlavorGroups", new JsonObject()).entrySet()) {
+					if (en.getValue() instanceof JsonObject obj) {
+						var id = obj.getString("id");
+						if (id == null) continue;
+						var name = obj.getString("name");
+						var description = obj.getString("description");
+						var choices = obj.getArray("choices");
+						var grp = new FlavorGroup();
+						grp.id = id;
+						grp.name = name;
+						grp.description = description;
+						for (Object cele : choices) {
+							FlavorChoice c = new FlavorChoice();
+							if (cele instanceof JsonObject cobj) {
+								c.id = cobj.getString("id");
+								if (c.id == null) continue;
+								c.name = cobj.getString("name");
+								c.description = cobj.getString("description");
+								grp.choices.add(c);
+							}
+						}
+						syntheticGroups.put(en.getKey(), grp);
+					}
+				}
+				ZipFile metafilesZip;
+				Map<String, List<String>> metafileFlavors = new HashMap<>();
+				JsonArray ourFlavors = Agent.state.getArray("flavors");
+				if (ourFlavors == null) ourFlavors = new JsonArray();
+				if (pack.containsTable("versions") && pack.getTable("versions").containsPrimitive("unsup")) {
+					try {
+						unsup = RequestHelper.loadToml(src.resolve("unsup.toml"), 64*K, null);
+					} catch (FileNotFoundException e) {
+						Log.debug("unsup is in the versions table, but there's no unsup.toml");
+					}
+					if (unsup != null) {
+						if (unsup.containsTable("flavor_groups")) {
+							flavors: for (Map.Entry<String, Object> en : unsup.getTable("flavor_groups").entrySet()) {
+								if (en.getValue() instanceof Toml group) {
+									String groupId = en.getKey();
+									var side = group.getString("side");
+									if (side != null && Agent.useEnvs && !side.equals("both") && !side.equals(Agent.detectedEnv)) {
+										Log.info("Skipping flavor group "+groupId+" as it's not eligible for env "+Agent.detectedEnv);
+										continue;
+									}
+									var groupName = group.getString("name", groupId);
+									var groupDescription = group.getString("description", "flavor.default_description");
+									String defChoice = Agent.config.get("flavors."+groupId);
+									FlavorGroup grp = new FlavorGroup();
+									grp.id = groupId;
+									grp.name = groupName;
+									grp.description = groupDescription;
+									if (group.containsTableArray("choices")) {
+										for (Object o : group.getList("choices")) {
+											String id, name, description;
+											if (o instanceof Map) {
+												@SuppressWarnings("unchecked")
+												Map<String, Object> choice = (Map<String, Object>)o;
+												id = String.valueOf(choice.get("id"));
+												name = String.valueOf(choice.getOrDefault("name", id));
+												description = String.valueOf(choice.getOrDefault("description", ""));
+											} else {
+												id = String.valueOf(o);
+												name = id;
+												description = "";
+											}
+											if (!changeFlavors && Iterables.contains(ourFlavors, id)) {
+												// a choice has already been made for this flavor
+												continue flavors;
+											}
+											FlavorGroup.FlavorChoice c = new FlavorGroup.FlavorChoice();
+											c.id = id;
+											c.name = name;
+											c.description = description;
+											c.def = changeFlavors ? Iterables.contains(ourFlavors, id) : id.equals(defChoice);
+											if (c.def) {
+												grp.defChoice = c.id;
+												grp.defChoiceName = c.name;
+											}
+											grp.choices.add(c);
+										}
+									}
+									unpickedGroups.add(grp);
+								}
+							}
+						}
+						if (unsup.containsTable("metafile")) {
+							for (Map.Entry<String, Object> en : unsup.getTable("metafile").entrySet()) {
+								if (en.getValue() instanceof Toml t) {
+									if (t.contains("flavors")) {
+										if (t.containsTableArray("flavors")) {
+											metafileFlavors.put(en.getKey(), t.getList("flavors").stream()
+													.map(String::valueOf)
+													.collect(Collectors.toList()));
+										} else {
+											metafileFlavors.put(en.getKey(), Collections.singletonList(t.getString("flavors")));
+										}
+									}
+								}
+							}
+						}
+						if (unsup.getBoolean("features.metafiles_zip", false)) {
+							File tmp = new File(".unsup-tmp");
+							File outf = new File(tmp, "unsup-metafiles.zip");
+							try (var in = new BrotliInputStream(RequestHelper.get(src.resolve("unsup-metafiles.zip.br")));
+									var out = new FileOutputStream(outf)) {
+								Util.copy(in, out);
+							} catch (IOException e) {
+								Log.warn("Failed to retrieve optimized metafiles, falling back to default behavior", e);
+							}
+							ZipFile metafilesZipTmp = null;
+							try {
+								metafilesZipTmp = new ZipFile(outf);
+								delete[0] = outf;
+							} catch (IOException e) {
+								Log.warn("Failed to open optimized metafiles, falling back to default behavior", e);
+							}
+							cleanup[0] = metafilesZip = metafilesZipTmp;
+						} else {
+							metafilesZip = null;
+						}
+					} else {
+						metafilesZip = null;
 					}
 				} else {
-					theirVers.put(en.getKey(), String.valueOf(en.getValue()));
+					metafilesZip = null;
 				}
-			}
-			for (Map.Entry<String, String> en : theirVers.entrySet()) {
-				String ours = MMCUpdater.currentComponentVersions.get(en.getKey());
-				if (ours != null && !ours.equals(en.getValue())) {
-					hasComponentUpdate = true;
-				}
-			}
-		}
-		boolean changeFlavors = SysProps.PACKWIZ_CHANGE_FLAVORS;
-		boolean actualUpdate = hasIndexUpdate || hasComponentUpdate;
-		if (!actualUpdate && Agent.config.getBoolean("offer_change_flavors", false)) {
-			if (PuppetHandler.openAlert("$$changeFlavorsOffer", "", AlertMessageType.NONE, AlertOptionType.YES_NO, AlertOption.NO) == AlertOption.YES) {
-				changeFlavors = true;
-			}
-		}
-		if (changeFlavors || actualUpdate) {
-			if (ourVersion == null) {
-				ourVersion = new Version("null", 0);
-			}
-			var theirVersion = new Version(pack.getString("version"), ourVersion.code() +1);
-			var newState = new JsonObject(Agent.state);
-			pwstate = new JsonObject(pwstate);
-			newState.put("packwiz", pwstate);
-			
-			if (hasIndexUpdate) {
-				Log.info("Update available - our index state is "+pwstate.getString("lastIndexHash")+", theirs is "+indexDoublet);
-			} else {
-				Log.info("Update available - only components have changed");
-			}
-			String body = "dialog.update.named¤"+ ourVersion.name() +"¤"+ theirVersion.name();
-			if (ourVersion.name().equals(theirVersion.name())) {
-				body = "dialog.update.unnamed";
-			}
-			boolean bootstrapping = !pwstate.containsKey("lastIndexHash");
-			if (!bootstrapping && actualUpdate && !autoaccept) {
-				AlertOption updateResp = PuppetHandler.openAlert("dialog.update.title",
-						body, AlertMessageType.QUESTION, AlertOptionType.YES_NO, AlertOption.YES);
-				if (updateResp == AlertOption.NO) {
-					Log.info("Ignoring update by user choice.");
-					return new CheckResult(ourVersion, theirVersion, null, Collections.emptyMap());
-				}
-			}
-			pwstate.put("lastIndexHash", indexDoublet);
-			PuppetHandler.updateTitle(bootstrapping ? "title.bootstrapping" : "title.updating", false);
-			PuppetHandler.updateSubtitle("subtitle.calculating");
-			Toml index = RequestHelper.loadToml(src.resolve(Util.uriOfPath(indexMeta.getString("file"))), 8*M,
-					indexFunc, indexMeta.getString("hash"));
-			Toml unsup = null;
-			List<FlavorGroup> unpickedGroups = new ArrayList<>();
-			Map<String, FlavorGroup> syntheticGroups = new HashMap<>();
-			for (Map.Entry<String, Object> en : pwstate.getObject("syntheticFlavorGroups", new JsonObject()).entrySet()) {
-				if (en.getValue() instanceof JsonObject obj) {
-					var id = obj.getString("id");
-					if (id == null) continue;
-					var name = obj.getString("name");
-					var description = obj.getString("description");
-					var choices = obj.getArray("choices");
-					var grp = new FlavorGroup();
-					grp.id = id;
-					grp.name = name;
-					grp.description = description;
-					for (Object cele : choices) {
-						FlavorChoice c = new FlavorChoice();
-						if (cele instanceof JsonObject cobj) {
-														c.id = cobj.getString("id");
-							if (c.id == null) continue;
-							c.name = cobj.getString("name");
-							c.description = cobj.getString("description");
-							grp.choices.add(c);
-						}
+				UpdatePlan<FilePlan> plan = new UpdatePlan<>(bootstrapping, newState);
+				Set<String> toDelete = new HashSet<>();
+				JsonObject lastState = pwstate.getObject("lastState");
+				if (lastState != null) {
+					for (Map.Entry<String, Object> en : lastState.entrySet()) {
+						toDelete.add(en.getKey());
+						String v = String.valueOf(en.getValue());
+						String[] s = v.split(":", 2);
+						plan.expectedState.put(en.getKey(), new FileState(HashFunction.byName(s[0]), s[1], -1));
 					}
-					syntheticGroups.put(en.getKey(), grp);
 				}
-			}
-			Map<String, List<String>> metafileFlavors = new HashMap<>();
-			JsonArray ourFlavors = Agent.state.getArray("flavors");
-			if (ourFlavors == null) ourFlavors = new JsonArray();
-			if (pack.containsTable("versions") && pack.getTable("versions").containsPrimitive("unsup")) {
-				try {
-					unsup = RequestHelper.loadToml(src.resolve("unsup.toml"), 64*K, null);
-				} catch (FileNotFoundException e) {
-					Log.debug("unsup is in the versions table, but there's no unsup.toml");
+				JsonObject metafileState = pwstate.getObject("metafileState");
+				if (metafileState == null) {
+					metafileState = new JsonObject();
+					pwstate.put("metafileState", metafileState);
 				}
-				if (unsup != null) {
-					if (unsup.containsTable("flavor_groups")) {
-						flavors: for (Map.Entry<String, Object> en : unsup.getTable("flavor_groups").entrySet()) {
-							if (en.getValue() instanceof Toml group) {
-								String groupId = en.getKey();
-								var side = group.getString("side");
-								if (side != null && Agent.useEnvs && !side.equals("both") && !side.equals(Agent.detectedEnv)) {
-									Log.info("Skipping flavor group "+groupId+" as it's not eligible for env "+Agent.detectedEnv);
-									continue;
-								}
-								var groupName = group.getString("name", groupId);
-								var groupDescription = group.getString("description", "flavor.default_description");
-								String defChoice = Agent.config.get("flavors."+groupId);
-								FlavorGroup grp = new FlavorGroup();
-								grp.id = groupId;
-								grp.name = groupName;
-								grp.description = groupDescription;
-								if (group.containsTableArray("choices")) {
-									for (Object o : group.getList("choices")) {
-										String id, name, description;
-										if (o instanceof Map) {
-											@SuppressWarnings("unchecked")
-											Map<String, Object> choice = (Map<String, Object>)o;
-											id = String.valueOf(choice.get("id"));
-											name = String.valueOf(choice.getOrDefault("name", id));
-											description = String.valueOf(choice.getOrDefault("description", ""));
-										} else {
-											id = String.valueOf(o);
-											name = id;
-											description = "";
-										}
-										if (!changeFlavors && Iterables.contains(ourFlavors, id)) {
-											// a choice has already been made for this flavor
-											continue flavors;
-										}
-										FlavorGroup.FlavorChoice c = new FlavorGroup.FlavorChoice();
-										c.id = id;
-										c.name = name;
-										c.description = description;
-										c.def = changeFlavors ? Iterables.contains(ourFlavors, id) : id.equals(defChoice);
-										if (c.def) {
-											grp.defChoice = c.id;
-											grp.defChoiceName = c.name;
-										}
-										grp.choices.add(c);
-									}
-								}
-								unpickedGroups.add(grp);
-							}
-						}
+				JsonObject metafileFiles = pwstate.getObject("metafileFiles");
+				if (metafileFiles == null) {
+					metafileFiles = new JsonObject();
+					pwstate.put("metafileFiles", metafileFiles);
+				} else {
+					for (Map.Entry<String, Object> en : metafileFiles.entrySet()) {
+						toDelete.add(String.valueOf(en.getValue()));
 					}
-					if (unsup.containsTable("metafile")) {
-						for (Map.Entry<String, Object> en : unsup.getTable("metafile").entrySet()) {
-							if (en.getValue() instanceof Toml t) {
-								if (t.contains("flavors")) {
-									if (t.containsTableArray("flavors")) {
-										metafileFlavors.put(en.getKey(), t.getList("flavors").stream()
-												.map(String::valueOf)
-												.collect(Collectors.toList()));
+				}
+				class Metafile {
+					final String name;
+					final String path;
+					final String hash;
+					final Toml toml;
+					String target;
+					
+					public Metafile(String name, String path, String hash, Toml metafile) {
+						this.name = name;
+						this.path = path;
+						this.hash = hash;
+						this.toml = metafile;
+					}
+				}
+				ExecutorService svc = Executors.newFixedThreadPool(12);
+				List<Future<Metafile>> metafileFutures = new ArrayList<>();
+				Map<String, FileState> postState = new HashMap<>();
+				HashFunction func = parseFunc(index.getString("hash-format"));
+				for (Toml file : index.getTables("files")) {
+					String path = file.getString("file");
+					String hash = file.getString("hash");
+					if (file.getBoolean("metafile", false)) {
+						String name = path.substring(path.lastIndexOf('/')+1, path.endsWith(".pw.toml") ? path.length()-8 : path.length());
+						String metafileDoublet = (func+":"+hash);
+						if (metafileDoublet.equals(metafileState.getString(path)) && !changeFlavors) {
+							toDelete.remove(String.valueOf(metafileFiles.get(path)));
+							continue;
+						}
+						metafileFutures.add(svc.submit(() -> {
+							if (metafilesZip != null) {
+								try {
+									var ze = metafilesZip.getEntry(path);
+									if (ze != null) {
+										try (var in = metafilesZip.getInputStream(ze)) {
+											return new Metafile(name, path, hash, new Toml().read(in));
+										}
 									} else {
-										metafileFlavors.put(en.getKey(), Collections.singletonList(t.getString("flavors")));
+										Log.warn(path+" is missing from metafiles zip");
 									}
+								} catch (Throwable t) {
+									Log.warn("Failed to retrieve "+path+" from metafiles zip, falling back to downloading the individual file", t);
 								}
 							}
+							return new Metafile(name, path, hash, RequestHelper.loadToml(src.resolve(Util.uriOfPath(path)), 8*K, func, hash));
+						}));
+					} else {
+						String alias = file.getString("alias", path);
+						FilePlan f = new FilePlan();
+						f.state = new FileState(func, hash, -1);
+						f.url = src.resolve(Util.uriOfPath(path));
+						toDelete.remove(alias);
+						postState.put(alias, f.state);
+						if (!plan.expectedState.containsKey(alias)) {
+							plan.expectedState.put(alias, FileState.EMPTY);
+						} else if (plan.expectedState.get(alias).equals(f.state)) {
+							continue;
 						}
+						plan.files.put(alias, f);
 					}
 				}
-			}
-			UpdatePlan<FilePlan> plan = new UpdatePlan<>(bootstrapping, newState);
-			Set<String> toDelete = new HashSet<>();
-			JsonObject lastState = pwstate.getObject("lastState");
-			if (lastState != null) {
-				for (Map.Entry<String, Object> en : lastState.entrySet()) {
-					toDelete.add(en.getKey());
-					String v = String.valueOf(en.getValue());
-					String[] s = v.split(":", 2);
-					plan.expectedState.put(en.getKey(), new FileState(HashFunction.byName(s[0]), s[1], -1));
-				}
-			}
-			JsonObject metafileState = pwstate.getObject("metafileState");
-			if (metafileState == null) {
-				metafileState = new JsonObject();
-				pwstate.put("metafileState", metafileState);
-			}
-			JsonObject metafileFiles = pwstate.getObject("metafileFiles");
-			if (metafileFiles == null) {
-				metafileFiles = new JsonObject();
-				pwstate.put("metafileFiles", metafileFiles);
-			} else {
-				for (Map.Entry<String, Object> en : metafileFiles.entrySet()) {
-					toDelete.add(String.valueOf(en.getValue()));
-				}
-			}
-			class Metafile {
-				final String name;
-				final String path;
-				final String hash;
-				final Toml toml;
-				String target;
-				
-				public Metafile(String name, String path, String hash, Toml metafile) {
-					this.name = name;
-					this.path = path;
-					this.hash = hash;
-					this.toml = metafile;
-				}
-			}
-			ExecutorService svc = Executors.newFixedThreadPool(12);
-			List<Future<Metafile>> metafileFutures = new ArrayList<>();
-			Map<String, FileState> postState = new HashMap<>();
-			HashFunction func = parseFunc(index.getString("hash-format"));
-			for (Toml file : index.getTables("files")) {
-				String path = file.getString("file");
-				String hash = file.getString("hash");
-				if (file.getBoolean("metafile", false)) {
-					String name = path.substring(path.lastIndexOf('/')+1, path.endsWith(".pw.toml") ? path.length()-8 : path.length());
+				svc.shutdown();
+				PuppetHandler.updateSubtitle("subtitle.packwiz.retrieving");
+				PuppetHandler.updateTitle(bootstrapping ? "title.bootstrapping" : "title.updating", false);
+				for (Future<Metafile> future : metafileFutures) {
+					Metafile mf;
+					while (true) {
+						try {
+							mf = future.get();
+							break;
+						} catch (InterruptedException e) {
+						} catch (ExecutionException e) {
+							for (Future<?> f2 : metafileFutures) {
+								try {
+									f2.cancel(false);
+								} catch (Throwable t) {}
+							}
+							if (e.getCause() instanceof IOException) throw (IOException)e.getCause();
+							throw new RuntimeException(e);
+						}
+					}
+					String path = mf.path;
+					String hash = mf.hash;
+					Toml metafile = mf.toml;
+					String side = metafile.getString("side");
 					String metafileDoublet = (func+":"+hash);
-					if (metafileDoublet.equals(metafileState.getString(path)) && !changeFlavors) {
-						toDelete.remove(String.valueOf(metafileFiles.get(path)));
+					metafileState.put(path, metafileDoublet);
+					if (side != null && Agent.useEnvs && !side.equals("both") && !side.equals(Agent.detectedEnv)) {
+						Log.info("Skipping "+path+" as it's not eligible for env "+Agent.detectedEnv);
 						continue;
 					}
-					metafileFutures.add(svc.submit(() -> {
-						return new Metafile(name, path, hash, RequestHelper.loadToml(src.resolve(Util.uriOfPath(path)), 8*K, func, hash));
-					}));
-				} else {
-					FilePlan f = new FilePlan();
-					f.state = new FileState(func, hash, -1);
-					f.url = src.resolve(Util.uriOfPath(path));
+					path = path.replace("\\", "/");
+					String pfx;
+					int slash = path.lastIndexOf('/');
+					if (slash >= 0) {
+						pfx = path.substring(0, slash+1);
+					} else {
+						pfx = "";
+					}
+					mf.target = pfx+metafile.getString("filename");
+					Toml option = metafile.getTable("option");
+					syntheticGroups.remove(mf.name);
+					if (option != null && option.getBoolean("optional", false) && !metafileFlavors.containsKey(mf.name)) {
+						FlavorGroup synth = new FlavorGroup();
+						synth.id = mf.name;
+						synth.name = metafile.getString("name");
+						synth.description = option.getString("description", "flavor.default_description");
+						String defChoice = Agent.config.get("flavors."+mf.name);
+						synth.defChoice = defChoice;
+						synth.defChoiceName = defChoice;
+						boolean defOn = changeFlavors ? Iterables.contains(ourFlavors, mf.name+"_on") : option.getBoolean("default", false);
+						FlavorGroup.FlavorChoice on = new FlavorGroup.FlavorChoice();
+						on.id = mf.name+"_on";
+						on.name = "On";
+						on.def = defOn;
+						synth.choices.add(on);
+						FlavorGroup.FlavorChoice off = new FlavorGroup.FlavorChoice();
+						off.id = mf.name+"_off";
+						off.name = "Off";
+						off.def = !defOn;
+						synth.choices.add(off);
+						metafileFlavors.put(mf.name, Collections.singletonList(on.id));
+						syntheticGroups.put(mf.name, synth);
+					}
+				}
+	
+				JsonObject syntheticGroupsJson = new JsonObject();
+				pwstate.put("syntheticFlavorGroups", syntheticGroupsJson);
+				final JsonArray fourFlavors = ourFlavors;
+				for (Map.Entry<String, FlavorGroup> en : syntheticGroups.entrySet()) {
+					if (changeFlavors || !en.getValue().choices.stream().anyMatch(c -> Iterables.contains(fourFlavors, c.id))) {
+						unpickedGroups.add(en.getValue());
+					}
+					FlavorGroup grp = en.getValue();
+					JsonObject obj = new JsonObject();
+					obj.put("id", grp.id);
+					obj.put("name", grp.name);
+					obj.put("description", grp.description);
+					JsonArray choices = new JsonArray();
+					for (FlavorChoice c : grp.choices) {
+						JsonObject cobj = new JsonObject();
+						cobj.put("id", c.id);
+						cobj.put("name", c.name);
+						cobj.put("description", c.description);
+						choices.add(cobj);
+					}
+					obj.put("choices", choices);
+					syntheticGroupsJson.put(en.getKey(), obj);
+				}
+	
+				PuppetHandler.updateSubtitle("subtitle.waiting_for_flavors");
+				if (changeFlavors) {
+					ourFlavors.clear();
+				}
+				ourFlavors = handleFlavorSelection(ourFlavors, unpickedGroups, newState, forceFlavorDefaults);
+				
+				for (Future<Metafile> future : metafileFutures) {
+					Metafile mf;
+					try {
+						mf = future.get();
+					} catch (Throwable e) {
+						throw new AssertionError(e);
+					}
+					
+					List<String> mfFlavors = metafileFlavors.get(mf.name);
+					if (mfFlavors != null) Log.debug("Flavors for "+mf.name+": "+mfFlavors);
+					if (mfFlavors != null && !Iterables.intersects(mfFlavors, ourFlavors)) {
+						Log.info("Skipping "+mf.target+" as it's not eligible for our selected flavors");
+						continue;
+					}
+					
+					if (mf.target == null) {
+						// skipped in an earlier pass
+						continue;
+					}
+					
+					String mfpath = mf.path;
+					String path = mf.target;
+					Toml metafile = mf.toml;
+					
+					metafileFiles.put(mfpath, path);
 					toDelete.remove(path);
+					Toml download = metafile.getTable("download");
+					FilePlan f = new FilePlan();
+					HashFunction thisFunc = parseFunc(download.getString("hash-format"));
+					String thisHash = download.getString("hash");
+					if (thisFunc == HashFunction.MURMUR2_CF) {
+						thisHash = Murmur2CFMessageDigest.decToHex(thisHash);
+					}
+					f.state = new FileState(thisFunc, thisHash, -1);
 					postState.put(path, f.state);
 					if (!plan.expectedState.containsKey(path)) {
 						plan.expectedState.put(path, FileState.EMPTY);
 					} else if (plan.expectedState.get(path).equals(f.state)) {
 						continue;
 					}
+					String url = download.getString("url");
+					String mode = download.getString("mode");
+					if (Bases.b64ToString("bWV0YWRhdGE6Y3Vyc2Vmb3JnZQ==").equals(mode)) {
+						// Not a virus. Trust me, I'm a dolphin
+						Toml tbl = metafile.getTable(Bases.b64ToString("dXBkYXRlLmN1cnNlZm9yZ2U="));
+						f.hostile = true;
+						String str = Long.toString(tbl.getLong(Bases.b64ToString("ZmlsZS1pZA==")));
+						int i = (str.length()+1)/2;
+						String l = str.substring(0, i);
+						String r = str.substring(i);
+						while (r.startsWith("0") && r.length() > 1) r = r.substring(1);
+						f.url = new URI(String.format(Bases.b64ToString("aHR0cHM6Ly9tZWRpYWZpbGV6LmZvcmdlY2RuLm5ldC9maWxlcy8lcy8lcy8="), l, r))
+								.resolve(URLEncoder.encode(metafile.getString(Bases.b64ToString("ZmlsZW5hbWU=")), "UTF-8"));
+					} else if (url != null && !url.trim().isEmpty()) {
+						try {
+							f.url = new URI(url);
+						} catch (URISyntaxException e) {
+							throw new IOException("Cannot update "+path+" - malformed url "+url, e);
+						}
+					} else {
+						throw new IOException("Cannot update "+path+(mode != null ? " - unrecognized download mode "+mode : " - missing url and no download mode provided"));
+					}
 					plan.files.put(path, f);
 				}
-			}
-			svc.shutdown();
-			PuppetHandler.updateSubtitle("subtitle.packwiz.retrieving");
-			PuppetHandler.updateTitle(bootstrapping ? "title.bootstrapping" : "title.updating", false);
-			for (Future<Metafile> future : metafileFutures) {
-				Metafile mf;
-				while (true) {
-					try {
-						mf = future.get();
-						break;
-					} catch (InterruptedException e) {
-					} catch (ExecutionException e) {
-						for (Future<?> f2 : metafileFutures) {
-							try {
-								f2.cancel(false);
-							} catch (Throwable t) {}
-						}
-						if (e.getCause() instanceof IOException) throw (IOException)e.getCause();
-						throw new RuntimeException(e);
+				for (String path : toDelete) {
+					FilePlan f = new FilePlan();
+					f.state = FileState.EMPTY;
+					plan.files.put(path, f);
+					postState.put(path, FileState.EMPTY);
+				}
+				var mfIter = metafileFiles.entrySet().iterator();
+				while (mfIter.hasNext()) {
+					var en = mfIter.next();
+					if (toDelete.contains(String.valueOf(en.getValue()))) {
+						mfIter.remove();
 					}
 				}
-				String path = mf.path;
-				String hash = mf.hash;
-				Toml metafile = mf.toml;
-				String side = metafile.getString("side");
-				String metafileDoublet = (func+":"+hash);
-				metafileState.put(path, metafileDoublet);
-				if (side != null && Agent.useEnvs && !side.equals("both") && !side.equals(Agent.detectedEnv)) {
-					Log.info("Skipping "+path+" as it's not eligible for env "+Agent.detectedEnv);
-					continue;
+				lastState = new JsonObject();
+				for (Map.Entry<String, FileState> en : plan.expectedState.entrySet()) {
+					if (toDelete.contains(en.getKey())) continue;
+					if (en.getValue().hash() == null) continue;
+					lastState.put(en.getKey(), en.getValue().func()+":"+ en.getValue().hash());
 				}
-				path = path.replace("\\", "/");
-				String pfx;
-				int slash = path.lastIndexOf('/');
-				if (slash >= 0) {
-					pfx = path.substring(0, slash+1);
-				} else {
-					pfx = "";
-				}
-				mf.target = pfx+metafile.getString("filename");
-				Toml option = metafile.getTable("option");
-				syntheticGroups.remove(mf.name);
-				if (option != null && option.getBoolean("optional", false) && !metafileFlavors.containsKey(mf.name)) {
-					FlavorGroup synth = new FlavorGroup();
-					synth.id = mf.name;
-					synth.name = metafile.getString("name");
-					synth.description = option.getString("description", "flavor.default_description");
-					String defChoice = Agent.config.get("flavors."+mf.name);
-					synth.defChoice = defChoice;
-					synth.defChoiceName = defChoice;
-					boolean defOn = changeFlavors ? Iterables.contains(ourFlavors, mf.name+"_on") : option.getBoolean("default", false);
-					FlavorGroup.FlavorChoice on = new FlavorGroup.FlavorChoice();
-					on.id = mf.name+"_on";
-					on.name = "On";
-					on.def = defOn;
-					synth.choices.add(on);
-					FlavorGroup.FlavorChoice off = new FlavorGroup.FlavorChoice();
-					off.id = mf.name+"_off";
-					off.name = "Off";
-					off.def = !defOn;
-					synth.choices.add(off);
-					metafileFlavors.put(mf.name, Collections.singletonList(on.id));
-					syntheticGroups.put(mf.name, synth);
-				}
-			}
-
-			JsonObject syntheticGroupsJson = new JsonObject();
-			pwstate.put("syntheticFlavorGroups", syntheticGroupsJson);
-			final JsonArray fourFlavors = ourFlavors;
-			for (Map.Entry<String, FlavorGroup> en : syntheticGroups.entrySet()) {
-				if (changeFlavors || !en.getValue().choices.stream().anyMatch(c -> Iterables.contains(fourFlavors, c.id))) {
-					unpickedGroups.add(en.getValue());
-				}
-				FlavorGroup grp = en.getValue();
-				JsonObject obj = new JsonObject();
-				obj.put("id", grp.id);
-				obj.put("name", grp.name);
-				obj.put("description", grp.description);
-				JsonArray choices = new JsonArray();
-				for (FlavorChoice c : grp.choices) {
-					JsonObject cobj = new JsonObject();
-					cobj.put("id", c.id);
-					cobj.put("name", c.name);
-					cobj.put("description", c.description);
-					choices.add(cobj);
-				}
-				obj.put("choices", choices);
-				syntheticGroupsJson.put(en.getKey(), obj);
-			}
-
-			PuppetHandler.updateSubtitle("subtitle.waiting_for_flavors");
-			if (changeFlavors) {
-				ourFlavors.clear();
-			}
-			ourFlavors = handleFlavorSelection(ourFlavors, unpickedGroups, newState, forceFlavorDefaults);
-			
-			for (Future<Metafile> future : metafileFutures) {
-				Metafile mf;
-				try {
-					mf = future.get();
-				} catch (Throwable e) {
-					throw new AssertionError(e);
-				}
-				
-				List<String> mfFlavors = metafileFlavors.get(mf.name);
-				if (mfFlavors != null) Log.debug("Flavors for "+mf.name+": "+mfFlavors);
-				if (mfFlavors != null && !Iterables.intersects(mfFlavors, ourFlavors)) {
-					Log.info("Skipping "+mf.target+" as it's not eligible for our selected flavors");
-					continue;
-				}
-				
-				if (mf.target == null) {
-					// skipped in an earlier pass
-					continue;
-				}
-				
-				String mfpath = mf.path;
-				String path = mf.target;
-				Toml metafile = mf.toml;
-				
-				metafileFiles.put(mfpath, path);
-				toDelete.remove(path);
-				Toml download = metafile.getTable("download");
-				FilePlan f = new FilePlan();
-				HashFunction thisFunc = parseFunc(download.getString("hash-format"));
-				String thisHash = download.getString("hash");
-				if (thisFunc == HashFunction.MURMUR2_CF) {
-					thisHash = Murmur2CFMessageDigest.decToHex(thisHash);
-				}
-				f.state = new FileState(thisFunc, thisHash, -1);
-				postState.put(path, f.state);
-				if (!plan.expectedState.containsKey(path)) {
-					plan.expectedState.put(path, FileState.EMPTY);
-				} else if (plan.expectedState.get(path).equals(f.state)) {
-					continue;
-				}
-				String url = download.getString("url");
-				String mode = download.getString("mode");
-				if (Bases.b64ToString("bWV0YWRhdGE6Y3Vyc2Vmb3JnZQ==").equals(mode)) {
-					// Not a virus. Trust me, I'm a dolphin
-					Toml tbl = metafile.getTable(Bases.b64ToString("dXBkYXRlLmN1cnNlZm9yZ2U="));
-					f.hostile = true;
-					String str = Long.toString(tbl.getLong(Bases.b64ToString("ZmlsZS1pZA==")));
-					int i = (str.length()+1)/2;
-					String l = str.substring(0, i);
-					String r = str.substring(i);
-					while (r.startsWith("0") && r.length() > 1) r = r.substring(1);
-					f.url = new URI(String.format(Bases.b64ToString("aHR0cHM6Ly9tZWRpYWZpbGV6LmZvcmdlY2RuLm5ldC9maWxlcy8lcy8lcy8="), l, r))
-							.resolve(URLEncoder.encode(metafile.getString(Bases.b64ToString("ZmlsZW5hbWU=")), "UTF-8"));
-				} else if (url != null && !url.trim().isEmpty()) {
-					try {
-						f.url = new URI(url);
-					} catch (URISyntaxException e) {
-						throw new IOException("Cannot update "+path+" - malformed url "+url, e);
+				for (Map.Entry<String, FileState> en : postState.entrySet()) {
+					if (toDelete.contains(en.getKey())) continue;
+					if (en.getValue().hash() == null) {
+						lastState.remove(en.getKey());
+						continue;
 					}
-				} else {
-					throw new IOException("Cannot update "+path+(mode != null ? " - unrecognized download mode "+mode : " - missing url and no download mode provided"));
+					lastState.put(en.getKey(), en.getValue().func()+":"+ en.getValue().hash());
 				}
-				plan.files.put(path, f);
+				pwstate.put("lastState", lastState);
+				return new CheckResult(ourVersion, theirVersion, plan, theirVers);
+			} else {
+				Log.info("We appear to be up-to-date. Nothing to do");
 			}
-			for (String path : toDelete) {
-				FilePlan f = new FilePlan();
-				f.state = FileState.EMPTY;
-				plan.files.put(path, f);
-				postState.put(path, FileState.EMPTY);
+			return new CheckResult(ourVersion, ourVersion, null, Collections.emptyMap());
+		} finally {
+			for (var c : cleanup) {
+				if (c != null) c.close();
 			}
-			var mfIter = metafileFiles.entrySet().iterator();
-			while (mfIter.hasNext()) {
-				var en = mfIter.next();
-				if (toDelete.contains(String.valueOf(en.getValue()))) {
-					mfIter.remove();
-				}
+			for (var f : delete) {
+				if (f != null) f.delete();
 			}
-			lastState = new JsonObject();
-			for (Map.Entry<String, FileState> en : plan.expectedState.entrySet()) {
-				if (toDelete.contains(en.getKey())) continue;
-				if (en.getValue().hash() == null) continue;
-				lastState.put(en.getKey(), en.getValue().func()+":"+ en.getValue().hash());
-			}
-			for (Map.Entry<String, FileState> en : postState.entrySet()) {
-				if (toDelete.contains(en.getKey())) continue;
-				if (en.getValue().hash() == null) {
-					lastState.remove(en.getKey());
-					continue;
-				}
-				lastState.put(en.getKey(), en.getValue().func()+":"+ en.getValue().hash());
-			}
-			pwstate.put("lastState", lastState);
-			return new CheckResult(ourVersion, theirVersion, plan, theirVers);
-		} else {
-			Log.info("We appear to be up-to-date. Nothing to do");
 		}
-		return new CheckResult(ourVersion, ourVersion, null, Collections.emptyMap());
 	}
 	
 	static HashFunction parseFunc(String str) {

@@ -61,6 +61,7 @@ import com.unascribed.sup.agent.Agent;
 import com.unascribed.sup.agent.Log;
 import com.unascribed.sup.agent.data.HashFunction;
 import com.unascribed.sup.agent.signing.SigProvider;
+import com.unascribed.sup.data.SysProps;
 import com.unascribed.sup.pieces.NullOutputStream;
 import com.unascribed.sup.util.Bases;
 
@@ -151,6 +152,9 @@ public class RequestHelper {
 	}
 
 	public static InputStream get(URI url, boolean hostile) throws IOException {
+		if (SysProps.DEBUG_REQUESTS) {
+			Log.debug((hostile ? "Carefully r" : "R")+"etrieving "+url);
+		}
 		if ("file".equals(url.getScheme())) {
 			return new FileInputStream(new File(url));
 		}
