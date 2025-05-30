@@ -45,6 +45,17 @@ public class SysPropDefs {
 	
 	/**
 	 * {@value}: <ul>
+	 * <li><b>true</b>: Wait 4 seconds before applying an update to let the user read the update
+	 * plan in the log.</li>
+	 * <li><b>false</b>: Normal behavior.</li>
+	 * </ul>
+	 * This behavior is enabled by {@link #DEBUG} prior to 1.1.4.
+	 * @since 1.1.4
+	 */
+	public static final String DEBUG_PAUSE_BEFORE_UPDATE = "unsup.debug.pauseBeforeUpdate";
+	
+	/**
+	 * {@value}: <ul>
 	 * <li><b>true</b>: Attempt to launch the Puppet even in standalone mode.</li>
 	 * <li><b>false</b>: Only launch the Puppet in agent mode.</li>
 	 * </ul>

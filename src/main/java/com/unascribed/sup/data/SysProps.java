@@ -29,6 +29,7 @@ public class SysProps {
 
 	public static final boolean DEBUG = getBoolean(SysPropDefs.DEBUG);
 	public static final boolean DEBUG_REQUESTS = getBoolean(SysPropDefs.DEBUG_REQUESTS);
+	public static final boolean DEBUG_PAUSE_BEFORE_UPDATE = getBoolean(SysPropDefs.DEBUG_PAUSE_BEFORE_UPDATE);
 	public static final boolean GUI_IN_STANDALONE = getBoolean(SysPropDefs.GUI_IN_STANDALONE);
 	public static final boolean IGNORE_ENVS = getBoolean(SysPropDefs.IGNORE_ENVS);
 	public static final boolean ABORT_ON_PUPPET_CRASH = getBoolean(SysPropDefs.ABORT_ON_PUPPET_CRASH);

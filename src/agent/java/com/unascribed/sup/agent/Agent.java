@@ -706,7 +706,7 @@ public class Agent {
 				Log.debug("Component "+en.getKey()+" will be updated from "+ours+" to "+en.getValue());
 			}
 		}
-		if (SysProps.DEBUG) {
+		if (SysProps.DEBUG_PAUSE_BEFORE_UPDATE) {
 			Log.debug("Sound good? You have 4 seconds to kill the process if not.");
 			try {
 				Thread.sleep(4000);

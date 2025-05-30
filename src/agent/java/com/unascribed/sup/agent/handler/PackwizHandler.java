@@ -541,6 +541,7 @@ public class PackwizHandler extends AbstractFormatHandler {
 				while (mfIter.hasNext()) {
 					var en = mfIter.next();
 					if (toDelete.contains(String.valueOf(en.getValue()))) {
+						metafileState.remove(en.getKey());
 						mfIter.remove();
 					}
 				}
