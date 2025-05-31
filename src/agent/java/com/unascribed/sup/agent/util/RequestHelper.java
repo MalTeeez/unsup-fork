@@ -21,6 +21,7 @@ package com.unascribed.sup.agent.util;
 
 import java.io.ByteArrayInputStream;
 import java.io.ByteArrayOutputStream;
+import java.io.Closeable;
 import java.io.File;
 import java.io.FileInputStream;
 import java.io.FileNotFoundException;
@@ -43,11 +44,10 @@ import java.time.format.DateTimeParseException;
 import java.time.temporal.ChronoUnit;
 import java.util.Arrays;
 import java.util.HashSet;
+import java.util.OptionalLong;
 import java.util.Set;
 import java.util.concurrent.TimeUnit;
 import java.util.function.Function;
-import java.util.function.LongConsumer;
-
 import javax.net.ssl.SSLException;
 import javax.net.ssl.SSLHandshakeException;
 
@@ -131,7 +131,7 @@ public class RequestHelper {
 	public static byte[] downloadToMemory(URI url, int sizeLimit) throws IOException {
 		return withRetries(10, () -> {
 			try {
-				InputStream conn = get(url);
+				InputStream conn = get(url).stream();
 				byte[] resp = RequestHelper.collectLimited(conn, sizeLimit);
 				return resp;
 			} catch (SocketTimeoutException e) {
@@ -147,16 +147,29 @@ public class RequestHelper {
 	private static String currentFirefoxVersion;
 	private static final Set<String> alwaysHostile = new HashSet<>(Arrays.asList(Bases.b64ToString("YmV0YS5jdXJzZWZvcmdlLmNvbXx3d3cuY3Vyc2Vmb3JnZS5jb218Y3Vyc2Vmb3JnZS5jb218bWluZWNyYWZ0LmN1cnNlZm9yZ2UuY29tfG1lZGlhZmlsZXouZm9yZ2VjZG4ubmV0fG1lZGlhZmlsZXMuZm9yZ2VjZG4ubmV0fGZvcmdlY2RuLm5ldHxlZGdlLmZvcmdlY2RuLm5ldHxzdGF0aWMucGxhbmV0bWluZWNyYWZ0LmNvbQ==").split("\\|")));
 
-	public static InputStream get(URI url) throws IOException {
+	@Desugar
+	public record ResourceRef(InputStream stream, OptionalLong size) implements Closeable {
+		
+		public ResourceRef(InputStream stream) { this(stream, OptionalLong.empty()); }
+		
+		public ResourceRef(InputStream stream, long size) { this(stream, OptionalLong.of(size)); }
+		
+		@Override
+		public void close() throws IOException { stream.close(); }
+		
+	}
+	
+	public static ResourceRef get(URI url) throws IOException {
 		return get(url, false);
 	}
 
-	public static InputStream get(URI url, boolean hostile) throws IOException {
+	public static ResourceRef get(URI url, boolean hostile) throws IOException {
 		if (SysProps.DEBUG_REQUESTS) {
 			Log.debug((hostile ? "Carefully r" : "R")+"etrieving "+url);
 		}
 		if ("file".equals(url.getScheme())) {
-			return new FileInputStream(new File(url));
+			var f = new File(url);
+			return new ResourceRef(new FileInputStream(f), f.length());
 		}
 		if (!hostile && alwaysHostile.contains(url.getHost())) {
 			hostile = true;
@@ -231,7 +244,12 @@ public class RequestHelper {
 						throw new IOException("Received non-200 response from server for "+url+": "+res.code()+"\n"+s);
 					}
 				}
-				return res.body().byteStream();
+				long len = res.body().contentLength();
+				if (len == -1) {
+					return new ResourceRef(res.body().byteStream());
+				} else {
+					return new ResourceRef(res.body().byteStream(), len);
+				}
 			} catch (InterruptedIOException e) {
 				throw new Retry("Connection to "+url.getHost()+" timed out",
 						e);
@@ -347,48 +365,60 @@ public class RequestHelper {
 		return new Toml().read(new ByteArrayInputStream(data));
 	}
 
+	public interface Progressor {
+		void updateProgress(State state, long bytesDownloaded, OptionalLong contentLength);
+		
+		public enum State { DOWNLOADING, FAILED, COMPLETE }
+	}
+	
 	/**
 	 * @param hash null if no hash function was specified
 	 */
 	@Desugar
 	public record DownloadedFile(String hash, File file) {}
 	
-	public static DownloadedFile downloadToFile(URI url, File dir, long size, LongConsumer addProgress, Runnable updateProgress, HashFunction hashFunc, boolean hostile) throws IOException {
+	public static DownloadedFile downloadToFile(URI url, File dir, long size, Progressor progressCb, HashFunction hashFunc, boolean hostile) throws IOException {
 		File file = dir == null ? null : File.createTempFile("download", "", dir);
 		if (file != null) Agent.cleanup.add(file::delete);
 		return withRetries(10, () -> {
 			try {
 				long readTotal = 0;
+				OptionalLong actualSize = OptionalLong.empty();
 				long lastProgressUpdate = 0;
 				MessageDigest digest = hashFunc == null ? null : hashFunc.createMessageDigest();
-				try (InputStream in = get(url, hostile)) {
+				try (var ref = get(url, hostile)) {
+					var in = ref.stream();
+					actualSize = ref.size();
+					if (actualSize.isPresent() && size != -1 && actualSize.getAsLong() != size) {
+						throw new IOException("Expected "+size+" bytes, but got "+actualSize.getAsLong());
+					}
 					byte[] buf = new byte[16384];
 					try (OutputStream out = file == null ? NullOutputStream.INSTANCE : new FileOutputStream(file)) {
 						while (true) {
 							int read = in.read(buf);
 							if (read == -1) break;
 							readTotal += read;
-							if (size != -1 && readTotal > size) throw new IOException("Overread; expected "+size+" bytes, but got at least "+readTotal);
+							if (size != -1 && readTotal > size)
+								throw new IOException("Overread; expected "+size+" bytes, but got at least "+readTotal);
+							if (actualSize.isPresent() && readTotal > actualSize.getAsLong())
+								throw new IOException("Overread; was told to expect "+actualSize.getAsLong()+" bytes, but got at least "+readTotal);
 							out.write(buf, 0, read);
 							if (digest != null) digest.update(buf, 0, read);
-							if (addProgress != null) addProgress.accept(read);
-							if (updateProgress != null && System.nanoTime()-lastProgressUpdate > ONE_SECOND_IN_NANOS/30) {
+							if (progressCb != null && System.nanoTime()-lastProgressUpdate > ONE_SECOND_IN_NANOS/90) {
 								lastProgressUpdate = System.nanoTime();
-								updateProgress.run();
+								progressCb.updateProgress(Progressor.State.DOWNLOADING, readTotal, actualSize);
 							}
 						}
 					}
 				} catch (InterruptedIOException e) {
-					if (addProgress != null) addProgress.accept(-readTotal);
-					if (updateProgress != null) updateProgress.run();
+					if (progressCb != null) progressCb.updateProgress(Progressor.State.FAILED, readTotal, actualSize);
 					throw e;
 				}
-				if (size != -1 && readTotal != size) {
+				if (size != -1 && readTotal != size)
 					throw new IOException("Underread; expected "+size+" bytes, but only got "+readTotal);
-				}
-				if (updateProgress != null) {
-					updateProgress.run();
-				}
+				if (actualSize.isPresent() && readTotal != actualSize.getAsLong())
+					throw new IOException("Underread; was told to expect "+actualSize.getAsLong()+" bytes, but only got "+readTotal);
+				if (progressCb != null) progressCb.updateProgress(Progressor.State.COMPLETE, readTotal, actualSize);
 				String hash = null;
 				if (digest != null) {
 					hash = Bases.bytesToHex(digest.digest());

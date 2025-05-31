@@ -50,7 +50,7 @@ import java.util.concurrent.Executors;
 import java.util.concurrent.Future;
 import java.util.concurrent.ThreadLocalRandom;
 import java.util.concurrent.TimeUnit;
-import java.util.concurrent.atomic.AtomicLong;
+import java.util.concurrent.atomic.AtomicIntegerArray;
 import java.util.function.Consumer;
 import java.util.function.Function;
 import java.util.regex.Matcher;
@@ -714,7 +714,6 @@ public class Agent {
 			}
 			Log.debug("Continuing.");
 		}
-		long progressDenom = 1;
 		File wd = new File("");
 		PuppetHandler.updateSubtitle("subtitle.verifying");
 		Set<String> moveAside = new HashSet<>();
@@ -800,15 +799,20 @@ public class Agent {
 					moveAside.add(path);
 				}
 			}
-			progressDenom += (to.size() == -1 ? 1 : to.size());
 		}
 		File tmp = dryRun ? null : new File(".unsup-tmp");
 		if (tmp != null && !tmp.exists()) {
 			tmp.mkdirs();
 		}
-		final long progressDenomf = progressDenom;
-		AtomicLong progress = new AtomicLong();
-		Runnable updateProgress = () -> PuppetHandler.updateProgress((int)((progress.get()*1000)/progressDenomf));
+		AtomicIntegerArray progresses = new AtomicIntegerArray(plan.files.size());
+		long denom = plan.files.size()*1000;
+		Runnable updateProgress = () -> {
+			long sum = 0;
+			for (int i = 0; i < progresses.length(); i++) {
+				sum += progresses.getOpaque(i);
+			}
+			PuppetHandler.updateProgress((int)((sum*1000)/denom));
+		};
 		PuppetHandler.updateTitle(bootstrapping ? "title.bootstrapping" : "title.updating", true);
 		Log.debug("Using "+SysProps.DOWNLOAD_WORKERS+" download worker"+(SysProps.DOWNLOAD_WORKERS == 1 ? "" : "s"));
 		ExecutorService svc = Executors.newFixedThreadPool(SysProps.DOWNLOAD_WORKERS);
@@ -828,6 +832,7 @@ public class Agent {
 				PuppetHandler.updateSubtitleDownloading(dl.toArray(new String[0]));
 			}
 		};
+		int i = 0;
 		for (Map.Entry<String, ? extends FilePlan> en : plan.files.entrySet()) {
 			String path = en.getKey();
 			FilePlan f = en.getValue();
@@ -839,6 +844,7 @@ public class Agent {
 			if (to.size() == 0) {
 				continue;
 			}
+			final int fi = i;
 			futures.add(svc.submit(() -> {
 				synchronized (files) {
 					files.add(path);
@@ -846,7 +852,7 @@ public class Agent {
 				}
 				try {
 					if (f.primerUrl != null) {
-						try (InputStream in = RequestHelper.get(f.primerUrl, f.hostile)) {
+						try (InputStream in = RequestHelper.get(f.primerUrl, f.hostile).stream()) {
 							byte[] buf = new byte[8192];
 							while (true) {
 								if (in.read(buf) == -1) break;
@@ -855,22 +861,17 @@ public class Agent {
 						Thread.sleep(2000+ThreadLocalRandom.current().nextInt(1200));
 					}
 					DownloadedFile df;
-					long[] contributedProgress = {0};
 					try {
 						if ("file".equals(f.url.getScheme())) {
 							Log.info("Copying "+path);
 						} else {
 							Log.info("Downloading "+path+" from "+describe(f.url));
 						}
-						df = downloadAndCheckHash(tmp, progress, updateProgress, path, f, f.url, to, contributedProgress);
-						if (to.size() == -1) progress.incrementAndGet();
+						df = downloadAndCheckHash(tmp, progresses, fi, updateProgress, path, f, f.url, to);
 					} catch (Throwable t) {
 						if (f.fallbackUrl != null) {
-							progress.addAndGet(-contributedProgress[0]);
-							contributedProgress[0] = 0;
 							Log.warn("Failed to download "+path+" from specified URL, trying again from "+describe(f.fallbackUrl), t);
-							df = downloadAndCheckHash(tmp, progress, updateProgress, path, f, f.fallbackUrl, to, contributedProgress);
-							if (to.size() == -1) progress.incrementAndGet();
+							df = downloadAndCheckHash(tmp, progresses, fi, updateProgress, path, f, f.fallbackUrl, to);
 						} else {
 							throw t;
 						}
@@ -886,6 +887,7 @@ public class Agent {
 					}
 				}
 			}));
+			i++;
 		}
 		svc.shutdown();
 		for (Future<?> future : futures) {
@@ -985,10 +987,26 @@ public class Agent {
 		return state.toString();
 	}
 
-	private static DownloadedFile downloadAndCheckHash(File tmp, AtomicLong progress, Runnable updateProgress, String path, FilePlan f, URI url, FileState to, long[] contributedProgress) throws IOException {
+	private static DownloadedFile downloadAndCheckHash(File tmp, AtomicIntegerArray progresses, int progressIdx,
+			Runnable updateProgress, String path, FilePlan f, URI url, FileState to) throws IOException {
 		return RequestHelper.withRetries(3, () -> {
-			DownloadedFile df = RequestHelper.downloadToFile(url, tmp, to.size(), to.size() == -1 ? l -> {} : l -> {contributedProgress[0]+=l;progress.addAndGet(l);},
-					updateProgress, to.func(), f.hostile);
+			DownloadedFile df = RequestHelper.downloadToFile(url, tmp, to.size(),
+					(state, amt, size) -> {
+						switch (state) {
+							case DOWNLOADING -> {
+								if (size.isPresent()) {
+									progresses.set(progressIdx, (int)((amt*1000)/size.getAsLong()));
+								}
+							}
+							case COMPLETE -> {
+								progresses.set(progressIdx, 1000);
+							}
+							case FAILED -> {
+								progresses.set(progressIdx, 0);
+							}
+						}
+						updateProgress.run();
+					}, to.func(), f.hostile);
 			if (!df.hash().equals(to.hash())) {
 				throw new Retry("Hash mismatch on downloaded file for "+path+" from "+url+" - expected "+ to.hash() +", got "+ df.hash(),
 						IOException::new);

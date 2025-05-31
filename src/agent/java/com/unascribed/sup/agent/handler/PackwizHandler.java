@@ -254,7 +254,7 @@ public class PackwizHandler extends AbstractFormatHandler {
 						if (unsup.getBoolean("features.metafiles_zip", false)) {
 							File tmp = new File(".unsup-tmp");
 							File outf = new File(tmp, "unsup-metafiles.zip");
-							try (var in = new BrotliInputStream(RequestHelper.get(src.resolve("unsup-metafiles.zip.br")));
+							try (var in = new BrotliInputStream(RequestHelper.get(src.resolve("unsup-metafiles.zip.br")).stream());
 									var out = new FileOutputStream(outf)) {
 								Util.copy(in, out);
 							} catch (IOException e) {
