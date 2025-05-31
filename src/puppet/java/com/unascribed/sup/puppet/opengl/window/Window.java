@@ -54,6 +54,7 @@ public abstract class Window {
 	private static final boolean OS_HAS_BROKEN_BUFFER_SWAP = Platform.get() == Platform.WINDOWS || MACOS;
 	
 	protected Window parent;
+	private boolean visible;
 	
 	protected long handle;
 	protected int width, height;
@@ -294,6 +295,10 @@ public abstract class Window {
 		return true;
 	}
 	
+	public synchronized boolean isVisible() {
+		return visible;
+	}
+	
 	public void setVisible(boolean visible) {
 		long handle;
 		synchronized (this) {
@@ -306,6 +311,9 @@ public abstract class Window {
 			} else {
 				glfwHideWindow(handle);
 			}
+			synchronized (this) {
+				this.visible = visible;
+			}
 		});
 		if (renderThread == null) {
 			renderThread = new Thread(() -> {
@@ -314,11 +322,15 @@ public abstract class Window {
 				macLockCGL(cgl);
 				GL.createCapabilities();
 				
-				if (Platform.get() == Platform.WINDOWS && "NVIDIA Corporation".equals(glGetString(GL_VENDOR)) && GL.getCapabilities().GL_KHR_debug) {
-					// force Windows nVidia to disable "Threaded Optimizations"
-					// https://github.com/CaffeineMC/sodium/blob/fe5fe6cf2184741bbf85da8a183dc145ff06b288/common/src/workarounds/java/net/caffeinemc/mods/sodium/client/compatibility/workarounds/nvidia/NvidiaWorkarounds.java#L125
-					Puppet.log("DEBUG", "Applying Windows nVidia Threaded Optimizations workaround");
-					glEnable(KHRDebug.GL_DEBUG_OUTPUT_SYNCHRONOUS);
+				if (Platform.get() == Platform.WINDOWS && "NVIDIA Corporation".equals(glGetString(GL_VENDOR))) {
+					if (GL.getCapabilities().GL_KHR_debug) {
+						// force Windows nVidia to disable "Threaded Optimizations"
+						// https://github.com/CaffeineMC/sodium/blob/fe5fe6cf2184741bbf85da8a183dc145ff06b288/common/src/workarounds/java/net/caffeinemc/mods/sodium/client/compatibility/workarounds/nvidia/NvidiaWorkarounds.java#L125
+						Puppet.log("DEBUG", "Applying Windows nVidia Threaded Optimizations workaround");
+						glEnable(KHRDebug.GL_DEBUG_OUTPUT_SYNCHRONOUS);
+					} else {
+						Puppet.log("WARN", "Want to apply Windows nVidia Threaded Optimizations workaround, but KHR_debug is not available");
+					}
 				}
 				
 				scratchTex = glGenTextures();

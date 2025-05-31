@@ -190,6 +190,10 @@ public class GLPuppet {
 			
 			@Override
 			public void setDone() {
+				if (!mainWindow.isVisible()) {
+					Puppet.reportDone();
+					return;
+				}
 				synchronized (mainWindow) {
 					mainWindow.throbber.animateDone();
 				}

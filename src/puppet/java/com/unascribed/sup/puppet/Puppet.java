@@ -34,12 +34,15 @@ import java.util.List;
 import java.util.Locale;
 import java.util.Map;
 import java.util.concurrent.BlockingQueue;
+import java.util.concurrent.Callable;
+import java.util.concurrent.ExecutionException;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
 import java.util.concurrent.LinkedBlockingQueue;
 import java.util.concurrent.ScheduledExecutorService;
 import java.util.concurrent.ScheduledFuture;
 import java.util.concurrent.TimeUnit;
+import java.util.concurrent.atomic.AtomicReference;
 import java.util.zip.GZIPInputStream;
 
 import javax.annotation.NotNull;
@@ -52,6 +55,7 @@ import com.unascribed.sup.data.FlavorGroup;
 import com.unascribed.sup.data.SysProps;
 import com.unascribed.sup.data.FlavorGroup.FlavorChoice;
 import com.unascribed.sup.data.SysProps.PuppetMode;
+import com.unascribed.sup.pieces.Latch;
 import com.unascribed.sup.puppet.opengl.GLPuppet;
 import com.unascribed.sup.puppet.swing.SwingPuppet;
 
@@ -430,6 +434,33 @@ public class Puppet {
 			r.run();
 		} else {
 			mainThreadWorkQueue.add(r);
+		}
+	}
+	
+	public static <T> T submitToMainThread(Callable<T> r) throws InterruptedException, ExecutionException {
+		if (isMainThread()) {
+			try {
+				return r.call();
+			} catch (Throwable e) {
+				throw new ExecutionException(e);
+			}
+		} else {
+			var ref = new AtomicReference<T>(null);
+			var err = new AtomicReference<Throwable>(null);
+			var latch = new Latch();
+			mainThreadWorkQueue.add(() -> {
+				try {
+					ref.set(r.call());
+				} catch (Throwable e) {
+					err.set(e);
+				} finally {
+					latch.release();
+				}
+			});
+			latch.await();
+			var t = err.get();
+			if (t != null) throw new ExecutionException(t);
+			return ref.get();
 		}
 	}
 
