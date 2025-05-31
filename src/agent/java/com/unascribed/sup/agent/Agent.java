@@ -809,7 +809,7 @@ public class Agent {
 		Runnable updateProgress = () -> {
 			long sum = 0;
 			for (int i = 0; i < progresses.length(); i++) {
-				sum += progresses.getOpaque(i);
+				sum += progresses.get(i);
 			}
 			PuppetHandler.updateProgress((int)((sum*1000)/denom));
 		};
