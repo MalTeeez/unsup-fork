@@ -838,10 +838,12 @@ public class Agent {
 			FilePlan f = en.getValue();
 			if (f.skip) {
 				Log.info("Skipping download of "+path);
+				progresses.set(i, 1000);
 				continue;
 			}
 			FileState to = f.state;
 			if (to.size() == 0) {
+				progresses.set(i, 1000);
 				continue;
 			}
 			final int fi = i;
