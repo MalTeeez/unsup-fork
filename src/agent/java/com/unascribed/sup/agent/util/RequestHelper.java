@@ -410,7 +410,7 @@ public class RequestHelper {
 							}
 						}
 					}
-				} catch (InterruptedIOException e) {
+				} catch (IOException e) {
 					if (progressCb != null) progressCb.updateProgress(Progressor.State.FAILED, readTotal, actualSize);
 					throw e;
 				}
