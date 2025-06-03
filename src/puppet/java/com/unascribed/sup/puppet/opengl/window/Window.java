@@ -272,7 +272,7 @@ public abstract class Window {
 				Puppet.log("ERROR", "Failed to create window icon: "+SDL_GetError());
 			} else {
 				check(SDL_AddSurfaceAlternateImage(surface,
-						SDL_CreateSurfaceFrom(highres.getWidth(), highres.getHeight(), SDL_PIXELFORMAT_ABGR8888, highresPx, lowres.getWidth()*4)));
+						SDL_CreateSurfaceFrom(highres.getWidth(), highres.getHeight(), SDL_PIXELFORMAT_ABGR8888, highresPx, highres.getWidth()*4)));
 				check(SDL_SetWindowIcon(handle, surface));
 			}
 			memFree(lowresPx);
