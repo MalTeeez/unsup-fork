@@ -190,7 +190,10 @@ public class SysPropDefs {
 	 * <li><b>null</b>: Force usage of the dummy platform. Almost never useful.</li>
 	 * </ul>
 	 * @since 1.1-pre1
+	 * @deprecated Since 1.2, SDL3 is used instead of GLFW. Use the SDL_VIDEODRIVER environment
+	 * 		variable instead. This sysprop no longer does anything.
 	 */
+	@Deprecated
 	public static final String PUPPET_PLATFORM = "unsup.puppet.opengl.platform";
 	
 }

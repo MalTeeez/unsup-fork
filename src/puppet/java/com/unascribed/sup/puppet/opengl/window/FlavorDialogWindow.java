@@ -28,9 +28,9 @@ import com.unascribed.sup.puppet.Translate;
 import com.unascribed.sup.puppet.opengl.pieces.FontManager.Face;
 
 import static com.unascribed.sup.puppet.opengl.util.GL.*;
-import static org.lwjgl.glfw.GLFW.*;
-import static org.lwjgl.system.MemoryUtil.NULL;
-
+import static org.lwjgl.sdl.SDLVideo.*;
+import static org.lwjgl.sdl.SDLMouse.*;
+import static org.lwjgl.sdl.SDLKeycode.*;
 import java.io.IOException;
 import java.io.StringReader;
 import java.util.ArrayList;
@@ -106,70 +106,63 @@ public class FlavorDialogWindow extends Window {
 	}
 	
 	@Override
-	public synchronized void create(Window parent, String title, int width, int height, double dpiScale) {
-		glfwWindowHint(GLFW_FOCUS_ON_SHOW, GLFW_TRUE);
-		glfwWindowHint(GLFW_RESIZABLE, GLFW_TRUE);
-		glfwWindowHint(GLFW_FLOATING, GLFW_TRUE);
-		super.create(parent, title, width, height, dpiScale);
-		
-		glfwSetKeyCallback(handle, (window, key, scancode, action, mods) -> {
-			if (action == GLFW_RELEASE) return;
-			if (key == GLFW_KEY_TAB || key == GLFW_KEY_UP || key == GLFW_KEY_DOWN) {
-				int dir = 1;
-				if (key == GLFW_KEY_UP || (key == GLFW_KEY_TAB && (mods & GLFW_MOD_SHIFT) != 0)) {
-					dir = -1;
-				}
-				synchronized (this) {
-					int h = highlighted + dir;
-					if (h < 0) h = flavors.size()+h;
-					h %= flavors.size();
-					highlighted = h;
-					needsFullRedraw = true;
-					didKeyboardNav = true;
-					preferKeyboard = true;
-				}
-			} else if (key == GLFW_KEY_ENTER && (mods & GLFW_MOD_CONTROL) != 0) {
-				synchronized (this) {
-					ctrlEnterPressed = true;
-					needsRightRedraw = true;
-					preferKeyboard = true;
-				}
-			} else if (key == GLFW_KEY_ENTER || key == GLFW_KEY_SPACE || key == GLFW_KEY_KP_ENTER) {
-				synchronized (this) {
-					enterPressed = true;
-					needsFullRedraw = true;
-					preferKeyboard = true;
-				}
-			} else if (key == GLFW_KEY_LEFT) {
-				synchronized (this) {
-					leftPressed = true;
-					needsFullRedraw = true;
-					preferKeyboard = true;
-				}
-			} else if (key == GLFW_KEY_RIGHT) {
-				synchronized (this) {
-					rightPressed = true;
-					needsFullRedraw = true;
-					preferKeyboard = true;
-				}
+	protected synchronized void onKeyDown(int key, int scancode, int mod, boolean repeat) {
+		if (key == SDLK_TAB || key == SDLK_UP || key == SDLK_DOWN) {
+			int dir = 1;
+			if (key == SDLK_UP || (key == SDLK_TAB && (mod & SDL_KMOD_SHIFT) != 0)) {
+				dir = -1;
 			}
-		});
-		glfwSetScrollCallback(handle, (window, xoffset, yoffset) -> {
 			synchronized (this) {
-				scrollVel -= yoffset*6;
-				preferKeyboard = false;
-			}
-		});
-		glfwSetWindowCloseCallback(handle, unused -> {
-			Puppet.reportCloseRequest();
-			close();
-		});
-		glfwSetWindowSizeLimits(handle, (int)(400*dpiScale), (int)(200*dpiScale), GLFW_DONT_CARE, GLFW_DONT_CARE);
-		glfwSetWindowFocusCallback(handle, (window, focus) -> {
-			synchronized (this) {
+				int h = highlighted + dir;
+				if (h < 0) h = flavors.size()+h;
+				h %= flavors.size();
+				highlighted = h;
 				needsFullRedraw = true;
+				didKeyboardNav = true;
+				preferKeyboard = true;
 			}
-		});
+		} else if (key == SDLK_RETURN && (mod & SDL_KMOD_CTRL) != 0) {
+			synchronized (this) {
+				ctrlEnterPressed = true;
+				needsRightRedraw = true;
+				preferKeyboard = true;
+			}
+		} else if (key == SDLK_RETURN || key == SDLK_SPACE || key == SDLK_KP_ENTER) {
+			synchronized (this) {
+				enterPressed = true;
+				needsFullRedraw = true;
+				preferKeyboard = true;
+			}
+		} else if (key == SDLK_LEFT) {
+			synchronized (this) {
+				leftPressed = true;
+				needsFullRedraw = true;
+				preferKeyboard = true;
+			}
+		} else if (key == SDLK_RIGHT) {
+			synchronized (this) {
+				rightPressed = true;
+				needsFullRedraw = true;
+				preferKeyboard = true;
+			}
+		}
+	}
+	
+	@Override
+	protected synchronized void onScroll(float dwheelX, float dwheelY) {
+		scrollVel -= dwheelY*6;
+		preferKeyboard = false;
+	}
+	
+	@Override
+	protected synchronized void onWindowCloseRequest() {
+		Puppet.reportCloseRequest();
+		close();
+	}
+	
+	@Override
+	protected synchronized void customizeWindow() {
+		SDL_SetWindowMinimumSize(handle, (int)(400*dpiScale), (int)(200*dpiScale));
 	}
 	
 	public void create(Window parent, double dpiScale) {
@@ -248,7 +241,7 @@ public class FlavorDialogWindow extends Window {
 		float leftArea = (float)(width*(Puppet.flavorDialogBias+0.05));
 		float rightArea = (width-leftArea)-12;
 		
-		boolean focused = glfwGetWindowAttrib(handle, GLFW_FOCUSED) == GLFW_TRUE;
+		boolean focused = (SDL_GetWindowFlags(handle) & SDL_WINDOW_INPUT_FOCUS) != 0;
 		
 		float scrollKnobX1 = leftArea;
 		float scrollKnobX2 = width-rightArea;
@@ -450,7 +443,7 @@ public class FlavorDialogWindow extends Window {
 					clickCursorActive = false;
 					Puppet.runOnMainThread(() -> {
 						if (!run) return;
-						glfwSetCursor(handle, NULL);
+						SDL_SetCursor(defaultCursor);
 					});
 				}
 			} else {
@@ -458,7 +451,7 @@ public class FlavorDialogWindow extends Window {
 					clickCursorActive = true;
 					Puppet.runOnMainThread(() -> {
 						if (!run) return;
-						glfwSetCursor(handle, clickCursor);
+						SDL_SetCursor(clickCursor);
 					});
 				}
 			}

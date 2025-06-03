@@ -27,13 +27,12 @@ import com.unascribed.sup.puppet.Translate;
 import com.unascribed.sup.puppet.opengl.icons.Icon;
 import com.unascribed.sup.puppet.opengl.pieces.FontManager.Face;
 
-import static org.lwjgl.opengl.GL11.glBegin;
-import static org.lwjgl.opengl.GL11.glEnd;
-
 import static com.unascribed.sup.puppet.opengl.util.GL.*;
-import static org.lwjgl.glfw.GLFW.*;
-import static org.lwjgl.system.MemoryUtil.*;
-
+import static com.unascribed.sup.puppet.opengl.util.SDLUtil.*;
+import static org.lwjgl.sdl.SDLProperties.*;
+import static org.lwjgl.sdl.SDLVideo.*;
+import static org.lwjgl.sdl.SDLMouse.*;
+import static org.lwjgl.sdl.SDLKeycode.*;
 import java.util.Arrays;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
@@ -104,42 +103,36 @@ public class MessageDialogWindow extends Window {
 	}
 	
 	@Override
-	public synchronized void create(Window parent, String title, int width, int height, double dpiScale) {
-		glfwWindowHint(GLFW_FOCUS_ON_SHOW, GLFW_TRUE);
-		glfwWindowHint(GLFW_RESIZABLE, GLFW_FALSE);
-		glfwWindowHint(GLFW_FLOATING, GLFW_TRUE);
-		super.create(parent, title, width, height, dpiScale);
-		
-		glfwSetKeyCallback(handle, (window, key, scancode, action, mods) -> {
-			if (action == GLFW_RELEASE) return;
-			if (key == GLFW_KEY_TAB) {
-				int dir = 1;
-				if ((mods & GLFW_MOD_SHIFT) != 0) {
-					dir = -1;
-				}
-				synchronized (this) {
-					int h = highlighted + dir;
-					if (h < 0) h = options.length+h;
-					h %= options.length;
-					highlighted = h;
-					needsRedraw = true;
-				}
-			} else if (key == GLFW_KEY_ENTER || key == GLFW_KEY_SPACE || key == GLFW_KEY_KP_ENTER) {
-				synchronized (this) {
-					enterPressed = true;
-					needsRedraw = true;
-				}
+	protected synchronized void customizeProperties(int props) {
+		check(SDL_SetBooleanProperty(props, SDL_PROP_WINDOW_CREATE_RESIZABLE_BOOLEAN, false));
+	}
+	
+	@Override
+	protected synchronized void onKeyDown(int key, int scancode, int mod, boolean repeat) {
+		if (key == SDLK_TAB) {
+			int dir = 1;
+			if ((mod & SDL_KMOD_SHIFT) != 0) {
+				dir = -1;
 			}
-		});
-		glfwSetWindowFocusCallback(handle, (window, focus) -> {
 			synchronized (this) {
+				int h = highlighted + dir;
+				if (h < 0) h = options.length+h;
+				h %= options.length;
+				highlighted = h;
 				needsRedraw = true;
 			}
-		});
-		glfwSetWindowCloseCallback(handle, unused -> {
-			Puppet.reportChoice(name, "closed");
-			close();
-		});
+		} else if (key == SDLK_RETURN || key == SDLK_SPACE || key == SDLK_KP_ENTER) {
+			synchronized (this) {
+				enterPressed = true;
+				needsRedraw = true;
+			}
+		}
+	}
+	
+	@Override
+	protected synchronized void onWindowCloseRequest() {
+		Puppet.reportChoice(name, "closed");
+		close();
 	}
 	
 	public void create(Window parent, double dpiScale) {
@@ -293,7 +286,7 @@ public class MessageDialogWindow extends Window {
 				hovered = i;
 				Puppet.runOnMainThread(() -> {
 					if (!run) return;
-					glfwSetCursor(handle, clickCursor);
+					SDL_SetCursor(clickCursor);
 				});
 				clickCursorActive = true;
 				
@@ -331,7 +324,7 @@ public class MessageDialogWindow extends Window {
 			}
 			
 			if (i == highlighted) {
-				if (glfwGetWindowAttrib(handle, GLFW_FOCUSED) == GLFW_TRUE) {
+				if ((SDL_GetWindowFlags(handle) & SDL_WINDOW_INPUT_FOCUS) != 0) {
 					glColor(isToAll ? ColorChoice.DIALOG : ColorChoice.BUTTONTEXT, 0.5f);
 					buildRectXYII(x1, y1+20,
 							x2Mouse, y1+22,
@@ -359,7 +352,7 @@ public class MessageDialogWindow extends Window {
 			clickCursorActive = false;
 			Puppet.runOnMainThread(() -> {
 				if (!run) return;
-				glfwSetCursor(handle, NULL);
+				SDL_SetCursor(defaultCursor);
 			});
 		}
 		glEnd();

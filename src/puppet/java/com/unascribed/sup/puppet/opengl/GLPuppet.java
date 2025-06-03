@@ -19,14 +19,17 @@
 
 package com.unascribed.sup.puppet.opengl;
 
-import org.lwjgl.PointerBuffer;
+import org.lwjgl.opengl.GL;
+import org.lwjgl.sdl.SDLVideo;
+import org.lwjgl.sdl.SDL_Event;
 import org.lwjgl.system.Configuration;
+import org.lwjgl.system.MemoryUtil;
 import org.lwjgl.util.freetype.FreeType;
 
 import com.unascribed.sup.Util;
 import com.unascribed.sup.data.AlertMessageType;
 import com.unascribed.sup.data.FlavorGroup;
-import com.unascribed.sup.data.SysProps;
+import com.unascribed.sup.data.SysPropDefs;
 import com.unascribed.sup.pieces.Latch;
 import com.unascribed.sup.puppet.Puppet;
 import com.unascribed.sup.puppet.PuppetDelegate;
@@ -41,12 +44,20 @@ import com.unascribed.sup.puppet.opengl.window.MessageDialogWindow;
 import java.io.File;
 import java.io.FileOutputStream;
 import java.io.InputStream;
+import java.nio.ByteBuffer;
 import java.nio.charset.StandardCharsets;
+import java.util.ArrayList;
 import java.util.List;
 import java.util.OptionalDouble;
 import java.util.concurrent.TimeUnit;
-import static org.lwjgl.system.MemoryUtil.*;
-import static org.lwjgl.glfw.GLFW.*;
+import java.util.function.Predicate;
+
+import static com.unascribed.sup.puppet.opengl.util.SDLUtil.check;
+import static org.lwjgl.sdl.SDLInit.*;
+import static org.lwjgl.sdl.SDLError.*;
+import static org.lwjgl.sdl.SDLStdinc.*;
+import static org.lwjgl.sdl.SDLVideo.SDL_GL_LoadLibrary;
+import static org.lwjgl.sdl.SDLEvents.*;
 
 public class GLPuppet {
 	
@@ -57,6 +68,8 @@ public class GLPuppet {
 	private static final Latch buildLatch = new Latch();
 	private static final Latch mainVisibleLatch = new Latch();
 	
+	private static final List<Predicate<SDL_Event>> eventListeners = new ArrayList<>();
+	
 	public static PuppetDelegate start() {
 		// just a transliteration of https://wiki.archlinux.org/title/HiDPI plus some unsup-specific extras
 		OptionalDouble oDpiScale = scanScale("unsup.scale", "sun.java2d.uiScale", "glass.gtk.uiScale",
@@ -64,40 +77,37 @@ public class GLPuppet {
 		scaleOverridden = oDpiScale.isPresent();
 		double dpiScale = oDpiScale.orElse(1);
 		
-		Configuration.HARFBUZZ_LIBRARY_NAME.set(FreeType.getLibrary());
-		
-		switch (SysProps.PUPPET_PLATFORM) {
-			case COCOA:
-				glfwInitHint(GLFW_PLATFORM, GLFW_PLATFORM_COCOA);
-				break;
-			case NULL:
-				glfwInitHint(GLFW_PLATFORM, GLFW_PLATFORM_NULL);
-				break;
-			case WAYLAND:
-				glfwInitHint(GLFW_PLATFORM, GLFW_PLATFORM_WAYLAND);
-				break;
-			case WIN32:
-				glfwInitHint(GLFW_PLATFORM, GLFW_PLATFORM_WIN32);
-				break;
-			case X11:
-				glfwInitHint(GLFW_PLATFORM, GLFW_PLATFORM_X11);
-				break;
-			case AUTO:
-				break;
+		if (System.getProperty(SysPropDefs.PUPPET_PLATFORM) != null) {
+			Puppet.log("WARN", "-Dunsup.puppet.opengl.platform no longer does anything - use the SDL_VIDEO_DRIVER environment variable instead");
 		}
 		
-		if (!glfwInit()) {
-			Puppet.log("ERROR", "Failed to initialize GLFW: "+getGLFWErrorDescription());
+		Configuration.HARFBUZZ_LIBRARY_NAME.set(FreeType.getLibrary());
+		Configuration.OPENGL_EXPLICIT_INIT.set(true);
+		
+		SDL_SetMemoryFunctions(
+				MemoryUtil::nmemAllocChecked,
+				MemoryUtil::nmemCallocChecked,
+				MemoryUtil::nmemReallocChecked,
+				MemoryUtil::nmemFree);
+
+		check(SDL_SetAppMetadata("unsup", Util.VERSION, "com.unascribed.sup"));
+		check(SDL_SetAppMetadataProperty(SDL_PROP_APP_METADATA_URL_STRING, "https://git.sleeping.town/unascribed/unsup"));
+		check(SDL_SetAppMetadataProperty(SDL_PROP_APP_METADATA_CREATOR_STRING, "Una Kearney"));
+		check(SDL_SetAppMetadataProperty(SDL_PROP_APP_METADATA_COPYRIGHT_STRING, "Copyright (c) 2020 - 2025 Una Kearney and contributors. Released under the GNU LGPLv3"));
+		check(SDL_SetAppMetadataProperty(SDL_PROP_APP_METADATA_TYPE_STRING, "application"));
+
+		if (!SDL_Init(SDL_INIT_VIDEO)) {
+			Puppet.log("ERROR", "Failed to initialize SDL: "+SDL_GetError());
 			return null;
 		}
 		
-		glfwSetErrorCallback((error, description) -> {
-			Puppet.log("WARN", "GLFW error: "+memASCII(description));
-		});
+		check(SDL_GL_LoadLibrary((ByteBuffer)null));
+		
+		GL.create(SDLVideo::SDL_GL_GetProcAddress);
 		
 		mainWindow = new ProgressWindow();
 		
-		if (glfwGetPlatform() == GLFW_PLATFORM_WAYLAND) {
+		if (System.getenv("WAYLAND_DISPLAY") != null) {
 			try {
 				new File(".unsup-tmp").mkdirs();
 				File icon = new File(".unsup-tmp/icon.png");
@@ -117,9 +127,21 @@ public class GLPuppet {
 			} catch (Throwable t) {}
 		}
 		
-		Puppet.sched.scheduleWithFixedDelay(() -> {
-			Puppet.runOnMainThread(() -> glfwPollEvents());
-		}, 0, 30, TimeUnit.MILLISECONDS);
+		Puppet.runOnMainThread(() -> {
+			var ev = SDL_Event.calloc();
+			Puppet.sched.scheduleWithFixedDelay(() -> {
+				Puppet.runOnMainThread(() -> {
+					while (SDL_PollEvent(ev)) {
+						var iter = eventListeners.iterator();
+						while (iter.hasNext()) {
+							if (!iter.next().test(ev)) {
+								iter.remove();
+							}
+						}
+					}
+				});
+			}, 0, 30, TimeUnit.MILLISECONDS);
+		});
 		
 		return new PuppetDelegate() {
 			
@@ -241,6 +263,12 @@ public class GLPuppet {
 			}
 		};
 	}
+	
+	public static void listen(Predicate<SDL_Event> listener) {
+		Puppet.runOnMainThread(() -> {
+			eventListeners.add(listener);
+		});
+	}
 
 	private static double parseScale(String uiscale) throws NumberFormatException {
 		if (uiscale.endsWith("dpi")) {
@@ -283,14 +311,6 @@ public class GLPuppet {
 			}
 		}
 		return OptionalDouble.empty();
-	}
-
-	public static String getGLFWErrorDescription() {
-		PointerBuffer buf = memAllocPointer(1);
-		glfwGetError(buf);
-		String s = buf.getStringASCII();
-		memFree(buf);
-		return s;
 	}
 
 	private static File getApplicationsDir() {

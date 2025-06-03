@@ -60,9 +60,4 @@ public class SysProps {
 		AUTO, SWING, OPENGL;
 	}
 	
-	public static final PuppetPlatform PUPPET_PLATFORM = PuppetPlatform.valueOf(getProperty("unsup.puppet.opengl.platform", "auto").toUpperCase(Locale.ROOT));
-	public enum PuppetPlatform {
-		AUTO, WIN32, COCOA, WAYLAND, X11, NULL
-	}
-	
 }

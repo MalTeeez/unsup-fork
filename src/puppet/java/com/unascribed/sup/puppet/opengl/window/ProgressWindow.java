@@ -26,8 +26,11 @@ import com.unascribed.sup.puppet.Translate;
 import com.unascribed.sup.puppet.opengl.pieces.GLThrobber;
 import com.unascribed.sup.puppet.opengl.pieces.FontManager.Face;
 
+import static org.lwjgl.sdl.SDLProperties.*;
+import static org.lwjgl.sdl.SDLVideo.*;
+import static org.lwjgl.sdl.SDLKeycode.*;
+import static com.unascribed.sup.puppet.opengl.util.SDLUtil.*;
 import static com.unascribed.sup.puppet.opengl.util.GL.*;
-import static org.lwjgl.glfw.GLFW.*;
 
 import java.util.ArrayList;
 import java.util.List;
@@ -58,37 +61,41 @@ public class ProgressWindow extends Window {
 	private boolean enterPressed;
 	
 	@Override
-	public synchronized void create(Window parent, String title, int width, int height, double dpiScale) {
-		glfwWindowHint(GLFW_FOCUS_ON_SHOW, GLFW_FALSE);
-		glfwWindowHint(GLFW_RESIZABLE, GLFW_FALSE);
-		glfwWindowHint(GLFW_FLOATING, GLFW_FALSE);
-		super.create(parent, title, width, height, dpiScale);
+	protected synchronized void customizeProperties(int props) {
+		check(SDL_SetBooleanProperty(props, SDL_PROP_WINDOW_CREATE_RESIZABLE_BOOLEAN, false));
+	}
+	
+	@Override
+	protected synchronized void onKeyDown(int key, int scancode, int mod, boolean repeat) {
+		if (key == SDLK_RETURN || key == SDLK_SPACE || key == SDLK_KP_ENTER) {
+			synchronized (this) {
+				enterPressed = true;
+			}
+		}
+	}
 
-		glfwSetKeyCallback(handle, (window, key, scancode, action, mods) -> {
-			if (action == GLFW_RELEASE) return;
-			if (key == GLFW_KEY_ENTER || key == GLFW_KEY_SPACE || key == GLFW_KEY_KP_ENTER) {
-				synchronized (this) {
-					enterPressed = true;
-				}
-			}
-		});
-		
-		glfwSetWindowCloseCallback(handle, unused -> {
-			if (offerChangeFlavors != 0) {
-				offerChangeFlavors = System.nanoTime()-OFFER_DELAY;
-			} else if (closeRequested) {
-				MessageDialogWindow diag = new MessageDialogWindow("puppet_busy_notice", "dialog.busy.title",
-						Translate.format("dialog.busy"), AlertMessageType.WARN, new String[] {"option.ok"}, "option.ok");
-				Puppet.runOnMainThread(() -> {
-					if (!run) return;
-					diag.create(this, dpiScale);
-					diag.setVisible(true);
-				});
-			} else {
-				Puppet.reportCloseRequest();
-				closeRequested = true;
-			}
-		});
+	@Override
+	protected synchronized void onMouseMove(double x, double y) {}
+	
+	@Override
+	protected synchronized void onMouseClick() {}
+	
+	@Override
+	protected synchronized void onWindowCloseRequest() {
+		if (offerChangeFlavors != 0) {
+			offerChangeFlavors = System.nanoTime()-OFFER_DELAY;
+		} else if (closeRequested) {
+			MessageDialogWindow diag = new MessageDialogWindow("puppet_busy_notice", "dialog.busy.title",
+					Translate.format("dialog.busy"), AlertMessageType.WARN, new String[] {"option.ok"}, "option.ok");
+			Puppet.runOnMainThread(() -> {
+				if (!run) return;
+				diag.create(this, dpiScale);
+				diag.setVisible(true);
+			});
+		} else {
+			Puppet.reportCloseRequest();
+			closeRequested = true;
+		}
 	}
 	
 	@Override
@@ -100,12 +107,6 @@ public class ProgressWindow extends Window {
 				" b"+glGetInteger(GL_BLUE_BITS)+" a"+glGetInteger(GL_ALPHA_BITS)+" d"+glGetInteger(GL_DEPTH_BITS)+
 				" s"+glGetInteger(GL_STENCIL_BITS)+" x"+glGetInteger(GL_SAMPLES));
 	}
-
-	@Override
-	protected synchronized void onMouseMove(double x, double y) {}
-	
-	@Override
-	protected synchronized void onMouseClick() {}
 	
 	@Override
 	protected synchronized void renderInner() {

@@ -60,7 +60,7 @@ ext {
 base {
 	group = 'com.unascribed'
 	archivesName = 'unsup'
-	def verBase = '1.1'
+	def verBase = '1.2'
 	if (project.hasProperty('unsup.release')) {
 		version = project.getProperty('unsup.release')
 		println 'Release build: '+version
@@ -195,6 +195,7 @@ afterEvaluate {
 repositories { 
 	mavenCentral()
 	maven { url 'https://repo.sleeping.town' }
+	maven { url "https://oss.sonatype.org/content/repositories/snapshots/" }
 	exclusiveContent {
 		forRepository {
 			flatDir { dirs '.gradle/transformed' }
@@ -265,8 +266,8 @@ dependencies {
 	shade 'com.unascribed:flexver-java:1.1.1'
 	shade 'me.saharnooby:qoi-java:1.2.1'
 	
-	def lwjglv = '3.3.6'
-	lwjgl(it, lwjglv, 'glfw', 'opengl', 'freetype')
+	def lwjglv = '3.4.0-SNAPSHOT'
+	lwjgl(it, lwjglv, 'sdl', 'opengl', 'freetype')
 	ogldep "org.lwjgl:lwjgl-harfbuzz:${lwjglv}"
 }
 
