@@ -104,7 +104,7 @@ license {
 		ini = 'HASH'
 		svg = 'XML'
 	}
-	exclude 'src/agent/java/uk/co/lucasweb/**'
+	exclude 'uk/co/lucasweb/**'
 }
 
 task computeFileDates {
