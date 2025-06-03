@@ -102,7 +102,6 @@ public class GLPuppet {
 		}
 		
 		check(SDL_GL_LoadLibrary((ByteBuffer)null));
-		
 		GL.create(SDLVideo::SDL_GL_GetProcAddress);
 		
 		mainWindow = new ProgressWindow();

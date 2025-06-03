@@ -19,6 +19,7 @@
 
 package com.unascribed.sup.puppet.opengl.window;
 
+import java.nio.ByteBuffer;
 import java.util.Collections;
 import java.util.HashMap;
 import java.util.Map;
@@ -35,12 +36,16 @@ import com.unascribed.sup.puppet.Puppet;
 import com.unascribed.sup.puppet.opengl.GLPuppet;
 import com.unascribed.sup.puppet.opengl.pieces.FontManager;
 import com.unascribed.sup.puppet.opengl.pieces.OpenGLDebug;
+
+import static com.unascribed.sup.puppet.WindowIcons.*;
 import static com.unascribed.sup.puppet.opengl.util.GL.*;
 import static org.lwjgl.sdl.SDLVideo.*;
 import static org.lwjgl.sdl.SDLProperties.*;
 import static org.lwjgl.sdl.SDLError.*;
 import static org.lwjgl.sdl.SDLMouse.*;
 import static org.lwjgl.sdl.SDLEvents.*;
+import static org.lwjgl.sdl.SDLSurface.*;
+import static org.lwjgl.sdl.SDLPixels.*;
 import static com.unascribed.sup.puppet.opengl.util.SDLUtil.*;
 import static org.lwjgl.system.MemoryUtil.*;
 
@@ -241,59 +246,38 @@ public abstract class Window {
 		});
 		
 		SDL_GL_MakeCurrent(handle, glContext);
-//		if (glfwGetPlatform() != GLFW_PLATFORM_WAYLAND) {
-//			if (glfwGetPlatform() != GLFW_PLATFORM_COCOA) {
-//				if (Puppet.icon != null) {
-//					ByteBuffer px = memAlloc(highres.getPixelData().length);
-//					px.put(Puppet.icon.getPixelData());
-//					px.flip();
-//
-//					GLFWImage.Buffer buffer = GLFWImage.malloc(1);
-//					buffer.get(0)
-//						.width(Puppet.icon.getWidth()).height(Puppet.icon.getHeight())
-//						.pixels(px);
-//					glfwSetWindowIcon(handle, buffer);
-//					memFree(buffer);
-//					memFree(px);
-//				} else {
-//					ByteBuffer lowresPx = memAlloc(lowres.getPixelData().length);
-//					ByteBuffer highresPx = memAlloc(highres.getPixelData().length);
-//					lowresPx.put(lowres.getPixelData());
-//					highresPx.put(highres.getPixelData());
-//					lowresPx.flip();
-//					highresPx.flip();
-//
-//					GLFWImage.Buffer buffer = GLFWImage.malloc(2);
-//					buffer.get(0)
-//						.width(lowres.getWidth()).height(lowres.getHeight())
-//						.pixels(lowresPx);
-//					buffer.get(1)
-//						.width(highres.getWidth()).height(highres.getHeight())
-//						.pixels(highresPx);
-//					glfwSetWindowIcon(handle, buffer);
-//					memFree(buffer);
-//					memFree(lowresPx);
-//					memFree(highresPx);
-//				}
-//			}
-//
-//			int[] x = new int[1];
-//			int[] y = new int[1];
-//			int[] w = new int[1];
-//			int[] h = new int[1];
-//
-//			if (parent == null) {
-//				long monitor = glfwGetPrimaryMonitor();
-//				glfwGetMonitorWorkarea(monitor, x, y, w, h);
-//			} else {
-//				synchronized (parent) {
-//					glfwGetWindowPos(parent.handle, x, y);
-//					glfwGetWindowSize(parent.handle, w, h);
-//				}
-//			}
-//
-//			glfwSetWindowPos(handle, x[0]+(w[0]-physW)/2, y[0]+(h[0]-physH)/2);
-//		}
+		if (Puppet.icon != null) {
+			ByteBuffer px = memAlloc(Puppet.icon.getPixelData().length);
+			px.put(Puppet.icon.getPixelData());
+			px.flip();
+
+			var surface = SDL_CreateSurfaceFrom(Puppet.icon.getWidth(), Puppet.icon.getHeight(), SDL_PIXELFORMAT_ABGR8888, px, Puppet.icon.getWidth()*4);
+			if (surface == null) {
+				Puppet.log("ERROR", "Failed to create window icon: "+SDL_GetError());
+			} else {
+				check(SDL_SetWindowIcon(handle, surface));
+			}
+			memFree(px);
+		} else {
+			ByteBuffer lowresPx = memAlloc(lowres.getPixelData().length);
+			ByteBuffer highresPx = memAlloc(highres.getPixelData().length);
+			lowresPx.put(lowres.getPixelData());
+			highresPx.put(highres.getPixelData());
+			lowresPx.flip();
+			highresPx.flip();
+
+
+			var surface = SDL_CreateSurfaceFrom(lowres.getWidth(), lowres.getHeight(), SDL_PIXELFORMAT_ABGR8888, lowresPx, lowres.getWidth()*4);
+			if (surface == null) {
+				Puppet.log("ERROR", "Failed to create window icon: "+SDL_GetError());
+			} else {
+				check(SDL_AddSurfaceAlternateImage(surface,
+						SDL_CreateSurfaceFrom(highres.getWidth(), highres.getHeight(), SDL_PIXELFORMAT_ABGR8888, highresPx, lowres.getWidth()*4)));
+				check(SDL_SetWindowIcon(handle, surface));
+			}
+			memFree(lowresPx);
+			memFree(highresPx);
+		}
 		
 		customizeWindow();
 		
