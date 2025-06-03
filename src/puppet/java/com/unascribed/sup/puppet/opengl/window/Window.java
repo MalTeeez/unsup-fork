@@ -234,10 +234,9 @@ public abstract class Window {
 					}
 				}
 				case SDL_EVENT_KEY_DOWN -> {
-					var k = evt.key();
-					if (k.windowID() == windowId) {
+					if (evt.key().windowID() == windowId) {
 						synchronized (this) {
-							onKeyDown(k.key(), k.scancode(), k.mod(), k.repeat());
+							onKeyDown(evt.key().key(), evt.key().scancode(), evt.key().mod(), evt.key().repeat());
 						}
 					}
 				}

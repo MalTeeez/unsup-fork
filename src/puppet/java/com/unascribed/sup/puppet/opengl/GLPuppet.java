@@ -35,6 +35,7 @@ import com.unascribed.sup.puppet.Puppet;
 import com.unascribed.sup.puppet.PuppetDelegate;
 import com.unascribed.sup.puppet.Translate;
 import com.unascribed.sup.puppet.WindowIcons;
+import com.unascribed.sup.puppet.opengl.util.CachedSDLEvent;
 import com.unascribed.sup.puppet.opengl.util.QDPNG;
 import com.unascribed.sup.puppet.opengl.window.FlavorDialogWindow;
 import com.unascribed.sup.puppet.opengl.window.ProgressWindow;
@@ -68,7 +69,7 @@ public class GLPuppet {
 	private static final Latch buildLatch = new Latch();
 	private static final Latch mainVisibleLatch = new Latch();
 	
-	private static final List<Predicate<SDL_Event>> eventListeners = new ArrayList<>();
+	private static final List<Predicate<CachedSDLEvent>> eventListeners = new ArrayList<>();
 	
 	public static PuppetDelegate start() {
 		// just a transliteration of https://wiki.archlinux.org/title/HiDPI plus some unsup-specific extras
@@ -128,12 +129,13 @@ public class GLPuppet {
 		
 		Puppet.runOnMainThread(() -> {
 			var ev = SDL_Event.calloc();
+			var cev = new CachedSDLEvent(ev);
 			Puppet.sched.scheduleWithFixedDelay(() -> {
 				Puppet.runOnMainThread(() -> {
 					while (SDL_PollEvent(ev)) {
 						var iter = eventListeners.iterator();
 						while (iter.hasNext()) {
-							if (!iter.next().test(ev)) {
+							if (!iter.next().test(cev)) {
 								iter.remove();
 							}
 						}
@@ -263,7 +265,7 @@ public class GLPuppet {
 		};
 	}
 	
-	public static void listen(Predicate<SDL_Event> listener) {
+	public static void listen(Predicate<CachedSDLEvent> listener) {
 		Puppet.runOnMainThread(() -> {
 			eventListeners.add(listener);
 		});
