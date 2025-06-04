@@ -91,7 +91,7 @@ public abstract class Window {
 	protected synchronized void onKeyDown(int key, int scancode, int mod, boolean repeat) {}
 	protected synchronized void onScroll(float dwheelX, float dwheelY) {}
 	
-	public synchronized void create(Window parent, String title, int width, int height, double dpiScale) {
+	public synchronized void create(Window parent, String title, int width, int height, double initialExplicitDpiScale) {
 		if (!Puppet.isMainThread()) throw new IllegalStateException("Must be on main thread");
 		
 		this.parent = parent;
@@ -99,10 +99,10 @@ public abstract class Window {
 		this.width = width;
 		this.height = height;
 		
-		this.dpiScale = dpiScale;
+		this.dpiScale = initialExplicitDpiScale;
 
-		int physW = (int)(width*dpiScale);
-		int physH = (int)(height*dpiScale);
+		int physW = (int)(width*initialExplicitDpiScale);
+		int physH = (int)(height*initialExplicitDpiScale);
 		
 		int props = SDL_CreateProperties();
 		check(SDL_SetNumberProperty(props, SDL_PROP_WINDOW_CREATE_X_NUMBER, SDL_WINDOWPOS_CENTERED));
@@ -192,7 +192,7 @@ public abstract class Window {
 								newHeight = h.get(0);
 							}
 							Puppet.log("DEBUG", "Window size updated - "+newWidth+"x"+newHeight+" / "+fbWidth+"x"+fbHeight);
-							double effectiveScale = dpiScale;
+							double effectiveScale = initialExplicitDpiScale;
 							if (!updateDpiScaleByFramebuffer) {
 								effectiveScale = this.dpiScale;
 							}
@@ -205,8 +205,8 @@ public abstract class Window {
 				case SDL_EVENT_MOUSE_MOTION -> {
 					if (evt.motion().windowID() == windowId) {
 						synchronized (this) {
-							mouseX = evt.motion().x()/dpiScale;
-							mouseY = evt.motion().y()/dpiScale;
+							mouseX = evt.motion().x()/initialExplicitDpiScale;
+							mouseY = evt.motion().y()/initialExplicitDpiScale;
 							onMouseMove(mouseX, mouseY);
 						}
 					}
@@ -284,7 +284,7 @@ public abstract class Window {
 			float s = SDL_GetWindowDisplayScale(handle);
 			
 			if (s != 1) {
-				updateScale("initial content scale update", dpiScale*s);
+				updateScale("initial content scale update", initialExplicitDpiScale*s);
 			}
 		}
 		

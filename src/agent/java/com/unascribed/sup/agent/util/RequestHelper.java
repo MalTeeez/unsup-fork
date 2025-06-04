@@ -200,13 +200,14 @@ public class RequestHelper {
 								         : "unsup/"+Util.VERSION+" (+https://git.sleeping.town/unascribed/unsup)"
 							);
 				if (fhostile) {
-					reqbldr.header("Accept", "text/html,application/xhtml+xml,application/xml;q=0.9,image/avif,image/webp,*/*;q=0.8");
-					reqbldr.header("Accept-Encoding", "gzip, deflate, br");
+					reqbldr.header("Accept", "text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8");
 					reqbldr.header("Accept-Language", "en-US,en;q=0.5");
+					reqbldr.header("Accept-Encoding", "gzip, deflate, br, zstd");
 					reqbldr.header("Sec-Fetch-Dest", "document");
 					reqbldr.header("Sec-Fetch-Mode", "navigate");
-					reqbldr.header("Sec-Fetch-Site", "same-origin");
+					reqbldr.header("Sec-Fetch-Site", "cross-site");
 					reqbldr.header("Sec-Fetch-User", "?1");
+					reqbldr.header("Priority", "u=0, i");
 					reqbldr.header("TE", "trailers");
 				}
 				Response res = Agent.okhttp.newCall(reqbldr.build()).execute();
