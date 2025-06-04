@@ -254,7 +254,7 @@ public abstract class Window {
 			if (surface == null) {
 				Puppet.log("ERROR", "Failed to create window icon: "+SDL_GetError());
 			} else {
-				check(SDL_SetWindowIcon(handle, surface));
+				SDL_SetWindowIcon(handle, surface);
 			}
 			memFree(px);
 		} else {
@@ -270,9 +270,9 @@ public abstract class Window {
 			if (surface == null) {
 				Puppet.log("ERROR", "Failed to create window icon: "+SDL_GetError());
 			} else {
-				check(SDL_AddSurfaceAlternateImage(surface,
-						SDL_CreateSurfaceFrom(highres.getWidth(), highres.getHeight(), SDL_PIXELFORMAT_ABGR8888, highresPx, highres.getWidth()*4)));
-				check(SDL_SetWindowIcon(handle, surface));
+				SDL_AddSurfaceAlternateImage(surface,
+						SDL_CreateSurfaceFrom(highres.getWidth(), highres.getHeight(), SDL_PIXELFORMAT_ABGR8888, highresPx, highres.getWidth()*4));
+				SDL_SetWindowIcon(handle, surface);
 			}
 			memFree(lowresPx);
 			memFree(highresPx);

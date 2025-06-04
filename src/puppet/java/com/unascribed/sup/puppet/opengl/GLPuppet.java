@@ -118,7 +118,7 @@ public class GLPuppet {
 		
 		mainWindow = new ProgressWindow();
 		
-		if (maybeWayland) {
+		if ("wayland".equals(SDL_GetCurrentVideoDriver())) {
 			try {
 				new File(".unsup-tmp").mkdirs();
 				File icon = new File(".unsup-tmp/icon.png");
