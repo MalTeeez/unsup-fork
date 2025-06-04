@@ -205,8 +205,8 @@ public abstract class Window {
 				case SDL_EVENT_MOUSE_MOTION -> {
 					if (evt.motion().windowID() == windowId) {
 						synchronized (this) {
-							mouseX = evt.motion().x();
-							mouseY = evt.motion().y();
+							mouseX = evt.motion().x()/dpiScale;
+							mouseY = evt.motion().y()/dpiScale;
 							onMouseMove(mouseX, mouseY);
 						}
 					}
