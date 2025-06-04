@@ -24,6 +24,7 @@ import org.lwjgl.sdl.SDLVideo;
 import org.lwjgl.sdl.SDL_Event;
 import org.lwjgl.system.Configuration;
 import org.lwjgl.system.MemoryUtil;
+import org.lwjgl.system.Platform;
 import org.lwjgl.util.freetype.FreeType;
 
 import com.unascribed.sup.Util;
@@ -57,8 +58,9 @@ import static com.unascribed.sup.puppet.opengl.util.SDLUtil.check;
 import static org.lwjgl.sdl.SDLInit.*;
 import static org.lwjgl.sdl.SDLError.*;
 import static org.lwjgl.sdl.SDLStdinc.*;
-import static org.lwjgl.sdl.SDLVideo.SDL_GL_LoadLibrary;
+import static org.lwjgl.sdl.SDLVideo.*;
 import static org.lwjgl.sdl.SDLEvents.*;
+import static org.lwjgl.sdl.SDLHints.*;
 
 public class GLPuppet {
 	
@@ -80,6 +82,15 @@ public class GLPuppet {
 		
 		if (System.getProperty(SysPropDefs.PUPPET_PLATFORM) != null) {
 			Puppet.log("WARN", "-Dunsup.puppet.opengl.platform no longer does anything - use the SDL_VIDEO_DRIVER environment variable instead");
+		}
+		
+		boolean maybeWayland = switch (Platform.get()) {
+			case WINDOWS, MACOSX -> false;
+			case LINUX, FREEBSD -> System.getenv("WAYLAND_DISPLAY") != null;
+		};
+		
+		if (maybeWayland && System.getenv("SDL_VIDEODRIVER") == null && System.getenv("SDL_VIDEO_DRIVER") == null) {
+			SDL_SetHint(SDL_HINT_VIDEO_DRIVER, "wayland,x11");
 		}
 		
 		Configuration.HARFBUZZ_LIBRARY_NAME.set(FreeType.getLibrary());
@@ -107,7 +118,7 @@ public class GLPuppet {
 		
 		mainWindow = new ProgressWindow();
 		
-		if (System.getenv("WAYLAND_DISPLAY") != null) {
+		if (maybeWayland) {
 			try {
 				new File(".unsup-tmp").mkdirs();
 				File icon = new File(".unsup-tmp/icon.png");
