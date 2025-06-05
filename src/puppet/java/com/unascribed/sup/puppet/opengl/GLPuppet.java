@@ -101,7 +101,7 @@ public class GLPuppet {
 				MemoryUtil::nmemCallocChecked,
 				MemoryUtil::nmemReallocChecked,
 				MemoryUtil::nmemFree);
-
+		
 		check(SDL_SetAppMetadata("unsup", Util.VERSION, "com.unascribed.sup"));
 		check(SDL_SetAppMetadataProperty(SDL_PROP_APP_METADATA_URL_STRING, "https://git.sleeping.town/unascribed/unsup"));
 		check(SDL_SetAppMetadataProperty(SDL_PROP_APP_METADATA_CREATOR_STRING, "Una Kearney"));
