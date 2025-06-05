@@ -138,6 +138,11 @@ public class PackwizHandler extends AbstractFormatHandler {
 				if (!bootstrapping && actualUpdate && !autoaccept) {
 					AlertOption updateResp = PuppetHandler.openAlert("dialog.update.title",
 							body, AlertMessageType.QUESTION, AlertOptionType.YES_NO, AlertOption.YES);
+					if (updateResp == AlertOption.CLOSED) {
+						Log.info("User closed update dialog! Exiting.");
+						System.exit(Agent.EXIT_USER_REQUEST);
+						return null;
+					}
 					if (updateResp == AlertOption.NO) {
 						Log.info("Ignoring update by user choice.");
 						return new CheckResult(ourVersion, theirVersion, null, Collections.emptyMap());
