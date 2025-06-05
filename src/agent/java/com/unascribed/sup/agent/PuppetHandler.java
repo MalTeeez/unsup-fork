@@ -49,7 +49,6 @@ import java.util.concurrent.ThreadLocalRandom;
 import java.util.concurrent.TimeUnit;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
-
 import org.brotli.dec.BrotliInputStream;
 
 import com.unascribed.sup.PlatDetect;
@@ -233,10 +232,9 @@ public class PuppetHandler {
 					cp.forEach(cpJ::add);
 					args.add("-cp");
 					args.add(cpJ.toString());
-					File errorFile = new File("puppet-native-crash-"+crashId+".log");
+					File errorFile = determineErrorFilePath();
 					args.add("-XX:ErrorFile="+errorFile.getAbsolutePath());
 					args.add("-XX:+ErrorLogSecondaryErrorDetails");
-					args.add("-XX:+ExtensiveErrorReports");
 					args.add("com.unascribed.sup.puppet.Puppet");
 					
 					StringJoiner printJ = new StringJoiner("' '", "'", "'");
@@ -310,6 +308,8 @@ public class PuppetHandler {
 				puppetOut = new BufferedOutputStream(puppet.getOutputStream(), 512);
 				Thread puppetThread = new Thread(() -> {
 					try (BufferedReader br2 = br) {
+						String eatenLine = null;
+						int crashState = 0;
 						while (true) {
 							String line = br.readLine();
 							if (line == null) return;
@@ -327,7 +327,19 @@ public class PuppetHandler {
 										latch.release();
 									}
 								}
-							} else {
+							} else if (crashState == 0 && line.startsWith("#")) {
+								crashState = 1;
+								eatenLine = line;
+							} else if (crashState == 1) {
+								if (line.startsWith("# A fatal error has been detected by the Java Runtime Environment:")) {
+									crashState = 2;
+									puppetCrashed();
+								} else {
+									Log.warn("Unknown line from puppet: "+eatenLine);
+									eatenLine = null;
+									crashState = 0;
+								}
+							} else if (crashState != 2) {
 								Log.warn("Unknown line from puppet: "+line);
 							}
 						}
@@ -338,8 +350,23 @@ public class PuppetHandler {
 			}
 		}
 	}
+	
+	private static String determineErrorFileName() {
+		return "unsup-puppet-native-crash-"+crashId+".log";
+	}
+	
+	private static File determineErrorFilePath() {
+		File logs = new File("logs");
+		String n = determineErrorFileName();
+		return logs.isDirectory() ? new File(logs, n) : new File(n);
+	}
 
 	private static void puppetCrashed() {
+		File nativeCrash = determineErrorFilePath();
+		if (nativeCrash.exists()) {
+			Log.error("The Puppet crashed in native code. Please report this issue, including the full unsup.log and "+determineErrorFileName());
+		}
+		
 		if (SysProps.ABORT_ON_PUPPET_CRASH) {
 			Log.error("Puppet crashed! Exiting, as requested by -Dunsup.abortOnPuppetCrash=true!");
 			try {
@@ -435,10 +462,6 @@ public class PuppetHandler {
 			} catch (IOException e) {
 				if (!Agent.awaitingExit) {
 					Log.warn("IO error while talking to puppet. Killing and continuing without GUI.", e);
-					File errorFile = new File("puppet-native-crash-"+crashId+".log");
-					if (errorFile.exists()) {
-						Log.warn("It looks like the Puppet crashed in native code. Please report this issue, including the full unsup.log and "+errorFile.getName());
-					}
 					puppetCrashed();
 				}
 				puppet.destroyForcibly();
