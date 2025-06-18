@@ -26,9 +26,7 @@ import java.io.IOException;
 import java.net.MalformedURLException;
 import java.nio.file.Files;
 import java.nio.file.StandardCopyOption;
-import java.util.ArrayList;
 import java.util.HashMap;
-import java.util.List;
 import java.util.Map;
 import java.util.function.Consumer;
 import java.util.function.Function;
@@ -44,16 +42,9 @@ public class MMCUpdater {
 	private static final String INDENT = "    ";
 
 	public static Map<String, String> currentComponentVersions = new HashMap<>();
-	public static Map<String, List<String>> componentShortnames = new HashMap<>();
 
 
 	public static void scan() {
-		String pfx = "mmc-component-map.";
-		for (String k : Agent.config.keySet()) {
-			if (k.startsWith(pfx)) {
-				MMCUpdater.componentShortnames.put(k.substring(pfx.length()), new ArrayList<>(Agent.config.getAll(k)));
-			}
-		}
 		if (forEachComponentRO(MMCUpdater::scanMMCPatch) == FERes.MISSING) {
 			Log.info("update_mmc_pack is enabled, but I don't see an mmc-pack.json. Ignoring");
 		}

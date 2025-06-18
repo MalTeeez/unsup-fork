@@ -26,6 +26,8 @@ import java.util.HashSet;
 import java.util.Set;
 import java.util.function.Supplier;
 
+import com.unascribed.sup.util.SuppressFBWarnings;
+
 public class PlatDetect {
 
 	public static final OSType OS;
@@ -77,7 +79,8 @@ public class PlatDetect {
 	}
 	
 	private static class PUtil {
-		
+
+		@SuppressFBWarnings("ENV_USE_PROPERTY_INSTEAD_OF_ENV") // this is how the XDG spec tells you to do it
 		private static File getXDGCacheDir() {
 			String home = System.getenv("HOME");
 			if (home == null || home.trim().isEmpty()) {

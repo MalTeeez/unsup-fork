@@ -93,7 +93,7 @@ public class PackwizHandler extends AbstractFormatHandler {
 			if (!MMCUpdater.currentComponentVersions.isEmpty()) {
 				theirVers = new HashMap<>();
 				for (Map.Entry<String, Object> en : pack.getTable("versions").entrySet()) {
-					List<String> exp = MMCUpdater.componentShortnames.get(en.getKey());
+					List<String> exp = Agent.config().mmcComponentMap().get(en.getKey());
 					if (exp != null) {
 						for (String s : exp) {
 							theirVers.put(s, String.valueOf(en.getValue()));
@@ -111,7 +111,7 @@ public class PackwizHandler extends AbstractFormatHandler {
 			}
 			boolean changeFlavors = SysProps.PACKWIZ_CHANGE_FLAVORS;
 			boolean actualUpdate = hasIndexUpdate || hasComponentUpdate;
-			if (!actualUpdate && Agent.config.getBoolean("offer_change_flavors", false)) {
+			if (!actualUpdate && Agent.config().offerChangeFlavors()) {
 				if (PuppetHandler.openAlert("$$changeFlavorsOffer", "", AlertMessageType.NONE, AlertOptionType.YES_NO, AlertOption.NO) == AlertOption.YES) {
 					changeFlavors = true;
 				}
@@ -196,13 +196,13 @@ public class PackwizHandler extends AbstractFormatHandler {
 								if (en.getValue() instanceof Toml group) {
 									String groupId = en.getKey();
 									var side = group.getString("side");
-									if (side != null && Agent.useEnvs && !side.equals("both") && !side.equals(Agent.detectedEnv)) {
-										Log.info("Skipping flavor group "+groupId+" as it's not eligible for env "+Agent.detectedEnv);
+									if (side != null && Agent.config().useEnvs() && !side.equals("both") && !side.equals(Agent.config().detectedEnv())) {
+										Log.info("Skipping flavor group "+groupId+" as it's not eligible for env "+Agent.config().detectedEnv());
 										continue;
 									}
 									var groupName = group.getString("name", groupId);
 									var groupDescription = group.getString("description", "flavor.default_description");
-									String defChoice = Agent.config.get("flavors."+groupId);
+									String defChoice = Agent.config().defaultFlavors().get(groupId);
 									FlavorGroup grp = new FlavorGroup();
 									grp.id = groupId;
 									grp.name = groupName;
@@ -403,8 +403,8 @@ public class PackwizHandler extends AbstractFormatHandler {
 					String side = metafile.getString("side");
 					String metafileDoublet = (func+":"+hash);
 					metafileState.put(path, metafileDoublet);
-					if (side != null && Agent.useEnvs && !side.equals("both") && !side.equals(Agent.detectedEnv)) {
-						Log.info("Skipping "+path+" as it's not eligible for env "+Agent.detectedEnv);
+					if (side != null && Agent.config().useEnvs() && !side.equals("both") && !side.equals(Agent.config().detectedEnv())) {
+						Log.info("Skipping "+path+" as it's not eligible for env "+Agent.config().detectedEnv());
 						continue;
 					}
 					path = path.replace("\\", "/");
@@ -423,7 +423,7 @@ public class PackwizHandler extends AbstractFormatHandler {
 						synth.id = mf.name;
 						synth.name = metafile.getString("name");
 						synth.description = option.getString("description", "flavor.default_description");
-						String defChoice = Agent.config.get("flavors."+mf.name);
+						String defChoice = Agent.config().defaultFlavors().get(mf.name);
 						synth.defChoice = defChoice;
 						synth.defChoiceName = defChoice;
 						boolean defOn = changeFlavors ? Iterables.contains(ourFlavors, mf.name+"_on") : option.getBoolean("default", false);
@@ -575,7 +575,11 @@ public class PackwizHandler extends AbstractFormatHandler {
 				if (c != null) c.close();
 			}
 			for (var f : delete) {
-				if (f != null) f.delete();
+				if (f != null) {
+					if (!f.delete()) {
+						Log.warn("Failed to delete "+f.getPath());
+					}
+				}
 			}
 		}
 	}

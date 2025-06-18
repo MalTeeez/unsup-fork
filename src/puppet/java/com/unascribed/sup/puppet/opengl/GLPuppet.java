@@ -41,6 +41,7 @@ import com.unascribed.sup.puppet.opengl.util.QDPNG;
 import com.unascribed.sup.puppet.opengl.window.FlavorDialogWindow;
 import com.unascribed.sup.puppet.opengl.window.ProgressWindow;
 import com.unascribed.sup.util.Resources;
+import com.unascribed.sup.util.SuppressFBWarnings;
 import com.unascribed.sup.puppet.opengl.window.MessageDialogWindow;
 
 import java.io.File;
@@ -48,6 +49,7 @@ import java.io.FileOutputStream;
 import java.io.InputStream;
 import java.nio.ByteBuffer;
 import java.nio.charset.StandardCharsets;
+import java.nio.file.Files;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.OptionalDouble;
@@ -120,7 +122,7 @@ public class GLPuppet {
 		
 		if ("wayland".equals(SDL_GetCurrentVideoDriver())) {
 			try {
-				new File(".unsup-tmp").mkdirs();
+				Files.createDirectories(new File(".unsup-tmp").toPath());
 				File icon = new File(".unsup-tmp/icon.png");
 				try (FileOutputStream fos = new FileOutputStream(icon)) {
 					fos.write(QDPNG.write(Puppet.icon == null ? WindowIcons.highres : Puppet.icon));
@@ -325,6 +327,7 @@ public class GLPuppet {
 		return OptionalDouble.empty();
 	}
 
+	@SuppressFBWarnings("ENV_USE_PROPERTY_INSTEAD_OF_ENV") // this is how the XDG spec tells you to do it
 	private static File getApplicationsDir() {
 		String home = System.getenv("HOME");
 		if (home == null || home.trim().isEmpty()) {

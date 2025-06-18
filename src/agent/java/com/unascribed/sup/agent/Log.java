@@ -28,6 +28,7 @@ import java.util.Date;
 
 import com.unascribed.sup.data.SysProps;
 import com.unascribed.sup.pieces.NullPrintStream;
+import com.unascribed.sup.util.SuppressFBWarnings;
 
 /**
  * Hand-rolled bare-minimum logger facility.
@@ -38,6 +39,7 @@ public class Log {
 	private static PrintStream fileStream;
 	private static String defaultTag;
 	
+	@SuppressFBWarnings("RV_RETURN_VALUE_IGNORED_BAD_PRACTICE")
 	public static void init() {
 		defaultTag = Agent.standalone ? "sync" : "agent";
 		File logTarget = new File("logs");
@@ -65,7 +67,7 @@ public class Log {
 		}
 		try {
 			OutputStream logOut = new FileOutputStream(logFile);
-			Agent.cleanup.add(logOut::close);
+			Agent.addCleanupAction(logOut::close);
 			fileStream = new PrintStream(logOut, true, "UTF-8");
 		} catch (Exception e) {
 			fileStream = NullPrintStream.INSTANCE;

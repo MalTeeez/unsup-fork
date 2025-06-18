@@ -154,7 +154,7 @@ public class PuppetHandler {
 					for (String prop : copyableProps) {
 						String v = System.getProperty(prop);
 						if ("unsup.puppetMode".equals(prop) && v == null) {
-							v = Agent.config.get("puppet_mode", "auto");
+							v = Agent.config().puppetMode().name();
 						}
 						if (v != null) {
 							args.add("-D"+prop+"="+v);
@@ -190,18 +190,15 @@ public class PuppetHandler {
 										return obtainAsset(cacheDir, "bundles/"+bundleVersion+"/"+os+"-"+arch);
 									}));
 									boolean needCjk = false;
-									for (String s : Agent.config.keySet()) {
-										if (s.startsWith("strings.")) {
-											String v = Agent.config.get(s);
-											if (v.codePoints().anyMatch(codepoint -> {
-												UnicodeScript sc = UnicodeScript.of(codepoint);
-												// I think this is all of them??
-												return sc == UnicodeScript.HANGUL || sc == UnicodeScript.HAN || sc == UnicodeScript.KATAKANA
-														|| sc == UnicodeScript.HIRAGANA || sc == UnicodeScript.BOPOMOFO;
-											})) {
-												needCjk = true;
-												break;
-											}
+									for (var v : Agent.config().strings().values()) {
+										if (v.codePoints().anyMatch(codepoint -> {
+											UnicodeScript sc = UnicodeScript.of(codepoint);
+											// I think this is all of them??
+											return sc == UnicodeScript.HANGUL || sc == UnicodeScript.HAN || sc == UnicodeScript.KATAKANA
+													|| sc == UnicodeScript.HIRAGANA || sc == UnicodeScript.BOPOMOFO;
+										})) {
+											needCjk = true;
+											break;
 										}
 									}
 									if (needCjk) {
@@ -340,6 +337,7 @@ public class PuppetHandler {
 									crashState = 0;
 								}
 							} else if (crashState != 2) {
+								if (crashState == 1) crashState = 0;
 								Log.warn("Unknown line from puppet: "+line);
 							}
 						}
@@ -425,22 +423,20 @@ public class PuppetHandler {
 	}
 
 	public static void sendConfig() {
-		for (ColorChoice cc : ColorChoice.values()) {
-			tellPuppet(":color="+cc.name()+":"+Agent.config.get("colors."+cc.configName, Bases.intToHex(cc.defaultValue)));
+		for (var en : Agent.config().colorChoices().entrySet()) {
+			tellPuppet(":color="+en.getKey().name()+":"+en.getValue());
 		}
-		for (String k : Agent.config.keySet()) {
-			if (k.startsWith("strings.")) {
-				tellPuppet(":string="+k.substring(8)+":"+Agent.config.get(k));
-			}
+		for (var en : Agent.config().strings().entrySet()) {
+			tellPuppet(":string="+en.getKey()+":"+en.getValue());
 		}
-		if (Agent.config.containsKey("branding.modpack_name")) {
-			tellPuppet(":modpackName="+Agent.config.get("branding.modpack_name"));
-		}
-		if (Agent.config.containsKey("branding.icon")) {
-			tellPuppet(":icon="+Agent.config.get("branding.icon"));
-		}
-		tellPuppet(":flavorDialogGeom="+Agent.config.get("flavor_dialog_geom", "600x400"));
-		tellPuppet(":flavorDialogBias="+Agent.config.get("flavor_dialog_bias", "0.5"));
+		Agent.config().modpackName().ifPresent(name -> {
+			tellPuppet(":modpackName="+name);
+		});
+		Agent.config().brandingIcon().ifPresent(icon -> {
+			tellPuppet(":icon="+icon);
+		});
+		tellPuppet(":flavorDialogGeom="+Agent.config().flavorDialogGeom());
+		tellPuppet(":flavorDialogBias="+Agent.config().flavorDialogBias());
 	}
 
 	public static void tellPuppet(String order) {
@@ -496,7 +492,7 @@ public class PuppetHandler {
 		if (Math.abs(lastReportedProgress-prog) >= 100 || System.nanoTime()-lastReportedProgressTime > TimeUnit.SECONDS.toNanos(3)) {
 			lastReportedProgress = prog;
 			lastReportedProgressTime = System.nanoTime();
-			Log.info(Agent.config.get("strings."+title)+" "+(prog/10)+"%");
+			Log.info(Agent.config().strings().get(title)+" "+(prog/10)+"%");
 		}
 	}
 

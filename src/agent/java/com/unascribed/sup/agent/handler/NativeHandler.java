@@ -78,7 +78,7 @@ public class NativeHandler extends AbstractFormatHandler {
 			flavors: for (Object ele : theirFlavorGroups) {
 				if (ele instanceof JsonObject obj) {
 					JsonArray envs = obj.getArray("envs");
-					if (envs != null && Agent.useEnvs && !Iterables.contains(envs, Agent.detectedEnv)) {
+					if (envs != null && Agent.config().useEnvs() && !Iterables.contains(envs, Agent.config().detectedEnv())) {
 						continue;
 					}
 					var id = obj.getString("id");
@@ -86,7 +86,7 @@ public class NativeHandler extends AbstractFormatHandler {
 						throw new IOException("A flavor group is missing an ID");
 					var name = obj.getString("name", id);
 					var description = obj.getString("description", "flavor.default_description");
-					String defChoice = Agent.config.get("flavors."+id);
+					String defChoice = Agent.config().defaultFlavors().get(id);
 					var choices = obj.getArray("choices");
 					FlavorGroup grp = new FlavorGroup();
 					grp.id = id;
@@ -129,7 +129,7 @@ public class NativeHandler extends AbstractFormatHandler {
 				for (Object ele : theirFlavors) {
 					if (ele instanceof JsonObject obj) {
 						JsonArray envs = obj.getArray("envs");
-						if (envs != null && Agent.useEnvs && !Iterables.contains(envs, Agent.detectedEnv)) {
+						if (envs != null && Agent.config().useEnvs() && !Iterables.contains(envs, Agent.config().detectedEnv())) {
 							continue;
 						}
 						String id = obj.getString("id");
@@ -188,8 +188,8 @@ public class NativeHandler extends AbstractFormatHandler {
 					if (size == 0 && !hash.equals(func.emptyHash())) throw new IOException(path+" in files array is empty file, but hash isn't the empty hash ("+hash+" != "+func.emptyHash()+")");
 					String urlStr = RequestHelper.checkSchemeMismatch(src, file.getString("url"));
 					JsonArray envs = file.getArray("envs");
-					if (Agent.useEnvs && !Iterables.contains(envs, Agent.detectedEnv)) {
-						Log.info("Skipping "+path+" as it's not eligible for env "+Agent.detectedEnv);
+					if (Agent.config().useEnvs() && !Iterables.contains(envs, Agent.config().detectedEnv())) {
+						Log.info("Skipping "+path+" as it's not eligible for env "+Agent.config().detectedEnv());
 						continue;
 					}
 					JsonArray flavors = file.getArray("flavors");
@@ -270,8 +270,8 @@ public class NativeHandler extends AbstractFormatHandler {
 					}
 					String urlStr = RequestHelper.checkSchemeMismatch(src, file.getString("url"));
 					JsonArray envs = file.getArray("envs");
-					if (Agent.useEnvs && !Iterables.contains(envs, Agent.detectedEnv)) {
-						Log.info("Skipping "+path+" as it's not eligible for env "+Agent.detectedEnv);
+					if (Agent.config().useEnvs() && !Iterables.contains(envs, Agent.config().detectedEnv())) {
+						Log.info("Skipping "+path+" as it's not eligible for env "+Agent.config().detectedEnv());
 						continue;
 					}
 					var flavors = file.getArray("flavors");

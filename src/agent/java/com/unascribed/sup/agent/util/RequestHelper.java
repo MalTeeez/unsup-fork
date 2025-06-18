@@ -95,7 +95,7 @@ public class RequestHelper {
 	}
 	
 	public static byte[] loadAndVerify(URI src, int sizeLimit, URI sigUrl) throws IOException {
-		return loadAndVerify(src, sizeLimit, sigUrl, Agent.packSig, Agent.altPackSig);
+		return loadAndVerify(src, sizeLimit, sigUrl, Agent.config().packSig(), Agent.config().altPackSig());
 	}
 	
 	public static byte[] loadAndVerify(URI src, int sizeLimit, URI sigUrl, SigProvider... keys) throws IOException {
@@ -380,7 +380,7 @@ public class RequestHelper {
 	
 	public static DownloadedFile downloadToFile(URI url, File dir, long size, Progressor progressCb, HashFunction hashFunc, boolean hostile) throws IOException {
 		File file = dir == null ? null : File.createTempFile("download", "", dir);
-		if (file != null) Agent.cleanup.add(file::delete);
+		if (file != null) Agent.addCleanupAction(file::delete);
 		return withRetries(10, () -> {
 			try {
 				long readTotal = 0;

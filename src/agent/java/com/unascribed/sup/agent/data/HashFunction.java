@@ -123,7 +123,7 @@ public enum HashFunction {
 	}
 	
 	void checkSecureHashEnforcement() {
-		if (insecure && Agent.enforceSecureHashes) {
+		if (insecure && Agent.config().enforceSecureHashes()) {
 			throw new IllegalArgumentException("Attempted to use insecure hash function "+name+" when enforce_secure_hashes=true");
 		}
 	}
@@ -135,7 +135,7 @@ public enum HashFunction {
 			func.checkSecureHashEnforcement();
 			if (func.insecure() && !func.hasWarned) {
 				func.hasWarned = true;
-				if (Agent.packSig != null) {
+				if (Agent.config().packSig() != null) {
 					Log.warn("Using insecure hash function "+func+" for a signed manifest! This is a very bad idea!");
 				} else {
 					Log.warn("Using insecure hash function "+func);
