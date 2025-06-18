@@ -41,13 +41,14 @@ public class Unsup {
 
 	public static void poke() {}
 
+	// deal with classloading disasters (e.g. FML Relauncher)
 	private static <T> T retrieve(String field) {
 		try {
-			var thisLoader = Class.forName("com.unascribed.sup.Agent", false, Unsup.class.getClassLoader());
-			if (thisLoader.getField("loaded").getBoolean(null)) {
+			var thisLoader = Class.forName("com.unascribed.sup.agent.Agent", false, Unsup.class.getClassLoader());
+			if (thisLoader.getField("launched").getBoolean(null)) {
 				return retrieve(thisLoader, field);
 			}
-			return retrieve(Class.forName("com.unascribed.sup.Agent", false, ClassLoader.getSystemClassLoader()), field);
+			return retrieve(Class.forName("com.unascribed.sup.agent.Agent", false, ClassLoader.getSystemClassLoader()), field);
 		} catch (ReflectiveOperationException | SecurityException e) {
 			throw new AssertionError(e);
 		}
