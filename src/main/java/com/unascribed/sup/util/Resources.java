@@ -19,9 +19,11 @@
 
 package com.unascribed.sup.util;
 
+import java.io.FileNotFoundException;
 import java.io.InputStream;
 import java.net.URL;
 
+import javax.annotation.NotNull;
 import javax.annotation.Nullable;
 
 public class Resources {
@@ -32,6 +34,12 @@ public class Resources {
 
 	public static @Nullable InputStream open(String name) {
 		return Resources.class.getClassLoader().getResourceAsStream(path(name));
+	}
+
+	public static @NotNull InputStream openNonnull(String name) throws FileNotFoundException {
+		var in = open(name);
+		if (in == null) throw new FileNotFoundException("in classpath: "+name);
+		return in;
 	}
 	
 	public static @Nullable URL get(String name) {

@@ -53,7 +53,7 @@ import com.unascribed.sup.data.AlertMessageType;
 import com.unascribed.sup.data.ColorChoice;
 import com.unascribed.sup.data.FlavorGroup;
 import com.unascribed.sup.data.SysProps;
-import com.unascribed.sup.data.FlavorGroup.FlavorChoice;
+import com.unascribed.sup.data.FlavorChoice;
 import com.unascribed.sup.data.SysProps.PuppetMode;
 import com.unascribed.sup.pieces.Latch;
 import com.unascribed.sup.puppet.opengl.GLPuppet;
@@ -330,19 +330,21 @@ public class Puppet {
 							List<FlavorGroup> groups = new ArrayList<>();
 							for (String s : split[0].replace('\u001B', ':').split("\u001D")) {
 								String[] fields = s.split("\u001C");
-								FlavorGroup grp = new FlavorGroup();
-								grp.id = fields[0];
-								grp.name = fields[1];
-								grp.description = Translate.format(fields[2]);
+								var choices = new ArrayList<FlavorChoice>();
+								var grp = FlavorGroup.builder()
+									.id(fields[0])
+									.name(fields[1])
+									.description(Translate.format(fields[2]))
+									.choices(choices);
 								for (int i = 3; i < fields.length; i += 4) {
-									FlavorChoice c = new FlavorChoice();
-									c.id = fields[i];
-									c.name = fields[i+1];
-									c.description = Translate.format(fields[i+2]);
-									c.def = Boolean.parseBoolean(fields[i+3]);
-									grp.choices.add(c);
+									choices.add(FlavorChoice.builder()
+										.id(fields[i])
+										.name(fields[i+1])
+										.description(Translate.format(fields[i+2]))
+										.def(Boolean.parseBoolean(fields[i+3]))
+										.build());
 								}
-								groups.add(grp);
+								groups.add(grp.build());
 							}
 							r = () -> del.openFlavorDialog(name, groups);
 						}

@@ -22,7 +22,7 @@ package com.unascribed.sup.puppet.opengl.window;
 
 import com.unascribed.sup.data.ColorChoice;
 import com.unascribed.sup.data.FlavorGroup;
-import com.unascribed.sup.data.FlavorGroup.FlavorChoice;
+import com.unascribed.sup.data.FlavorChoice;
 import com.unascribed.sup.puppet.Puppet;
 import com.unascribed.sup.puppet.Translate;
 import com.unascribed.sup.puppet.opengl.pieces.FontManager.Face;
@@ -90,15 +90,15 @@ public class FlavorDialogWindow extends Window {
 		this.flavors.sort((a, b) -> Boolean.compare(a.isBoolean(), b.isBoolean()));
 		for (FlavorGroup grp : flavors) {
 			boolean anyDefault = false;
-			for (FlavorChoice choice : grp.choices) {
-				if (choice.def) {
+			for (FlavorChoice choice : grp.choices()) {
+				if (choice.def()) {
 					anyDefault = true;
-					selectedFlavors.add(choice.id);
+					selectedFlavors.add(choice.id());
 					break;
 				}
 			}
 			if (!anyDefault) {
-				selectedFlavors.add(grp.choices.get(0).id);
+				selectedFlavors.add(grp.choices().get(0).id());
 			}
 		}
 		
@@ -292,7 +292,7 @@ public class FlavorDialogWindow extends Window {
 					
 					if (y > -16 && y < height+12) {
 						glColor(ColorChoice.DIALOG);
-						float w = font.drawString(Face.REGULAR, x+20, y+6, 18, grp.name);
+						float w = font.drawString(Face.REGULAR, x+20, y+6, 18, grp.name());
 						
 						boolean toggle = false;
 						boolean hover = false;
@@ -319,16 +319,16 @@ public class FlavorDialogWindow extends Window {
 						}
 						
 						if (toggle) {
-							if (selectedFlavors.contains(grp.id+"_on")) {
-								selectedFlavors.remove(grp.id+"_on");
-								selectedFlavors.add(grp.id+"_off");
+							if (selectedFlavors.contains(grp.id()+"_on")) {
+								selectedFlavors.remove(grp.id()+"_on");
+								selectedFlavors.add(grp.id()+"_off");
 							} else {
-								selectedFlavors.remove(grp.id+"_off");
-								selectedFlavors.add(grp.id+"_on");
+								selectedFlavors.remove(grp.id()+"_off");
+								selectedFlavors.add(grp.id()+"_on");
 							}
 						}
 						
-						if (selectedFlavors.contains(grp.id+"_on")) {
+						if (selectedFlavors.contains(grp.id()+"_on")) {
 							glColor(ColorChoice.BUTTON);
 							drawCircle(x, y, 24);
 							if (hover) {
@@ -349,7 +349,7 @@ public class FlavorDialogWindow extends Window {
 				} else {
 					if (y > -48 && y < height) {
 						glColor(ColorChoice.DIALOG);
-						font.drawString(Face.REGULAR, x-9, y+6, 18, grp.name);
+						font.drawString(Face.REGULAR, x-9, y+6, 18, grp.name());
 						if (i == highlighted) {
 							if (focused) {
 								glColor(ColorChoice.DIALOG, 0.75f);
@@ -358,16 +358,16 @@ public class FlavorDialogWindow extends Window {
 							if (leftPressed || rightPressed || enterPressed) {
 								int dir = leftPressed ? -1 : 1;
 								int selI = getSelectedIndex(grp);
-								for (FlavorChoice ch2 : grp.choices) {
-									selectedFlavors.remove(ch2.id);
+								for (FlavorChoice ch2 : grp.choices()) {
+									selectedFlavors.remove(ch2.id());
 								}
 								selI += dir;
-								if (selI < 0) selI = grp.choices.size()+selI;
-								selI %= grp.choices.size();
-								selectedFlavors.add(grp.choices.get(selI).id);
+								if (selI < 0) selI = grp.choices().size()+selI;
+								selI %= grp.choices().size();
+								selectedFlavors.add(grp.choices().get(selI).id());
 							}
 						}
-						int segments = grp.choices.size();
+						int segments = grp.choices().size();
 						float btnH = 32;
 						float subX = x-9;
 						float subY = y+14;
@@ -380,8 +380,8 @@ public class FlavorDialogWindow extends Window {
 						
 						for (int pass = 0; pass < 2; pass++) {
 							subX = x-9;
-							for (int j = 0; j < grp.choices.size(); j++) {
-								FlavorChoice ch = grp.choices.get(j);
+							for (int j = 0; j < grp.choices().size(); j++) {
+								FlavorChoice ch = grp.choices().get(j);
 								float x1 = subX;
 								float y1 = subY;
 								float x2 = subX+btnW;
@@ -393,16 +393,16 @@ public class FlavorDialogWindow extends Window {
 									subhovered = j;
 									hover = true;
 									if (pass == 0 && mouseClicked) {
-										for (FlavorChoice ch2 : grp.choices) {
-											selectedFlavors.remove(ch2.id);
+										for (FlavorChoice ch2 : grp.choices()) {
+											selectedFlavors.remove(ch2.id());
 										}
-										selectedFlavors.add(ch.id);
+										selectedFlavors.add(ch.id());
 									}
 								}
 								
 								if (pass == 1) {
-									boolean sel = selectedFlavors.contains(ch.id);
-									String name = ch.name;
+									boolean sel = selectedFlavors.contains(ch.id());
+									String name = ch.name();
 									String ellipsis = "";
 									float w;
 									do {
@@ -473,10 +473,10 @@ public class FlavorDialogWindow extends Window {
 				int subtarget = grp.isBoolean() ? -1 : preferKeyboard ? getSelectedIndex(grp) : subhovered;
 				String html;
 				if (subtarget == -1) {
-					html = makeMoreXMLy("<h1>"+grp.name+"</h1>"+grp.description);
+					html = makeMoreXMLy("<h1>"+grp.name()+"</h1>"+grp.description());
 				} else {
-					FlavorChoice choice = grp.choices.get(subtarget);
-					html = makeMoreXMLy("<h1>"+grp.name+"</h1>"+grp.description+"<h2>"+choice.name+"</h2><br/>"+choice.description);
+					FlavorChoice choice = grp.choices().get(subtarget);
+					html = makeMoreXMLy("<h1>"+grp.name()+"</h1>"+grp.description()+"<h2>"+choice.name()+"</h2><br/>"+choice.description());
 				}
 				
 				NodeDrawState state = new NodeDrawState();
@@ -673,9 +673,9 @@ public class FlavorDialogWindow extends Window {
 
 	private int getSelectedIndex(FlavorGroup grp) {
 		int selI = 0;
-		for (int j = 0; j < grp.choices.size(); j++) {
-			FlavorChoice ch = grp.choices.get(j);
-			if (selectedFlavors.contains(ch.id)) {
+		for (int j = 0; j < grp.choices().size(); j++) {
+			FlavorChoice ch = grp.choices().get(j);
+			if (selectedFlavors.contains(ch.id())) {
 				selI = j;
 				break;
 			}

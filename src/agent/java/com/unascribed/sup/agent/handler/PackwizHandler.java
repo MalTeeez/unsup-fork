@@ -59,28 +59,28 @@ import com.unascribed.sup.agent.data.HashFunction;
 import com.unascribed.sup.agent.pieces.Murmur2CFMessageDigest;
 import com.unascribed.sup.agent.util.RequestHelper;
 import com.unascribed.sup.data.AlertMessageType;
+import com.unascribed.sup.data.FlavorChoice;
 import com.unascribed.sup.data.FlavorGroup;
 import com.unascribed.sup.data.SysProps;
 import com.unascribed.sup.data.Version;
-import com.unascribed.sup.data.FlavorGroup.FlavorChoice;
 import com.unascribed.sup.util.Bases;
 import com.unascribed.sup.util.Iterables;
 
 public class PackwizHandler extends AbstractFormatHandler {
 	
-	public static CheckResult check(URI src, boolean autoaccept, boolean forceFlavorDefaults) throws IOException, URISyntaxException {
+	public static CheckResult check(URI src, boolean autoaccept, boolean forceFlavorDefaults, JsonObject baseState) throws IOException, URISyntaxException {
 		var cleanup = new Closeable[1];
 		var delete = new File[1];
 		try {
-			var ourVersion = Version.fromJson(Agent.state.getObject("current_version"));
+			var ourVersion = Version.fromJson(baseState.getObject("current_version"));
 			Toml pack = RequestHelper.loadToml(src, 4*K, src.resolve("unsup.sig"));
 			var fmt = pack.getString("pack-format");
 			if (!fmt.equals("unsup-packwiz") && (!fmt.startsWith("packwiz:") || FlexVerComparator.compare("packwiz:1.1.0", fmt) < 0))
 				throw new IOException("Cannot read unknown pack-format "+fmt);
-			var pwstate = Agent.state.getObject("packwiz");
+			var pwstate = baseState.getObject("packwiz");
 			if (pwstate == null) {
 				pwstate = new JsonObject();
-				Agent.state.put("packwiz", pwstate);
+				baseState.put("packwiz", pwstate);
 			}
 			Toml indexMeta = pack.getTable("index");
 			if (indexMeta == null)
@@ -121,7 +121,7 @@ public class PackwizHandler extends AbstractFormatHandler {
 					ourVersion = new Version("null", 0);
 				}
 				var theirVersion = new Version(pack.getString("version"), ourVersion.code() +1);
-				var newState = new JsonObject(Agent.state);
+				var newState = new JsonObject(baseState);
 				pwstate = new JsonObject(pwstate);
 				newState.put("packwiz", pwstate);
 				
@@ -162,27 +162,30 @@ public class PackwizHandler extends AbstractFormatHandler {
 						if (id == null) continue;
 						var name = obj.getString("name");
 						var description = obj.getString("description");
-						var choices = obj.getArray("choices");
-						var grp = new FlavorGroup();
-						grp.id = id;
-						grp.name = name;
-						grp.description = description;
-						for (Object cele : choices) {
-							FlavorChoice c = new FlavorChoice();
+						var choicesJson = obj.getArray("choices");
+						var choices = new ArrayList<FlavorChoice>();
+						var grp = FlavorGroup.builder()
+							.id(id)
+							.name(name)
+							.description(description)
+							.choices(choices);
+						for (Object cele : choicesJson) {
 							if (cele instanceof JsonObject cobj) {
-								c.id = cobj.getString("id");
-								if (c.id == null) continue;
-								c.name = cobj.getString("name");
-								c.description = cobj.getString("description");
-								grp.choices.add(c);
+								var choiceId = cobj.getString("id");
+								if (choiceId == null) continue;
+								choices.add(FlavorChoice.builder()
+										.id(choiceId)
+										.name(cobj.getString("name"))
+										.description(cobj.getString("description"))
+										.build());
 							}
 						}
-						syntheticGroups.put(en.getKey(), grp);
+						syntheticGroups.put(en.getKey(), grp.build());
 					}
 				}
 				ZipFile metafilesZip;
 				Map<String, List<String>> metafileFlavors = new HashMap<>();
-				JsonArray ourFlavors = Agent.state.getArray("flavors");
+				JsonArray ourFlavors = baseState.getArray("flavors");
 				if (ourFlavors == null) ourFlavors = new JsonArray();
 				if (pack.containsTable("versions") && pack.getTable("versions").containsPrimitive("unsup")) {
 					try {
@@ -203,10 +206,12 @@ public class PackwizHandler extends AbstractFormatHandler {
 									var groupName = group.getString("name", groupId);
 									var groupDescription = group.getString("description", "flavor.default_description");
 									String defChoice = Agent.config().defaultFlavors().get(groupId);
-									FlavorGroup grp = new FlavorGroup();
-									grp.id = groupId;
-									grp.name = groupName;
-									grp.description = groupDescription;
+									var choices = new ArrayList<FlavorChoice>();
+									var grp = FlavorGroup.builder()
+										.id(groupId)
+										.name(groupName)
+										.description(groupDescription)
+										.choices(choices);
 									if (group.containsTableArray("choices")) {
 										for (Object o : group.getList("choices")) {
 											String id, name, description;
@@ -225,19 +230,20 @@ public class PackwizHandler extends AbstractFormatHandler {
 												// a choice has already been made for this flavor
 												continue flavors;
 											}
-											FlavorGroup.FlavorChoice c = new FlavorGroup.FlavorChoice();
-											c.id = id;
-											c.name = name;
-											c.description = description;
-											c.def = changeFlavors ? Iterables.contains(ourFlavors, id) : id.equals(defChoice);
-											if (c.def) {
-												grp.defChoice = c.id;
-												grp.defChoiceName = c.name;
+											var c = FlavorChoice.builder()
+												.id(id)
+												.name(name)
+												.description(description)
+												.def(changeFlavors ? Iterables.contains(ourFlavors, id) : id.equals(defChoice))
+												.build();
+											if (c.def()) {
+												grp.defChoice(c.id());
+												grp.defChoiceName(c.name());
 											}
-											grp.choices.add(c);
+											choices.add(c);
 										}
 									}
-									unpickedGroups.add(grp);
+									unpickedGroups.add(grp.build());
 								}
 							}
 						}
@@ -393,7 +399,7 @@ public class PackwizHandler extends AbstractFormatHandler {
 									f2.cancel(false);
 								} catch (Throwable t) {}
 							}
-							if (e.getCause() instanceof IOException) throw (IOException)e.getCause();
+							if (e.getCause() instanceof IOException ioe) throw ioe;
 							throw new RuntimeException(e);
 						}
 					}
@@ -419,26 +425,29 @@ public class PackwizHandler extends AbstractFormatHandler {
 					Toml option = metafile.getTable("option");
 					syntheticGroups.remove(mf.name);
 					if (option != null && option.getBoolean("optional", false) && !metafileFlavors.containsKey(mf.name)) {
-						FlavorGroup synth = new FlavorGroup();
-						synth.id = mf.name;
-						synth.name = metafile.getString("name");
-						synth.description = option.getString("description", "flavor.default_description");
 						String defChoice = Agent.config().defaultFlavors().get(mf.name);
-						synth.defChoice = defChoice;
-						synth.defChoiceName = defChoice;
+						var choices = new ArrayList<FlavorChoice>();
+						var synth = FlavorGroup.builder()
+							.id(mf.name)
+							.name(metafile.getString("name"))
+							.description(option.getString("description", "flavor.default_description"))
+							.choices(choices)
+							.defChoice(defChoice)
+							.defChoiceName(defChoice);
 						boolean defOn = changeFlavors ? Iterables.contains(ourFlavors, mf.name+"_on") : option.getBoolean("default", false);
-						FlavorGroup.FlavorChoice on = new FlavorGroup.FlavorChoice();
-						on.id = mf.name+"_on";
-						on.name = "On";
-						on.def = defOn;
-						synth.choices.add(on);
-						FlavorGroup.FlavorChoice off = new FlavorGroup.FlavorChoice();
-						off.id = mf.name+"_off";
-						off.name = "Off";
-						off.def = !defOn;
-						synth.choices.add(off);
-						metafileFlavors.put(mf.name, Collections.singletonList(on.id));
-						syntheticGroups.put(mf.name, synth);
+						FlavorChoice on;
+						choices.add(on = FlavorChoice.builder()
+								.id(mf.name+"_on")
+								.name("On")
+								.def(defOn)
+								.build());
+						choices.add(FlavorChoice.builder()
+								.id(mf.name+"_off")
+								.name("Off")
+								.def(defOn)
+								.build());
+						metafileFlavors.put(mf.name, Collections.singletonList(on.id()));
+						syntheticGroups.put(mf.name, synth.build());
 					}
 				}
 	
@@ -446,20 +455,20 @@ public class PackwizHandler extends AbstractFormatHandler {
 				pwstate.put("syntheticFlavorGroups", syntheticGroupsJson);
 				final JsonArray fourFlavors = ourFlavors;
 				for (Map.Entry<String, FlavorGroup> en : syntheticGroups.entrySet()) {
-					if (changeFlavors || !en.getValue().choices.stream().anyMatch(c -> Iterables.contains(fourFlavors, c.id))) {
+					if (changeFlavors || !en.getValue().choices().stream().anyMatch(c -> Iterables.contains(fourFlavors, c.id()))) {
 						unpickedGroups.add(en.getValue());
 					}
 					FlavorGroup grp = en.getValue();
 					JsonObject obj = new JsonObject();
-					obj.put("id", grp.id);
-					obj.put("name", grp.name);
-					obj.put("description", grp.description);
+					obj.put("id", grp.id());
+					obj.put("name", grp.name());
+					obj.put("description", grp.description());
 					JsonArray choices = new JsonArray();
-					for (FlavorChoice c : grp.choices) {
+					for (FlavorChoice c : grp.choices()) {
 						JsonObject cobj = new JsonObject();
-						cobj.put("id", c.id);
-						cobj.put("name", c.name);
-						cobj.put("description", c.description);
+						cobj.put("id", c.id());
+						cobj.put("name", c.name());
+						cobj.put("description", c.description());
 						choices.add(cobj);
 					}
 					obj.put("choices", choices);

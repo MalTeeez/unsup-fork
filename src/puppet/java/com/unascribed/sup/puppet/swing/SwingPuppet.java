@@ -87,7 +87,7 @@ import com.unascribed.sup.Util;
 import com.unascribed.sup.data.AlertMessageType;
 import com.unascribed.sup.data.ColorChoice;
 import com.unascribed.sup.data.FlavorGroup;
-import com.unascribed.sup.data.FlavorGroup.FlavorChoice;
+import com.unascribed.sup.data.FlavorChoice;
 import com.unascribed.sup.puppet.FontResources;
 import com.unascribed.sup.puppet.Puppet;
 import com.unascribed.sup.puppet.PuppetDelegate;
@@ -114,7 +114,7 @@ public class SwingPuppet {
 	private static Image logo, logoLowres;
 	private static List<Image> logos;
 	@SuppressWarnings("unused")
-	private static Font font, fontBold, fontItalic, fontBoldItalic;
+	private static Font font, fontBold, fontItalic/*, fontBoldItalic*/;
 	
 	public static PuppetDelegate start() {
 		if (GraphicsEnvironment.isHeadless()) {
@@ -141,7 +141,7 @@ public class SwingPuppet {
 		font = loadFont("FiraGO.zip.br!FiraGO-Regular.ttf", Font.PLAIN);
 		fontBold = loadFont("FiraGO.zip.br!FiraGO-Bold.ttf", Font.BOLD);
 		fontItalic = loadFont("FiraGO.zip.br!FiraGO-Italic.ttf", Font.ITALIC);
-		fontBoldItalic = loadFont("FiraGO.zip.br!FiraGO-BoldItalic.ttf", Font.BOLD|Font.ITALIC);
+//		fontBoldItalic = loadFont("FiraGO.zip.br!FiraGO-BoldItalic.ttf", Font.BOLD|Font.ITALIC);
 		
 		return new PuppetDelegate() {
 			
@@ -534,12 +534,12 @@ public class SwingPuppet {
 		for (FlavorGroup grp : groups) {
 			if (!grp.isBoolean()) {
 				Box box = Box.createVerticalBox();
-				JLabel title = new JLabel(grp.name);
+				JLabel title = new JLabel(grp.name());
 				title.setBorder(new EmptyBorder(8,8,8,8));
 				title.setFont(fontBold.deriveFont(18f));
 				title.setMinimumSize(new Dimension(0, 24));
 				title.setForeground(getColor(ColorChoice.DIALOG));
-				String titleDescHtml = "<h1>"+grp.name+"</h1>"+grp.description;
+				String titleDescHtml = "<h1>"+grp.name()+"</h1>"+grp.description();
 				title.addMouseListener(new MouseAdapter() {
 					@Override
 					public void mouseEntered(MouseEvent e) {
@@ -556,12 +556,12 @@ public class SwingPuppet {
 				ButtonGroup btng = new ButtonGroup();
 				Box btns = Box.createHorizontalBox();
 				boolean selectedAny = false;
-				for (FlavorChoice c : grp.choices) {
-					JToggleButton btn = new JToggleButton(c.name);
+				for (FlavorChoice c : grp.choices()) {
+					JToggleButton btn = new JToggleButton(c.name());
 					btn.setUI(new BasicButtonUI());
 					btn.setFont(font.deriveFont(14f));
-					btn.setSelected(c.def);
-					if (c.def) selectedAny = true;
+					btn.setSelected(c.def());
+					if (c.def()) selectedAny = true;
 					btn.setMinimumSize(new Dimension(0, 32));
 					btn.setPreferredSize(new Dimension(64, 32));
 					btn.setMaximumSize(new Dimension(32767, 32));
@@ -571,17 +571,17 @@ public class SwingPuppet {
 							btn.setBackground(getColor(ColorChoice.BUTTON));
 							btn.setForeground(getColor(ColorChoice.BUTTONTEXT));
 							btn.setFont(fontBold.deriveFont(14f));
-							results.add(c.id);
+							results.add(c.id());
 						} else {
 							btn.setBorder(new LineBorder(getColor(ColorChoice.DIALOG), 2));
 							btn.setBackground(getColor(ColorChoice.BACKGROUND));
 							btn.setForeground(getColor(ColorChoice.DIALOG));
 							btn.setFont(font.deriveFont(14f));
-							results.remove(c.id);
+							results.remove(c.id());
 						}
 					};
 					updateLook.run();
-					String descHtml = "<h1>"+grp.name+"</h1><h2>"+c.name+"</h2>"+c.description;
+					String descHtml = "<h1>"+grp.name()+"</h1><h2>"+c.name()+"</h2>"+c.description();
 					btn.addMouseListener(new MouseAdapter() {
 						@Override
 						public void mouseEntered(MouseEvent e) {
@@ -600,7 +600,7 @@ public class SwingPuppet {
 					btns.add(btn);
 					btng.add(btn);
 				}
-				if (!selectedAny && !grp.choices.isEmpty()) {
+				if (!selectedAny && !grp.choices().isEmpty()) {
 					btng.getElements().nextElement().setSelected(true);
 				}
 				btns.setAlignmentX(0);
@@ -611,7 +611,7 @@ public class SwingPuppet {
 		options.add(Box.createVerticalStrut(8));
 		for (FlavorGroup grp : groups) {
 			if (grp.isBoolean()) {
-				JCheckBox cb = new JCheckBox(grp.name);
+				JCheckBox cb = new JCheckBox(grp.name());
 				cb.setUI(new BasicCheckBoxUI());
 				cb.setIcon(new Icon() {
 					
@@ -668,13 +668,13 @@ public class SwingPuppet {
 				cb.setMinimumSize(new Dimension(0, 24));
 				cb.setForeground(getColor(ColorChoice.DIALOG));
 				cb.setBackground(getColor(ColorChoice.BACKGROUND));
-				cb.setSelected(grp.choices.stream().filter(c -> c.id.endsWith("_on")).findFirst().map(c -> c.def).orElse(false));
+				cb.setSelected(grp.choices().stream().filter(c -> c.id().endsWith("_on")).findFirst().map(c -> c.def()).orElse(false));
 				if (cb.isSelected()) {
-					results.add(grp.id+"_on");
+					results.add(grp.id()+"_on");
 				} else {
-					results.add(grp.id+"_off");
+					results.add(grp.id()+"_off");
 				}
-				String titleDescHtml = "<h1>"+grp.name+"</h1>"+grp.description;
+				String titleDescHtml = "<h1>"+grp.name()+"</h1>"+grp.description();
 				cb.addMouseListener(new MouseAdapter() {
 					@Override
 					public void mouseEntered(MouseEvent e) {
@@ -689,11 +689,11 @@ public class SwingPuppet {
 				});
 				cb.addChangeListener((e) -> {
 					if (cb.isSelected()) {
-						results.add(grp.id+"_on");
-						results.remove(grp.id+"_off");
+						results.add(grp.id()+"_on");
+						results.remove(grp.id()+"_off");
 					} else {
-						results.add(grp.id+"_off");
-						results.remove(grp.id+"_on");
+						results.add(grp.id()+"_off");
+						results.remove(grp.id()+"_on");
 					}
 				});
 				options.add(cb);

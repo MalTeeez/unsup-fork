@@ -359,7 +359,9 @@ public abstract class Window {
 		});
 		if (renderThread == null) {
 			renderThread = new Thread(() -> {
-				SDL_GL_MakeCurrent(handle, glContext);
+				synchronized (this) {
+					SDL_GL_MakeCurrent(handle, glContext);
+				}
 				
 				GL.createCapabilities(MemoryUtil::memCallocPointer);
 				
@@ -396,12 +398,14 @@ public abstract class Window {
 				SDL_GL_MakeCurrent(NULL, NULL);
 				
 				Puppet.runOnMainThread(() -> {
-			        memFree(GL.getCapabilities().getAddressBuffer());
-			        GL.setCapabilities(null);
-					SDL_GL_DestroyContext(glContext);
-					SDL_DestroyCursor(defaultCursor);
-					SDL_DestroyCursor(clickCursor);
-					SDL_DestroyWindow(handle);
+					memFree(GL.getCapabilities().getAddressBuffer());
+					GL.setCapabilities(null);
+					synchronized (this) {
+						SDL_GL_DestroyContext(glContext);
+						SDL_DestroyCursor(defaultCursor);
+						SDL_DestroyCursor(clickCursor);
+						SDL_DestroyWindow(handle);
+					}
 				});
 			}, getClass().getSimpleName().replace("Window", "")+"#"+threadNumbers.computeIfAbsent(getClass(), k -> new AtomicInteger(1)).getAndIncrement());
 			renderThread.start();

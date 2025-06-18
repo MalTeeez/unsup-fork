@@ -47,36 +47,33 @@ public class UpdateHandler {
 
 	private static final Pattern domainPattern = Pattern.compile("(^|\\.)([^\\.]+\\.[^\\.]+)$");
 
-	static boolean checkForUpdate(SourceFormat fmt, URI src, boolean autoaccept, boolean dryRun, boolean forceFlavorDefaults, boolean reentering, Consumer<CheckResult> modifier) {
+	public static boolean checkForUpdate(JsonObject baseState, SourceFormat fmt, URI src, boolean autoaccept, boolean dryRun, boolean forceFlavorDefaults, Consumer<CheckResult> modifier) {
 		PuppetHandler.updateTitle("title.checking", false);
 		try {
 			CheckResult res = null;
 			if ("merge".equals(src.getScheme())) {
 				Log.warn("Using an experimental feature: Manifest merging");
-				JsonObject realState = Agent.state;
-				JsonObject mergeStates = realState.getObject("mergeStates");
+				JsonObject mergeStates = baseState.getObject("mergeStates");
 				if (mergeStates == null) {
 					mergeStates = new JsonObject();
-					realState.put("mergeStates", mergeStates);
+					baseState.put("mergeStates", mergeStates);
 				}
 				for (String s : src.getRawSchemeSpecificPart().split(";")) {
 					JsonObject thisState = mergeStates.getObject(s, new JsonObject());
-					Agent.state = thisState;
-					if (checkForUpdate(fmt, new URI(s), autoaccept, dryRun, forceFlavorDefaults, true, modifier)) {
+					if (checkForUpdate(thisState, fmt, new URI(s), autoaccept, dryRun, forceFlavorDefaults, modifier)) {
 						// if the user has accepted an update, then accept the rest of them implicitly
 						autoaccept = true;
 					}
-					mergeStates.put(s, Agent.state);
+					mergeStates.put(s, thisState);
 				}
-				Agent.state = realState;
 				if (!dryRun) Agent.saveState();
 				return true;
 			} else {
 				Log.debug("Retrieving from "+src+" in "+fmt+" format");
 				if (fmt == SourceFormat.UNSUP) {
-					res = NativeHandler.check(src, autoaccept, forceFlavorDefaults);
+					res = NativeHandler.check(src, autoaccept, forceFlavorDefaults, baseState);
 				} else if (fmt == SourceFormat.PACKWIZ) {
-					res = PackwizHandler.check(src, autoaccept, forceFlavorDefaults);
+					res = PackwizHandler.check(src, autoaccept, forceFlavorDefaults, baseState);
 				} else {
 					throw new AssertionError();
 				}
@@ -85,8 +82,12 @@ public class UpdateHandler {
 				Agent.sourceVersion = res.ourVersion.name();
 				modifier.accept(res);
 				if (res.plan != null) {
-					applyUpdate(res, dryRun);
-					if (!reentering && !dryRun) Agent.saveState();
+					JsonObject newState = applyUpdate(res, dryRun);
+					if (newState != null) {
+						baseState.clear();
+						baseState.putAll(newState);
+					}
+					if (!dryRun) Agent.saveState();
 					return true;
 				}
 			}
@@ -106,7 +107,7 @@ public class UpdateHandler {
 		}
 	}
 
-	private static void applyUpdate(CheckResult res, boolean dryRun) throws IOException {
+	private static JsonObject applyUpdate(CheckResult res, boolean dryRun) throws IOException {
 		UpdatePlan<?> plan = res.plan;
 		boolean bootstrapping = plan.isBootstrap;
 		Log.debug("Alright, so here's what I'm thinking:");
@@ -218,8 +219,7 @@ public class UpdateHandler {
 					continue;
 				} else if (resp == AlertOption.CANCEL) {
 					Log.info("User cancelled conflict dialog! Exiting.");
-					Agent.exit(Agent.EXIT_USER_REQUEST);
-					return;
+					throw Agent.exit(Agent.EXIT_USER_REQUEST);
 				}
 				if (dest.exists() && Agent.config().behavior().promptConflicts()) {
 					moveAside.add(path);
@@ -231,7 +231,7 @@ public class UpdateHandler {
 			Files.createDirectories(tmp.toPath());
 		}
 		AtomicIntegerArray progresses = new AtomicIntegerArray(plan.files.size());
-		long denom = plan.files.size()*1000;
+		long denom = plan.files.size()*1000L;
 		Runnable updateProgress = () -> {
 			long sum = 0;
 			for (int i = 0; i < progresses.length(); i++) {
@@ -255,7 +255,7 @@ public class UpdateHandler {
 				for (String s : files) {
 					dl.add(s.substring(s.lastIndexOf('/')+1));
 				}
-				PuppetHandler.updateSubtitleDownloading(dl.toArray(new String[0]));
+				PuppetHandler.updateSubtitleDownloading(dl.toArray(new String[dl.size()]));
 			}
 		};
 		int i = 0;
@@ -330,7 +330,7 @@ public class UpdateHandler {
 							f2.cancel(false);
 						} catch (Throwable t) {}
 					}
-					if (e.getCause() instanceof IOException) throw (IOException)e.getCause();
+					if (e.getCause() instanceof IOException ioe) throw ioe;
 					throw new RuntimeException(e);
 				}
 			}
@@ -393,8 +393,7 @@ public class UpdateHandler {
 				}
 				}
 				if (!plan.skipStateApplication) {
-					Agent.state = plan.newState;
-					Agent.state.put("current_version", res.theirVersion.toJson());
+					plan.newState.put("current_version", res.theirVersion.toJson());
 				}
 				try {
 					Agent.updatedComponents = MMCUpdater.apply(res.componentVersions);
@@ -405,6 +404,7 @@ public class UpdateHandler {
 		}
 		Log.info("Update successful!");
 		Agent.updated = true;
+		return plan.skipStateApplication ? null : plan.newState;
 	}
 
 	static String ponder(FileState state) {

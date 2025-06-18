@@ -64,6 +64,7 @@ import com.unascribed.sup.agent.signing.SigProvider;
 import com.unascribed.sup.data.SysProps;
 import com.unascribed.sup.pieces.NullOutputStream;
 import com.unascribed.sup.util.Bases;
+import com.unascribed.sup.util.SuppressFBWarnings;
 
 import okhttp3.HttpUrl;
 import okhttp3.Request;
@@ -210,7 +211,7 @@ public class RequestHelper {
 					reqbldr.header("Priority", "u=0, i");
 					reqbldr.header("TE", "trailers");
 				}
-				Response res = Agent.okhttp.newCall(reqbldr.build()).execute();
+				Response res = Agent.okhttp().newCall(reqbldr.build()).execute();
 				if (res.code() != 200) {
 					if (res.code() == 429) {
 						int delay = 0;
@@ -454,6 +455,7 @@ public class RequestHelper {
 	/**
 	 * Closes the stream when done.
 	 */
+	@SuppressFBWarnings("PZLA_PREFER_ZERO_LENGTH_ARRAYS")
 	public static byte[] collectLimited(InputStream in, int limit) throws IOException {
 		try (in) {
 			ByteArrayOutputStream baos = new ByteArrayOutputStream();
@@ -464,7 +466,7 @@ public class RequestHelper {
 				if (read == -1) break;
 				totalRead += read;
 				if (totalRead > limit) {
-						return null;
+					return null;
 				}
 				baos.write(buf, 0, read);
 			}

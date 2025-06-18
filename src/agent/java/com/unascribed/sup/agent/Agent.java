@@ -70,10 +70,11 @@ public class Agent {
 
 	static volatile boolean awaitingExit = false;
 	
+	public static boolean launched;
 	static boolean standalone;
 	
 	private static List<ExceptableRunnable> cleanup = new ArrayList<>();
-	public static Config config;
+	private static Config config;
 	
 	public static final SigProvider unsupSig = SigProvider.of("signify RWTSwM40VCzVER3YWt55m4Fvsg0sjZLEICikuU3cD91gR/2lii/jk67B");
 	
@@ -84,13 +85,13 @@ public class Agent {
 	
 	static boolean updatedComponents;
 
-	public static JsonObject state;
+	private static JsonObject state;
 	private static File stateFile;
 	
 	/** this mutex must be held while doing sensitive operations that shouldn't be interrupted */
 	static final Object dangerMutex = new Object();
 	
-	public static OkHttpClient okhttp;
+	private static OkHttpClient okhttp;
 
 	public static void main(String[] args) {
 		standalone = true;
@@ -98,6 +99,7 @@ public class Agent {
 	}
 	
 	public static void premain(String arg) {
+		launched = true;
 		long start = System.nanoTime();
 		try {
 			Log.init();
@@ -106,11 +108,10 @@ public class Agent {
 			
 			if (config().serverAuthority()) {
 				Log.info("Performing pre-update to check for a new config");
-				if (UpdateHandler.checkForUpdate(config().format(), config().source(),
+				if (UpdateHandler.checkForUpdate(state, config().format(), config().source(),
 						true,
 						false,
 						true,
-						false,
 						res -> {
 					res.componentVersions.clear();
 					if (res.plan != null) {
@@ -155,10 +156,9 @@ public class Agent {
 			}
 			PuppetHandler.tellPuppet("[openTimeout]"+delay+":visible=true");
 			
-			UpdateHandler.checkForUpdate(config().format(), config().source(),
+			UpdateHandler.checkForUpdate(state, config().format(), config().source(),
 					!config().behavior().promptUpdates(),
 					SysProps.DRY_RUN,
-					false,
 					false,
 					res -> {}
 				);
@@ -364,9 +364,9 @@ public class Agent {
 	}
 	
 	private static void destroyOkHttp() {
-		if (okhttp != null) {
-			okhttp.dispatcher().executorService().shutdown();
-			okhttp.connectionPool().evictAll();
+		if (okhttp() != null) {
+			okhttp().dispatcher().executorService().shutdown();
+			okhttp().connectionPool().evictAll();
 			okhttp = null;
 		}
 	}
@@ -449,6 +449,10 @@ public class Agent {
 
 	public static Config config() {
 		return config;
+	}
+
+	public static OkHttpClient okhttp() {
+		return okhttp;
 	}
 	
 }

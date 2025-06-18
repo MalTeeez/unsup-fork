@@ -40,9 +40,9 @@ import com.unascribed.sup.agent.PuppetHandler.AlertOptionType;
 import com.unascribed.sup.agent.data.HashFunction;
 import com.unascribed.sup.agent.util.RequestHelper;
 import com.unascribed.sup.data.AlertMessageType;
+import com.unascribed.sup.data.FlavorChoice;
 import com.unascribed.sup.data.FlavorGroup;
 import com.unascribed.sup.data.Version;
-import com.unascribed.sup.data.FlavorGroup.FlavorChoice;
 import com.unascribed.sup.util.Iterables;
 
 public class NativeHandler extends AbstractFormatHandler {
@@ -53,22 +53,22 @@ public class NativeHandler extends AbstractFormatHandler {
 		int code;
 	}
 	
-	public static CheckResult check(URI src, boolean autoaccept, boolean forceFlavorDefaults) throws IOException, JsonParserException, URISyntaxException {
+	public static CheckResult check(URI src, boolean autoaccept, boolean forceFlavorDefaults, JsonObject baseState) throws IOException, JsonParserException, URISyntaxException {
 		Log.info("Loading unsup-format manifest from "+src);
 		JsonObject manifest = RequestHelper.loadJson(src, 32*K, src.resolve("manifest.sig"));
 		checkManifestFlavor(manifest, "root", it -> it == 1);
-		Version ourVersion = Version.fromJson(Agent.state.getObject("current_version"));
+		Version ourVersion = Version.fromJson(baseState.getObject("current_version"));
 		if (!manifest.containsKey("versions")) throw new IOException("Manifest is missing versions field");
 		Version theirVersion = Version.fromJson(manifest.getObject("versions").getObject("current"));
 		if (theirVersion == null) throw new IOException("Manifest is missing current version field");
 		if (System.getProperty("unsup.debug.overrideRemoteVersionCode") != null) {
 			theirVersion = new Version(theirVersion.name(), Integer.getInteger("unsup.debug.overrideRemoteVersionCode", theirVersion.code()));
 		}
-		JsonObject newState = new JsonObject(Agent.state);
-		JsonArray ourFlavors = Agent.state.getArray("flavors");
-		if (ourFlavors == null && Agent.state.containsKey("flavor")) {
+		JsonObject newState = new JsonObject(baseState);
+		JsonArray ourFlavors = baseState.getArray("flavors");
+		if (ourFlavors == null && baseState.containsKey("flavor")) {
 			ourFlavors = new JsonArray();
-			ourFlavors.add(Agent.state.get("flavor"));
+			ourFlavors.add(baseState.get("flavor"));
 			newState.put("flavors", ourFlavors);
 			newState.remove("flavor");
 		}
@@ -87,45 +87,55 @@ public class NativeHandler extends AbstractFormatHandler {
 					var name = obj.getString("name", id);
 					var description = obj.getString("description", "flavor.default_description");
 					String defChoice = Agent.config().defaultFlavors().get(id);
-					var choices = obj.getArray("choices");
-					FlavorGroup grp = new FlavorGroup();
-					grp.id = id;
-					grp.name = name;
-					grp.description = description;
-					for (Object cele : choices) {
-						var c = new FlavorChoice();
+					var choicesJson = obj.getArray("choices");
+					var choices = new ArrayList<FlavorChoice>();
+					var grp = FlavorGroup.builder()
+						.id(id)
+						.name(name)
+						.description(description)
+						.choices(choices);
+					for (Object cele : choicesJson) {
+						String choiceId;
+						var cb = FlavorChoice.builder();
 						if (cele instanceof JsonObject cobj) {
-							c.id = cobj.getString("id");
-							if (c.id == null)
+							choiceId = cobj.getString("id");
+							if (choiceId == null)
 								throw new IOException("A flavor choice in group "+id+" is missing an ID");
-							c.name = cobj.getString("name", c.id);
-							c.description = cobj.getString("description", "");
+							cb.id(choiceId);
+							cb.name(cobj.getString("name", choiceId));
+							cb.description(cobj.getString("description", ""));
 						} else {
-							c.id = String.valueOf(cele);
-							c.name = c.id;
-							c.description = "";
+							choiceId = String.valueOf(cele);
+							cb.id(choiceId);
+							cb.name(choiceId);
+							cb.description("");
 						}
-						if (Iterables.contains(ourFlavors, c.id)) {
+						if (Iterables.contains(ourFlavors, choiceId)) {
 							// a choice has already been made for this flavor
 							continue flavors;
 						}
-						c.def = c.id.equals(defChoice);
-						if (c.def) {
-							grp.defChoice = c.id;
-							grp.defChoiceName = c.name;
+						boolean def = choiceId.equals(defChoice);
+						cb.def(def);
+						var c = cb.build();
+						if (def) {
+							grp.defChoice(c.id());
+							grp.defChoiceName(c.name());
 						}
-						grp.choices.add(c);
+						choices.add(c);
 					}
-					unpickedGroups.add(grp);
+					grp.choices(choices);
+					unpickedGroups.add(grp.build());
 				}
 			}
 			ourFlavors = handleFlavorSelection(ourFlavors, unpickedGroups, newState, forceFlavorDefaults);
 		} else {
 			JsonArray theirFlavors = manifest.getArray("flavors");
 			if (theirFlavors != null) {
-				FlavorGroup grp = new FlavorGroup();
-				grp.id = "default";
-				grp.name = "Flavor";
+				var choices = new ArrayList<FlavorChoice>();
+				var grp = FlavorGroup.builder()
+						.id("default")
+						.name("Flavor")
+						.choices(choices);
 				for (Object ele : theirFlavors) {
 					if (ele instanceof JsonObject obj) {
 						JsonArray envs = obj.getArray("envs");
@@ -144,14 +154,14 @@ public class NativeHandler extends AbstractFormatHandler {
 							description = name.substring(firstOParen+1, lastCParen);
 							name = newName;
 						}
-						FlavorChoice c = new FlavorChoice();
-						c.id = id;
-						c.name = name;
-						c.description = description;
-						grp.choices.add(c);
+						choices.add(FlavorChoice.builder()
+								.id(id)
+								.name(name)
+								.description(description)
+								.build());
 					}
 				}
-				unpickedGroups.add(grp);
+				unpickedGroups.add(grp.build());
 				ourFlavors = handleFlavorSelection(ourFlavors, unpickedGroups, newState, forceFlavorDefaults);
 			}
 		}

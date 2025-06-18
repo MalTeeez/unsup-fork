@@ -87,6 +87,10 @@ public class ProgressWindow extends Window {
 		} else if (closeRequested) {
 			MessageDialogWindow diag = new MessageDialogWindow("puppet_busy_notice", "dialog.busy.title",
 					Translate.format("dialog.busy"), AlertMessageType.WARN, new String[] {"option.ok"}, "option.ok");
+			double dpiScale;
+			synchronized (this) {
+				dpiScale = this.dpiScale;
+			}
 			Puppet.runOnMainThread(() -> {
 				if (!run) return;
 				diag.create(this, dpiScale);

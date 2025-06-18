@@ -19,7 +19,6 @@
 
 package com.unascribed.sup.agent;
 
-import java.io.ByteArrayOutputStream;
 import java.io.IOException;
 import java.security.cert.CertificateException;
 import java.security.cert.CertificateFactory;
@@ -42,10 +41,8 @@ class CACerts {
 		List<X509Certificate> certsTmp = Collections.emptyList();
 		try (ZipInputStream zis = new ZipInputStream(new BrotliInputStream(Resources.open("assets/cacerts.zip.br")))) {
 			List<X509Certificate> out = new ArrayList<>();
-			ByteArrayOutputStream baos = new ByteArrayOutputStream();
 			ZipEntry en;
 			while ((en = zis.getNextEntry()) != null) {
-				baos.reset();
 				try {
 					out.add((X509Certificate)CertificateFactory.getInstance("X.509").generateCertificate(zis));
 					Log.debug("Loaded CA cert "+en.getName());

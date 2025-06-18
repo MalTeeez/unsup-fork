@@ -102,14 +102,14 @@ public abstract class AbstractFormatHandler {
 				ourFlavors.addAll(PuppetHandler.openFlavorSelectDialog("dialog.flavors.title", "", unpickedGroups));
 			} else {
 				for (FlavorGroup grp : unpickedGroups) {
-					if (grp.defChoice != null) {
-						Log.info("Selecting default choice "+grp.defChoiceName+" for flavor group "+grp.name);
-						ourFlavors.add(grp.defChoice);
+					if (grp.defChoice() != null) {
+						Log.info("Selecting default choice "+grp.defChoiceName()+" for flavor group "+grp.name());
+						ourFlavors.add(grp.defChoice());
 					} else if (forceDefault) {
-						Log.debug("Forced to select first choice "+grp.choices.get(0).name+" as default for flavor group "+grp.name);
-						ourFlavors.add(grp.choices.get(0).id);
+						Log.debug("Forced to select first choice "+grp.choices().get(0).name()+" as default for flavor group "+grp.name());
+						ourFlavors.add(grp.choices().get(0).id());
 					} else {
-						Log.error("No choice provided for flavor group "+grp.name+" ("+grp.id+")");
+						Log.error("No choice provided for flavor group "+grp.name()+" ("+grp.id()+")");
 						Agent.exit(Agent.EXIT_CONFIG_ERROR);
 						return null;
 					}

@@ -110,7 +110,7 @@ public record Config(
 		if (config.containsKey("public_key")) {
 			packSig = parsePackSig(config, "public_key");
 			if (config.containsKey("alt_public_key")) {
-				packSig = parsePackSig(config, "alt_public_key");
+				altPackSig = parsePackSig(config, "alt_public_key");
 			}
 		}
 		
@@ -196,7 +196,7 @@ public record Config(
 					}
 				}
 				case "env" -> {
-					if (subkey.endsWith(".marker")) {
+					if (subkey != null && subkey.endsWith(".marker")) {
 						String env = subkey.substring(0, subkey.length()-7);
 						validEnvs.add(env);
 						envMarkers.put(env, v);

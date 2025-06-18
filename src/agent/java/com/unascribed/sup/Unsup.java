@@ -19,8 +19,6 @@
 
 package com.unascribed.sup;
 
-import com.unascribed.sup.agent.Agent;
-
 /**
  * Post-load API for accessing unsup data from within the launched program.
  */
@@ -34,13 +32,33 @@ public class Unsup {
 	/**
 	 * The last version of the source to be synced to the working directory by unsup.
 	 */
-	public static final String SOURCE_VERSION = Agent.sourceVersion;
+	public static final String SOURCE_VERSION = retrieve("sourceVersion");
 	
 	/**
 	 * {@code true} if unsup downloaded updates this launch.
 	 */
-	public static final boolean UPDATED = Agent.updated;
+	public static final boolean UPDATED = retrieve("updated");
 
 	public static void poke() {}
+
+	private static <T> T retrieve(String field) {
+		try {
+			var thisLoader = Class.forName("com.unascribed.sup.Agent", false, Unsup.class.getClassLoader());
+			if (thisLoader.getField("loaded").getBoolean(null)) {
+				return retrieve(thisLoader, field);
+			}
+			return retrieve(Class.forName("com.unascribed.sup.Agent", false, ClassLoader.getSystemClassLoader()), field);
+		} catch (ReflectiveOperationException | SecurityException e) {
+			throw new AssertionError(e);
+		}
+	}
+
+	private static <T> T retrieve(Class<?> clazz, String field) {
+		try {
+			return (T)clazz.getField(field).get(null);
+		} catch (ReflectiveOperationException | SecurityException e) {
+			throw new AssertionError(e);
+		}
+	}
 	
 }

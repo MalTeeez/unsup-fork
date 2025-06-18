@@ -19,31 +19,77 @@
 
 package com.unascribed.sup.data;
 
-import java.io.Serializable;
-import java.util.ArrayList;
 import java.util.List;
 
-public class FlavorGroup implements Serializable { // TODO serializable is temporary for easy debug
-	public String id, name, description;
-	public List<FlavorChoice> choices = new ArrayList<>();
-	public /*transient*/ String defChoice, defChoiceName;
-	
-	public static class FlavorChoice implements Serializable { // TODO serializable is temporary for easy debug
-		public String id;
-		public String name;
-		public String description;
-		public boolean def;
-	}
+import com.github.bsideup.jabel.Desugar;
+import java.util.Collections;
+
+@Desugar
+public record FlavorGroup(
+		String id, String name, String description,
+		List<FlavorChoice> choices,
+		String defChoice, String defChoiceName
+	) {
 	
 	public boolean isBoolean() {
 		if (choices.size() == 2) {
-			String a = choices.get(0).id;
-			String b = choices.get(1).id;
-			String on = id+"_on";
-			String off = id+"_off";
+			String a = choices().get(0).id();
+			String b = choices().get(1).id();
+			String on = id()+"_on";
+			String off = id()+"_off";
 			return (a.equals(on) && b.equals(off))
 					|| (a.equals(off) && b.equals(on));
 		}
 		return false;
+	}
+
+	public static Builder builder() {
+		return new Builder();
+	}
+
+	public static final class Builder {
+		private String id;
+		private String name;
+		private String description;
+		private List<FlavorChoice> choices = Collections.emptyList();
+		private String defChoice;
+		private String defChoiceName;
+
+		private Builder() {
+		}
+
+		public Builder id(String id) {
+			this.id = id;
+			return this;
+		}
+
+		public Builder name(String name) {
+			this.name = name;
+			return this;
+		}
+
+		public Builder description(String description) {
+			this.description = description;
+			return this;
+		}
+
+		public Builder choices(List<FlavorChoice> choices) {
+			this.choices = Collections.unmodifiableList(choices);
+			return this;
+		}
+
+		public Builder defChoice(String defChoice) {
+			this.defChoice = defChoice;
+			return this;
+		}
+
+		public Builder defChoiceName(String defChoiceName) {
+			this.defChoiceName = defChoiceName;
+			return this;
+		}
+
+		public FlavorGroup build() {
+			return new FlavorGroup(id, name, description, choices, defChoice, defChoiceName);
+		}
 	}
 }

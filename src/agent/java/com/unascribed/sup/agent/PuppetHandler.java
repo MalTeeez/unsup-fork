@@ -57,12 +57,10 @@ import com.unascribed.sup.PlatDetect.OSType;
 import com.unascribed.sup.Util;
 import com.unascribed.sup.agent.util.RequestHelper;
 import com.unascribed.sup.data.AlertMessageType;
-import com.unascribed.sup.data.ColorChoice;
 import com.unascribed.sup.data.FlavorGroup;
 import com.unascribed.sup.data.SysProps;
 import com.unascribed.sup.data.SysProps.PuppetMode;
 import com.unascribed.sup.pieces.Latch;
-import com.unascribed.sup.util.Bases;
 
 public class PuppetHandler {
 	
@@ -536,12 +534,12 @@ public class PuppetHandler {
 			StringJoiner groupJoiner = new StringJoiner("\u001D");
 			for (FlavorGroup group : groups) {
 				StringJoiner joiner = new StringJoiner("\u001C");
-				joiner.add(group.id);
-				joiner.add(group.name);
-				joiner.add(group.description);
-				for (FlavorGroup.FlavorChoice choice : group.choices) {
-					joiner.add(choice.id).add(choice.name).add(choice.description).add(Boolean.toString(choice.def));
-					if (choice.def) defaultJoiner.add(choice.id);
+				joiner.add(group.id());
+				joiner.add(group.name());
+				joiner.add(group.description());
+				for (var choice : group.choices()) {
+					joiner.add(choice.id()).add(choice.name()).add(choice.description()).add(Boolean.toString(choice.def()));
+					if (choice.def()) defaultJoiner.add(choice.id());
 				}
 				groupJoiner.add(joiner.toString());
 			}

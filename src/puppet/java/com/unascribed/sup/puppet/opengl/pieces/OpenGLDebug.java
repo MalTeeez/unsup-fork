@@ -27,13 +27,9 @@ import java.util.HashMap;
 import java.util.Map;
 
 import org.lwjgl.opengl.GL;
-import org.lwjgl.opengl.GLDebugMessageCallbackI;
-
 import com.unascribed.sup.puppet.Puppet;
 
 public class OpenGLDebug {
-	@SuppressWarnings("unused")
-	private static GLDebugMessageCallbackI callback;
 
 	private static final Map<Integer, String> strings = new HashMap<>();
 	static {
@@ -58,7 +54,7 @@ public class OpenGLDebug {
 		if (GL.getCapabilities().GL_KHR_debug) {
 			glEnable(GL_DEBUG_OUTPUT);
 			glEnable(GL_DEBUG_OUTPUT_SYNCHRONOUS);
-			glDebugMessageCallback(callback = (sourceId, typeId, id, severity, length, messagePtr, userParam) -> {
+			glDebugMessageCallback((sourceId, typeId, id, severity, length, messagePtr, userParam) -> {
 				String message = memASCII(messagePtr);
 				String source = strings.getOrDefault(sourceId, "Unknown");
 				String type = strings.getOrDefault(typeId, "Unknown");
