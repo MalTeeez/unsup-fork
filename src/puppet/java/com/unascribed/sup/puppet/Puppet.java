@@ -271,8 +271,8 @@ public class Puppet {
 								case "det" -> r = del::setProgressDeterminate;
 								case "done" -> r = del::setDone;
 								default -> {
-								    Puppet.log("WARN", "Unknown mode " + arg + ", expected ind, det, or done");
-								    continue;
+									Puppet.log("WARN", "Unknown mode " + arg + ", expected ind, det, or done");
+									continue;
 								}
 							}
 						}
