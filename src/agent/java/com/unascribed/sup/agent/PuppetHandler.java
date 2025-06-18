@@ -58,6 +58,7 @@ import com.unascribed.sup.Util;
 import com.unascribed.sup.agent.util.RequestHelper;
 import com.unascribed.sup.data.AlertMessageType;
 import com.unascribed.sup.data.FlavorGroup;
+import com.unascribed.sup.data.SysPropDefs;
 import com.unascribed.sup.data.SysProps;
 import com.unascribed.sup.data.SysProps.PuppetMode;
 import com.unascribed.sup.pieces.Latch;
@@ -149,9 +150,10 @@ public class PuppetHandler {
 					args.add("-XX:+IgnoreUnrecognizedVMOptions");
 					args.add("-XX:+UnlockDiagnosticVMOptions");
 					args.add("-Djbr.catch.SIGABRT=true");
+					args.add("-D"+SysPropDefs.LANGUAGE+"="+Agent.config().lang());
 					for (String prop : copyableProps) {
 						String v = System.getProperty(prop);
-						if ("unsup.puppetMode".equals(prop) && v == null) {
+						if (SysPropDefs.PUPPET_MODE.equals(prop) && v == null) {
 							v = Agent.config().puppetMode().name();
 						}
 						if (v != null) {
@@ -187,23 +189,25 @@ public class PuppetHandler {
 									futures.add(svc.submit(() -> {
 										return obtainAsset(cacheDir, "bundles/"+bundleVersion+"/"+os+"-"+arch);
 									}));
-									boolean needCjk = false;
-									for (var v : Agent.config().strings().values()) {
-										if (v.codePoints().anyMatch(codepoint -> {
-											UnicodeScript sc = UnicodeScript.of(codepoint);
-											// I think this is all of them??
-											return sc == UnicodeScript.HANGUL || sc == UnicodeScript.HAN || sc == UnicodeScript.KATAKANA
-													|| sc == UnicodeScript.HIRAGANA || sc == UnicodeScript.BOPOMOFO;
-										})) {
-											needCjk = true;
-											break;
+									if (PlatDetect.OS != OSType.WINDOWS) {
+										boolean needCjk = false;
+										for (var v : Agent.config().strings().values()) {
+											if (v.codePoints().anyMatch(codepoint -> {
+												UnicodeScript sc = UnicodeScript.of(codepoint);
+												// I think this is all of them??
+												return sc == UnicodeScript.HANGUL || sc == UnicodeScript.HAN || sc == UnicodeScript.KATAKANA
+														|| sc == UnicodeScript.HIRAGANA || sc == UnicodeScript.BOPOMOFO;
+											})) {
+												needCjk = true;
+												break;
+											}
 										}
-									}
-									if (needCjk) {
-										Log.debug("Retrieving CJK support...");
-										futures.add(svc.submit(() -> {
-											return obtainAsset(cacheDir, "CJKSupport");
-										}));
+										if (needCjk) {
+											Log.debug("Retrieving CJK support...");
+											futures.add(svc.submit(() -> {
+												return obtainAsset(cacheDir, "CJKSupport");
+											}));
+										}
 									}
 									svc.shutdown();
 									List<String> addnCp = new ArrayList<>();

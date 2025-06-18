@@ -78,7 +78,7 @@ public record Config(
 		Map<String, String> strings,
 		Optional<String> modpackName, Optional<String> brandingIcon,
 		Geometry flavorDialogGeom, double flavorDialogBias,
-		PuppetMode puppetMode
+		PuppetMode puppetMode, String lang
 	) {
 	
 	public Dns dns(OkHttpClient client) {
@@ -86,7 +86,7 @@ public record Config(
 	}
 	
 	@SuppressWarnings("deprecation")
-	public static Config parse(QDIni config, String arg) {
+	public static Config parse(QDIni config, String arg, String lang) {
 		boolean useEnvs = false;
 		boolean noGui = determineNoGui(config);
 		boolean enforceSecureHashes = config.getBoolean("enforce_secure_hashes", false);
@@ -286,7 +286,7 @@ public record Config(
 				Collections.unmodifiableMap(defaultFlavors), packSig, altPackSig,
 				mmcComponentMap.unmodifiable(), Collections.unmodifiableMap(colorChoices),
 				Collections.unmodifiableMap(strings), modpackName, brandingIcon,
-				flavorDialogGeom, flavorDialogBias, puppetMode);
+				flavorDialogGeom, flavorDialogBias, puppetMode, lang);
 	}
 
 	private static SigProvider parsePackSig(QDIni ini, String key) {

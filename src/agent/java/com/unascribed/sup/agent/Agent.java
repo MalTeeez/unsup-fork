@@ -215,13 +215,16 @@ public class Agent {
 	}
 
 	private static boolean preinit(String arg) {
-		var ini = loadConfig();
+		String lang = Locale.getDefault().toLanguageTag();
+		if (SysProps.LANGUAGE != null) lang = SysProps.LANGUAGE;
+		Log.debug("Language: "+lang);
+		var ini = loadConfig(lang);
 		if (ini == null) {
 			Log.warn("Cannot find a config file, giving up.");
 			// by returning but not exiting, we yield control to the program whose launch we hijacked, if any
 			return false;
 		}
-		config = Config.parse(ini, arg);
+		config = Config.parse(ini, arg, lang);
 		
 		setupOkHttp();
 		
@@ -240,7 +243,7 @@ public class Agent {
 		return true;
 	}
 	
-	private static QDIni loadConfig() {
+	private static QDIni loadConfig(String lang) {
 		File configFile = new File("unsup.ini");
 		if (configFile.exists()) {
 			QDIni ini;
@@ -259,9 +262,6 @@ public class Agent {
 				Log.error("Config file error: Unknown version "+version+" at "+ini.getBlame("version")+"! Exiting.");
 				throw exit(EXIT_CONFIG_ERROR);
 			}
-			String lang = Locale.getDefault().toLanguageTag();
-			if (SysProps.LANGUAGE != null) lang = SysProps.LANGUAGE;
-			Log.debug("Language: "+lang);
 			if (!"en-US".equals(lang)) {
 				ini = mergePreset(ini, "lang/"+lang, false);
 			}
@@ -305,7 +305,7 @@ public class Agent {
 					Files.write(configFile.toPath(), data);
 					Log.info("Successfully downloaded bootstrap config");
 					destroyOkHttp();
-					return loadConfig();
+					return loadConfig(lang);
 				} catch (Exception e) {
 					Log.error("Failed to download bootstrap config", e);
 					throw exit(EXIT_CONFIG_ERROR);

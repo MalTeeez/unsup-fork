@@ -20,8 +20,9 @@
 package com.unascribed.sup.puppet.opengl.pieces;
 
 import java.io.ByteArrayOutputStream;
+import java.io.File;
+import java.io.FileInputStream;
 import java.io.IOException;
-import java.io.InputStream;
 import java.nio.ByteBuffer;
 import java.util.HashMap;
 import java.util.HashSet;
@@ -36,8 +37,11 @@ import org.lwjgl.util.freetype.FT_Face;
 
 import com.github.bsideup.jabel.Desugar;
 import com.unascribed.sup.Util;
+import com.unascribed.sup.data.SysProps;
 import com.unascribed.sup.puppet.FontResources;
 import com.unascribed.sup.puppet.Puppet;
+import com.unascribed.sup.puppet.opengl.util.CJK;
+
 import static org.lwjgl.util.freetype.FreeType.*;
 import static com.unascribed.sup.puppet.opengl.util.GL.*;
 import static org.lwjgl.system.MemoryUtil.*;
@@ -52,10 +56,10 @@ public class FontManager {
 	private final Map<CacheKey, CachedTexture> cachedTextures = new HashMap<>();
 	
 	public enum Face {
-		REGULAR("FiraGO.zip.br!FiraGO-Regular.ttf", "NotoSansCJK-Regular.ttc"),
-		BOLD("FiraGO.zip.br!FiraGO-Bold.ttf", "NotoSansCJK-Bold.ttc"),
-		ITALIC("FiraGO.zip.br!FiraGO-Italic.ttf", "NotoSansCJK-Regular.ttc"),
-		BOLDITALIC("FiraGO.zip.br!FiraGO-BoldItalic.ttf", "NotoSansCJK-Bold.ttc"),
+		REGULAR("FiraGO.zip.br!FiraGO-Regular.ttf", "NotoSansCJK-Regular.ttc", "#SYSTEM_PREFERRED_LOCALE_FONT"),
+		BOLD("FiraGO.zip.br!FiraGO-Bold.ttf", "NotoSansCJK-Bold.ttc", "#SYSTEM_PREFERRED_LOCALE_FONT"),
+		ITALIC("FiraGO.zip.br!FiraGO-Italic.ttf", "NotoSansCJK-Regular.ttc", "#SYSTEM_PREFERRED_LOCALE_FONT"),
+		BOLDITALIC("FiraGO.zip.br!FiraGO-BoldItalic.ttf", "NotoSansCJK-Bold.ttc", "#SYSTEM_PREFERRED_LOCALE_FONT"),
 		;
 		public final String[] filenames;
 
@@ -239,12 +243,23 @@ public class FontManager {
 		PointerBuffer ftFacePtr = memAllocPointer(1);
 		try {
 			ByteArrayOutputStream baos = new ByteArrayOutputStream();
-			try (InputStream in = FontResources.get(name)) {
-				if (in == null) return null;
-				Util.copy(in, baos);
-			} catch (IOException e) {
-				Puppet.log("WARN", "Failed to load font "+name, e);
-				return null;
+			if ("#SYSTEM_PREFERRED_LOCALE_FONT".equals(name)) {
+				File f = CJK.getOSPreferredFont(SysProps.LANGUAGE);
+				if (f == null) return null;
+				try (var in = new FileInputStream(f)) {
+					Util.copy(in, baos);
+				} catch (IOException e) {
+					Puppet.log("WARN", "Failed to load system preferred locale font "+f, e);
+					return null;
+				}
+			} else {
+				try (var in = FontResources.get(name)) {
+					if (in == null) return null;
+					Util.copy(in, baos);
+				} catch (IOException e) {
+					Puppet.log("WARN", "Failed to load font "+name, e);
+					return null;
+				}
 			}
 			ByteBuffer buf = memAlloc(baos.size());
 			buf.put(baos.toByteArray());
