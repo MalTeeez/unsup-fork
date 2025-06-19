@@ -30,6 +30,7 @@ import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.concurrent.TimeUnit;
 import java.util.function.Consumer;
 import java.util.function.Function;
 
@@ -238,12 +239,17 @@ public class MMCUpdater {
 							 * a pre-launch command via standalone mode, but the Java agent approach
 							 * makes it non-launcher-specific.)
 							 *
-							 * So just wait 5½ seconds to ensure MMC's timer has expired by the time
-							 * we modify the file.
+							 * So just wait whatever amount of time is needed to make it 5.5 seconds
+							 * since we launched to ensure MMC's timer has expired by the time we
+							 * modify the file.
 							 */
-							try {
-								Thread.sleep(5500);
-							} catch (InterruptedException e) {}
+							long fivePointFive = TimeUnit.MILLISECONDS.toNanos(5500);
+							long time;
+							while ((time = fivePointFive-(System.nanoTime()-Agent.launchTime)) > 0) {
+								try {
+									TimeUnit.NANOSECONDS.sleep(time);
+								} catch (InterruptedException e) {}
+							}
 							Files.move(mmcPackFTmp.toPath(), mmcPackF.toPath(), StandardCopyOption.REPLACE_EXISTING);
 							anyChanges = true;
 						} catch (IOException e) {

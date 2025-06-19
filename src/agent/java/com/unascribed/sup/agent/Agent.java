@@ -107,6 +107,8 @@ public class Agent {
 	public static final int EXIT_CONSISTENCY_ERROR = 2;
 	public static final int EXIT_BUG = 3;
 	public static final int EXIT_USER_REQUEST = 4;
+	
+	public static final long launchTime = System.nanoTime();
 
 	static volatile boolean awaitingExit = false;
 	
