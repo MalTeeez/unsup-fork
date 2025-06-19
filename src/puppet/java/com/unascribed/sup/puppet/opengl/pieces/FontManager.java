@@ -53,16 +53,16 @@ public class FontManager {
 	private final long ftLibrary;
 	private final FT_Bitmap scratchBitmap;
 	
-	private static final String LOCALE_FONT = "#SYSTEM_PREFERRED_LOCALE_FONT";
-	private static final String LOCALE_FONT_BOLD = "#SYSTEM_PREFERRED_LOCALE_FONT_BOLD";
+	private static final String LOCALE_FONT = "#PREFERRED_LOCALE_FONT";
+	private static final String LOCALE_FONT_BOLD = "#PREFERRED_LOCALE_FONT_BOLD";
 	
 	private final Map<CacheKey, CachedTexture> cachedTextures = new HashMap<>();
 	
 	public enum Face {
-		REGULAR("FiraGO.zip.br!FiraGO-Regular.ttf", "NotoSansCJK-Regular.ttc", LOCALE_FONT),
-		BOLD("FiraGO.zip.br!FiraGO-Bold.ttf", "NotoSansCJK-Bold.ttc", LOCALE_FONT_BOLD),
-		ITALIC("FiraGO.zip.br!FiraGO-Italic.ttf", "NotoSansCJK-Regular.ttc", LOCALE_FONT),
-		BOLDITALIC("FiraGO.zip.br!FiraGO-BoldItalic.ttf", "NotoSansCJK-Bold.ttc", LOCALE_FONT_BOLD),
+		REGULAR("FiraGO.zip.br!FiraGO-Regular.ttf", LOCALE_FONT),
+		BOLD("FiraGO.zip.br!FiraGO-Bold.ttf", LOCALE_FONT_BOLD),
+		ITALIC("FiraGO.zip.br!FiraGO-Italic.ttf", LOCALE_FONT),
+		BOLDITALIC("FiraGO.zip.br!FiraGO-BoldItalic.ttf", LOCALE_FONT_BOLD),
 		;
 		public final String[] filenames;
 
@@ -246,9 +246,15 @@ public class FontManager {
 		PointerBuffer ftFacePtr = memAllocPointer(1);
 		try {
 			ByteArrayOutputStream baos = new ByteArrayOutputStream();
+			File f = null;
 			if (LOCALE_FONT.equals(name) || LOCALE_FONT_BOLD.equals(name)) {
-				File f = CJK.getOSPreferredFont(SysProps.LANGUAGE, LOCALE_FONT_BOLD.equals(name));
-				if (f == null) return null;
+				boolean bold = LOCALE_FONT_BOLD.equals(name);
+				f = CJK.getOSPreferredFont(SysProps.LANGUAGE, bold);
+				if (f == null) {
+					name = "locale/"+SysProps.LANGUAGE+"/"+(bold?"Bold":"Regular")+".otf";
+				}
+			}
+			if (f != null) {
 				name = f.getName();
 				try (var in = new FileInputStream(f)) {
 					Util.copy(in, baos);

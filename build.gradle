@@ -452,6 +452,7 @@ task proguardJar(type: Jar) {
 	exclude '**/*.kotlin_metadata'
 	exclude '**/*.kotlin_builtins'
 	exclude '**/*.ttc'
+	exclude '**/assets/fonts/locale/**'
 	
 	reproducibleFileOrder = true
 	preserveFileTimestamps = false

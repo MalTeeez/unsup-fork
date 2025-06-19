@@ -28,7 +28,6 @@ import java.io.IOException;
 import java.io.InputStream;
 import java.io.InputStreamReader;
 import java.io.OutputStream;
-import java.lang.Character.UnicodeScript;
 import java.net.URI;
 import java.net.URISyntaxException;
 import java.nio.charset.StandardCharsets;
@@ -173,7 +172,7 @@ public class PuppetHandler {
 						if (PlatDetect.OS == OSType.UNSUPPORTED || PlatDetect.ARCH == ArchType.UNSUPPORTED
 								|| !PlatDetect.OS.supportedArchitectures.contains(PlatDetect.ARCH)) {
 							Log.error("Unrecognized platform, falling back to Swing puppet (use -Dunsup.puppetMode=swing to enforce this behavior)");
-							args.add("-Dunsup.puppetMode=swing");
+							args.add("-D"+SysPropDefs.PUPPET_MODE+"=swing");
 						} else {
 							if (PlatDetect.OS == OSType.MACOS) {
 								args.add("-XstartOnFirstThread");
@@ -189,23 +188,12 @@ public class PuppetHandler {
 									futures.add(svc.submit(() -> {
 										return obtainAsset(cacheDir, "bundles/"+bundleVersion+"/"+os+"-"+arch);
 									}));
-									if (PlatDetect.OS != OSType.WINDOWS) {
-										boolean needCjk = false;
-										for (var v : Agent.config().strings().values()) {
-											if (v.codePoints().anyMatch(codepoint -> {
-												UnicodeScript sc = UnicodeScript.of(codepoint);
-												// I think this is all of them??
-												return sc == UnicodeScript.HANGUL || sc == UnicodeScript.HAN || sc == UnicodeScript.KATAKANA
-														|| sc == UnicodeScript.HIRAGANA || sc == UnicodeScript.BOPOMOFO;
-											})) {
-												needCjk = true;
-												break;
-											}
-										}
-										if (needCjk) {
-											Log.debug("Retrieving CJK support...");
+									var lang = Agent.config().lang();
+									switch (lang) {
+										case "ja", "ko", "zh-CN", "zh-HK", "zh-TW" -> {
+											Log.info("Retrieving "+lang+" support fonts...");
 											futures.add(svc.submit(() -> {
-												return obtainAsset(cacheDir, "CJKSupport");
+												return obtainAsset(cacheDir, "localefonts/"+lang);
 											}));
 										}
 									}
@@ -216,8 +204,8 @@ public class PuppetHandler {
 									}
 									cp.addAll(addnCp);
 								} catch (ExecutionException e) {
-									Log.error("Failed to load assets for OpenGL puppet, falling back to Swing puppet (use -Dunsup.puppetMode=swing to enforce this behavior)", e);
-									args.add("-Dunsup.puppetMode=swing");
+									Log.error("Failed to load assets for OpenGL puppet, falling back to Swing puppet (use -D"+SysPropDefs.PUPPET_MODE+"=swing to enforce this behavior)", e);
+									args.add("-D"+SysPropDefs.PUPPET_MODE+"=swing");
 								}
 							}
 						}
