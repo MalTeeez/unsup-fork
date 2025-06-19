@@ -26,15 +26,15 @@ import com.unascribed.sup.puppet.Puppet;
 
 public class CJK {
 
-	public static File getOSPreferredFont(String lang) {
+	public static File getOSPreferredFont(String lang, boolean bold) {
 		if (Platform.get() != Platform.WINDOWS) return null;
 		File sysroot = new File(System.getenv("SystemRoot"));
 		File fonts = new File(sysroot, "Fonts");
 		File font = switch (lang) {
-			case "zh-CN" -> new File(fonts, "msyh.ttc");
-			case "zh-TW", "zh-HK" -> new File(fonts, "msjh.ttc");
-			case "ja" -> new File(fonts, "meiryo.ttc");
-			case "ko" -> new File(fonts, "malgun.ttf");
+			case "zh-CN" -> new File(fonts, bold ? "msyhbd.ttc" : "msyh.ttc");
+			case "zh-TW", "zh-HK" -> new File(fonts, bold ? "msjhbd.ttc" : "msjh.ttc");
+			case "ja" -> new File(fonts, bold ? "meiryob.ttc" : "meiryo.ttc");
+			case "ko" -> new File(fonts, bold ? "malgunbd.ttf" : "malgun.ttf");
 			default -> {
 				Puppet.log("WARN", "Couldn't find system preferred locale font for "+lang);
 				yield null;
