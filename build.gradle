@@ -138,8 +138,8 @@ task computeFileDates {
 			
 			eachFile {
 				try {
-					def years = ['sh', '-c', "git log --format=%cd --date=iso-strict --follow '${it.path}' |cut -d- -f1 |sort -nu"].execute().text.trim().split("\n").collect { Integer.parseInt(it) }
-					def authors = ['sh', '-c', "git log --format=%aN --follow '${it.path}' |grep -v '^\$' |grep -v 'Sleeping Town Weblate' |sort -u"].execute().text.trim().split("\n").toList()
+					def years = ['sh', '-c', "git log --grep '\\[no attribution\\]' --invert-grep --format=%cd --date=iso-strict --follow '${it.path}' |cut -d- -f1 |sort -nu"].execute().text.trim().split("\n").collect { Integer.parseInt(it) }
+					def authors = ['sh', '-c', "git log --grep '\\[no attribution\\]' --invert-grep --format=%aN --follow '${it.path}' |grep -v '^\$' |grep -v 'Sleeping Town Weblate' |sort -u"].execute().text.trim().split("\n").toList()
 					authors.addAll(uncreditedAuthors[it.path] ?: [])
 					if (authors.remove('Una Kearney')) {
 						// main copyright holder name first
