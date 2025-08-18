@@ -175,8 +175,9 @@ public class RequestHelper {
 		if ("file".equals(url.getScheme())) {
 			var f = new File(url);
 			var fis = new FileInputStream(f);
-			fis.getChannel().position(startAt);
-			return new ResourceRef(fis, f.length(), true);
+			var ch = fis.getChannel();
+			ch.position(startAt);
+			return new ResourceRef(fis, ch.size()-startAt, true);
 		}
 		if (!hostile && alwaysHostile.contains(url.getHost())) {
 			hostile = true;
