@@ -149,11 +149,11 @@ public class RequestHelper {
 	private static final Set<String> alwaysHostile = new HashSet<>(Arrays.asList(Bases.b64ToString("YmV0YS5jdXJzZWZvcmdlLmNvbXx3d3cuY3Vyc2Vmb3JnZS5jb218Y3Vyc2Vmb3JnZS5jb218bWluZWNyYWZ0LmN1cnNlZm9yZ2UuY29tfG1lZGlhZmlsZXouZm9yZ2VjZG4ubmV0fG1lZGlhZmlsZXMuZm9yZ2VjZG4ubmV0fGZvcmdlY2RuLm5ldHxlZGdlLmZvcmdlY2RuLm5ldHxzdGF0aWMucGxhbmV0bWluZWNyYWZ0LmNvbQ==").split("\\|")));
 
 	@Desugar
-	public record ResourceRef(InputStream stream, OptionalLong size) implements Closeable {
+	public record ResourceRef(InputStream stream, OptionalLong size, boolean supportsRange) implements Closeable {
 		
-		public ResourceRef(InputStream stream) { this(stream, OptionalLong.empty()); }
+		public ResourceRef(InputStream stream, boolean supportsRange) { this(stream, OptionalLong.empty(), supportsRange); }
 		
-		public ResourceRef(InputStream stream, long size) { this(stream, OptionalLong.of(size)); }
+		public ResourceRef(InputStream stream, long size, boolean supportsRange) { this(stream, OptionalLong.of(size), supportsRange); }
 		
 		@Override
 		public void close() throws IOException { stream.close(); }
@@ -165,12 +165,18 @@ public class RequestHelper {
 	}
 
 	public static ResourceRef get(URI url, boolean hostile) throws IOException {
+		return get(url, hostile, 0);
+	}
+	
+	public static ResourceRef get(URI url, boolean hostile, long startAt) throws IOException {
 		if (SysProps.DEBUG_REQUESTS) {
-			Log.debug((hostile ? "Carefully r" : "R")+"etrieving "+url);
+			Log.debug((hostile ? "Carefully r" : "R")+"etrieving "+url+(startAt == 0 ? "" : " (starting at byte "+startAt+")"));
 		}
 		if ("file".equals(url.getScheme())) {
 			var f = new File(url);
-			return new ResourceRef(new FileInputStream(f), f.length());
+			var fis = new FileInputStream(f);
+			fis.getChannel().position(startAt);
+			return new ResourceRef(fis, f.length(), true);
 		}
 		if (!hostile && alwaysHostile.contains(url.getHost())) {
 			hostile = true;
@@ -200,6 +206,9 @@ public class RequestHelper {
 								fhostile ? "Mozilla/5.0 (Windows NT 10.0; Win64; x64; rv:"+currentFirefoxVersion+") Gecko/20100101 Firefox/"+currentFirefoxVersion
 								         : "unsup/"+Util.VERSION+" (+https://git.sleeping.town/unascribed/unsup)"
 							);
+				if (startAt != 0) {
+					reqbldr.addHeader("Range", "bytes="+startAt+"-");
+				}
 				if (fhostile) {
 					reqbldr.header("Accept", "text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8");
 					reqbldr.header("Accept-Language", "en-US,en;q=0.5");
@@ -212,7 +221,7 @@ public class RequestHelper {
 					reqbldr.header("TE", "trailers");
 				}
 				Response res = Agent.okhttp().newCall(reqbldr.build()).execute();
-				if (res.code() != 200) {
+				if (res.code() != (startAt == 0 ? 200 : 206)) {
 					if (res.code() == 429) {
 						int delay = 0;
 						String val = res.header("Retry-After");
@@ -247,10 +256,13 @@ public class RequestHelper {
 					}
 				}
 				long len = res.body().contentLength();
+				boolean supportsRange = "identity".equals(res.header("Content-Encoding", "identity"))
+						&& "bytes".equals(res.header("Accept-Ranges"));
+				System.out.println(url+" "+supportsRange);
 				if (len == -1) {
-					return new ResourceRef(res.body().byteStream());
+					return new ResourceRef(res.body().byteStream(), supportsRange);
 				} else {
-					return new ResourceRef(res.body().byteStream(), len);
+					return new ResourceRef(res.body().byteStream(), len, supportsRange);
 				}
 			} catch (InterruptedIOException e) {
 				throw new Retry("Connection to "+url.getHost()+" timed out",
@@ -362,8 +374,36 @@ public class RequestHelper {
 		byte[] data = downloadToMemory(src, sizeLimit);
 		if (data == null) throw new IOException("Size limit of "+(sizeLimit/K)+"K for "+src+" exceeded");
 		String hash = Bases.bytesToHex(func.createMessageDigest().digest(data));
-		if (!hash.equals(expectedHash))
-			throw new IOException("Expected "+expectedHash+" from "+src+", but got "+hash);
+		if (!hash.equals(expectedHash)) {
+			var dos = func.createMessageDigest();
+			var unix = func.createMessageDigest();
+			for (byte b : data) {
+				if (b == '\r') continue;
+				if (b == '\n') {
+					dos.update((byte)'\r');
+					dos.update((byte)'\n');
+					unix.update((byte)'\n');
+				} else {
+					dos.update(b);
+					unix.update(b);
+				}
+			}
+			String dosHash = Bases.bytesToHex(dos.digest());
+			String unixHash = Bases.bytesToHex(unix.digest());
+			String culprit = null;
+			if (dosHash.equals(hash) && unixHash.equals(expectedHash)) {
+				culprit = "a Unix-to-DOS line ending conversion";
+			} else if (unixHash.equals(hash) && dosHash.equals(expectedHash)) {
+				culprit = "a DOS-to-Unix line ending conversion";
+			}
+			String msg;
+			if (culprit != null) {
+				msg = src+" is corrupted by "+culprit+". Ensure autocrlf is disabled in Git. (Expected "+expectedHash+", but got "+hash+")";
+			} else {
+				msg = "Expected "+expectedHash+" from "+src+", but got "+hash;
+			}
+			throw new IOException(msg);
+		}
 		return new Toml().read(new ByteArrayInputStream(data));
 	}
 
@@ -388,16 +428,35 @@ public class RequestHelper {
 				OptionalLong actualSize = OptionalLong.empty();
 				long lastProgressUpdate = 0;
 				MessageDigest digest = hashFunc == null ? null : hashFunc.createMessageDigest();
-				try (var ref = get(url, hostile)) {
+				var ref = get(url, hostile);
+				try {
 					var in = ref.stream();
 					actualSize = ref.size();
 					if (actualSize.isPresent() && size != -1 && actualSize.getAsLong() != size) {
 						throw new IOException("Expected "+size+" bytes, but got "+actualSize.getAsLong());
 					}
+					boolean canUseRange = ref.supportsRange();
 					byte[] buf = new byte[16384];
 					try (OutputStream out = file == null ? NullOutputStream.INSTANCE : new FileOutputStream(file)) {
 						while (true) {
-							int read = in.read(buf);
+							int read;
+							try {
+								read = in.read(buf);
+							} catch (IOException e) {
+								if (canUseRange) {
+									Log.warn("IO error while downloading "+url+"; trying to resume");
+									try { ref.close(); } catch (Throwable t) {}
+									try {
+										ref = get(url, hostile, readTotal);
+									} catch (Throwable t) {
+										t.addSuppressed(e);
+										throw t;
+									}
+									continue;
+								} else {
+									throw e;
+								}
+							}
 							if (read == -1) break;
 							readTotal += read;
 							if (size != -1 && readTotal > size)
@@ -415,6 +474,8 @@ public class RequestHelper {
 				} catch (IOException e) {
 					if (progressCb != null) progressCb.updateProgress(Progressor.State.FAILED, readTotal, actualSize);
 					throw e;
+				} finally {
+					ref.close();
 				}
 				if (size != -1 && readTotal != size)
 					throw new IOException("Underread; expected "+size+" bytes, but only got "+readTotal);
@@ -429,11 +490,8 @@ public class RequestHelper {
 			} catch (InterruptedIOException e) {
 				throw new Retry("Connection to "+url.getHost()+" timed out",
 						e);
-			} catch (IOException e) {
-				throw e;
 			} catch (Throwable e) {
-				// fallback... OkHttp likes to rethrow off-thread exceptions without wrapping
-				// we want to at least add context
+				// add context
 				throw new IOException("Failed to retrieve "+url, e);
 			}
 		});

@@ -455,7 +455,17 @@ public class UpdateHandler {
 						updateProgress.run();
 					}, to.func(), f.hostile);
 			if (!df.hash().equals(to.hash())) {
-				throw new Retry("Hash mismatch on downloaded file for "+path+" from "+url+" - expected "+ to.hash() +", got "+ df.hash(),
+				String extra = "";
+				if (path.endsWith(".js")) {
+					extra = " (Ensure JavaScript Minification is disabled on the host)";
+				} else if (path.endsWith(".css")) {
+					extra = " (Ensure CSS Minification is disabled on the host)";
+				} else if (path.endsWith(".png") || path.endsWith(".jpg") || path.endsWith(".jpeg")) {
+					extra = " (Ensure Image Optimization is disabled on the host)";
+				} else if (path.endsWith(".txt") || path.endsWith(".json") || path.endsWith(".snbt") || path.endsWith(".conf") || path.endsWith(".cfg")) {
+					extra = " (Ensure autocrlf is disabled in Git, if the pack is developed on Windows)";
+				}
+				throw new Retry("Hash mismatch on downloaded file for "+path+" from "+url+" - expected "+ to.hash() +", got "+ df.hash()+extra,
 						IOException::new);
 			}
 			return df;
