@@ -193,7 +193,7 @@ public abstract class Window {
 		if (glfwGetPlatform() != GLFW_PLATFORM_WAYLAND) {
 			if (glfwGetPlatform() != GLFW_PLATFORM_COCOA) {
 				if (Puppet.icon != null) {
-					ByteBuffer px = memAlloc(highres.getPixelData().length);
+					ByteBuffer px = memAlloc(Puppet.icon.getPixelData().length);
 					px.put(Puppet.icon.getPixelData());
 					px.flip();
 					
