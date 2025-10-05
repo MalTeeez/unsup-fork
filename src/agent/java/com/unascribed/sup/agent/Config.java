@@ -126,6 +126,12 @@ public record Config(
 			behavior = config.getEnum("behavior", Behavior.class, behavior);
 		}
 		
+		if (System.getProperty(SysPropDefs.PUPPET_MODE) != null) {
+			puppetMode = SysProps.PUPPET_MODE;
+		} else {
+			puppetMode = config.getEnum("puppet_mode", PuppetMode.class, puppetMode);
+		}
+		
 		if (config.containsKey("public_key")) {
 			packSig = parsePackSig(config, "public_key");
 			if (config.containsKey("alt_public_key")) {
@@ -223,6 +229,9 @@ public record Config(
 				}
 				case "mmc-component-map" -> {
 					mmcComponentMap.put(subkey, v);
+				}
+				case "flavors" -> {
+					defaultFlavors.put(subkey, v);
 				}
 			}
 		}

@@ -86,7 +86,6 @@ public class PuppetHandler {
 	private static final String[] copyableProps = {
 		"javax.accessibility.assistive_technologies",
 		"assistive_technologies",
-		"unsup.puppetMode",
 		"unsup.puppet.opengl.platform",
 		"sun.java2d.uiScale",
 		"unsup.scale"
@@ -150,11 +149,9 @@ public class PuppetHandler {
 					args.add("-XX:+UnlockDiagnosticVMOptions");
 					args.add("-Djbr.catch.SIGABRT=true");
 					args.add("-D"+SysPropDefs.LANGUAGE+"="+Agent.config().lang());
+					args.add("-D"+SysPropDefs.PUPPET_MODE+"="+Agent.config().puppetMode());
 					for (String prop : copyableProps) {
 						String v = System.getProperty(prop);
-						if (SysPropDefs.PUPPET_MODE.equals(prop) && v == null) {
-							v = Agent.config().puppetMode().name();
-						}
 						if (v != null) {
 							args.add("-D"+prop+"="+v);
 						}
@@ -168,7 +165,7 @@ public class PuppetHandler {
 					}
 					List<String> cp = new ArrayList<>();
 					cp.add(ourPath.getAbsolutePath());
-					if (SysProps.PUPPET_MODE != PuppetMode.SWING) {
+					if (Agent.config().puppetMode() != PuppetMode.SWING) {
 						if (PlatDetect.OS == OSType.UNSUPPORTED || PlatDetect.ARCH == ArchType.UNSUPPORTED
 								|| !PlatDetect.OS.supportedArchitectures.contains(PlatDetect.ARCH)) {
 							Log.error("Unrecognized platform, falling back to Swing puppet (use -Dunsup.puppetMode=swing to enforce this behavior)");
