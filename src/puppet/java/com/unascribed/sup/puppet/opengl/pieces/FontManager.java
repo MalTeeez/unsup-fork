@@ -59,10 +59,10 @@ public class FontManager {
 	private final Map<CacheKey, CachedTexture> cachedTextures = new HashMap<>();
 	
 	public enum Face {
-		REGULAR("FiraGO.zip.br!FiraGO-Regular.ttf", LOCALE_FONT),
-		BOLD("FiraGO.zip.br!FiraGO-Bold.ttf", LOCALE_FONT_BOLD),
-		ITALIC("FiraGO.zip.br!FiraGO-Italic.ttf", LOCALE_FONT),
-		BOLDITALIC("FiraGO.zip.br!FiraGO-BoldItalic.ttf", LOCALE_FONT_BOLD),
+		REGULAR("locale/default/FiraGO-Regular.ttf", LOCALE_FONT),
+		BOLD("locale/default/FiraGO-Bold.ttf", LOCALE_FONT_BOLD),
+		ITALIC("locale/default/FiraGO-Italic.ttf", LOCALE_FONT),
+		BOLDITALIC("locale/default/FiraGO-BoldItalic.ttf", LOCALE_FONT_BOLD),
 		;
 		public final String[] filenames;
 

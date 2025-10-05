@@ -39,6 +39,7 @@ import java.util.function.Function;
 import com.grack.nanojson.JsonObject;
 import com.grack.nanojson.JsonParser;
 import com.grack.nanojson.JsonWriter;
+import com.unascribed.sup.LibBootstrap;
 import com.unascribed.sup.Unsup;
 import com.unascribed.sup.Util;
 import com.unascribed.sup.agent.PuppetHandler.AlertOption;
@@ -403,6 +404,8 @@ public class Agent {
 			} catch (Throwable t) {}
 		}
 		destroyOkHttp();
+		LibBootstrap.multiverse.forget();
+		LibBootstrap.universe.forget();
 		cleanup = null;
 	}
 	

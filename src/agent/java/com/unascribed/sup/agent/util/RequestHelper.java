@@ -259,7 +259,6 @@ public class RequestHelper {
 				long len = res.body().contentLength();
 				boolean supportsRange = "identity".equals(res.header("Content-Encoding", "identity"))
 						&& "bytes".equals(res.header("Accept-Ranges"));
-				System.out.println(url+" "+supportsRange);
 				if (len == -1) {
 					return new ResourceRef(res.body().byteStream(), supportsRange);
 				} else {

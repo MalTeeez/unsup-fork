@@ -50,6 +50,7 @@ import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 import org.brotli.dec.BrotliInputStream;
 
+import com.unascribed.sup.LibBootstrap;
 import com.unascribed.sup.PlatDetect;
 import com.unascribed.sup.PlatDetect.ArchType;
 import com.unascribed.sup.PlatDetect.OSType;
@@ -99,7 +100,7 @@ public class PuppetHandler {
 		out: {
 			URI uri;
 			try {
-				uri = Agent.class.getProtectionDomain().getCodeSource().getLocation().toURI();
+				uri = LibBootstrap.location.toURI();
 			} catch (URISyntaxException e) {
 				Log.warn("Cannot summon Puppet: Failed to find our own JAR file or directory.");
 				puppet = null;
@@ -194,6 +195,10 @@ public class PuppetHandler {
 											}));
 										}
 									}
+									Log.info("Retrieving default fonts...");
+									futures.add(svc.submit(() -> {
+										return obtainAsset(cacheDir, "localefonts/default");
+									}));
 									svc.shutdown();
 									List<String> addnCp = new ArrayList<>();
 									for (Future<File> f : futures) {
@@ -219,7 +224,7 @@ public class PuppetHandler {
 					File errorFile = determineErrorFilePath();
 					args.add("-XX:ErrorFile="+errorFile.getAbsolutePath());
 					args.add("-XX:+ErrorLogSecondaryErrorDetails");
-					args.add("com.unascribed.sup.puppet.Puppet");
+					args.add("com.unascribed.sup.puppet.Bootstrap");
 					
 					StringJoiner printJ = new StringJoiner("' '", "'", "'");
 					for (String s : args) {

@@ -138,10 +138,10 @@ public class SwingPuppet {
 		logos.add(logo);
 		logos.add(logoLowres);
 		
-		font = loadFont("FiraGO.zip.br!FiraGO-Regular.ttf", Font.PLAIN);
-		fontBold = loadFont("FiraGO.zip.br!FiraGO-Bold.ttf", Font.BOLD);
-		fontItalic = loadFont("FiraGO.zip.br!FiraGO-Italic.ttf", Font.ITALIC);
-//		fontBoldItalic = loadFont("FiraGO.zip.br!FiraGO-BoldItalic.ttf", Font.BOLD|Font.ITALIC);
+		font = loadFont("locale/default/FiraGO-Regular.ttf", Font.PLAIN);
+		fontBold = loadFont("locale/default/FiraGO-Bold.ttf", Font.BOLD);
+		fontItalic = loadFont("locale/default/FiraGO-Italic.ttf", Font.ITALIC);
+//		fontBoldItalic = loadFont("locale/default/FiraGO-BoldItalic.ttf", Font.BOLD|Font.ITALIC);
 		
 		return new PuppetDelegate() {
 			

@@ -40,7 +40,7 @@ plugins {
 import com.unascribed.sup.PlatDetect;
 import com.unascribed.sup.PlatDetect.OSType;
 import com.unascribed.sup.PlatDetect.ArchType;
-import com.unascribed.sup.build.JarAmender;
+import com.unascribed.sup.build.*;
 import com.unascribed.sup.build.transformer.JarTransformer;
 import java.nio.file.Files;
 import java.nio.file.StandardCopyOption;
@@ -373,8 +373,11 @@ task proguard(type: proguard.gradle.ProGuardTask) {
 	
 	applymapping 'build/tmp/proguard.map'
 	
+	keep 'class com.unascribed.sup.agent.Bootstrap { *; }'
 	keep 'class com.unascribed.sup.agent.Agent { *; }'
+	keep 'class com.unascribed.sup.puppet.Bootstrap { *; }'
 	keep 'class com.unascribed.sup.puppet.Puppet { *; }'
+	keep 'class com.unascribed.sup.LibBootstrap* { *; }'
 	keep 'class com.unascribed.sup.Unsup { *; }'
 	
 	keepclassmembers 'enum * { public static **[] values(); public static ** valueOf(java.lang.String); }'
@@ -435,22 +438,92 @@ task brotliPublicSuffix(type: Exec) {
 	}
 }
 
-task proguardJar(type: Jar) {
+task libsJar(type: Jar) {
 	dependsOn proguard
-	dependsOn brotliPublicSuffix
-	
 	from(zipTree('build/tmp/proguard.jar'))
-	from('build/tmp/publicsuffix/okhttp3/internal/publicsuffix/publicsuffixes.br') {
-		into 'com/unascribed/sup/lib/okhttp3/internal/publicsuffix'
-	}
+	
+	archiveFileName = 'libs.jar'
+	destinationDirectory.set(file('build/tmp'))
 	
 	exclude 'com/unascribed/sup/lib/okhttp3/internal/platform/android/**'
 	exclude 'com/unascribed/sup/lib/okhttp3/internal/platform/Android*'
+	exclude 'com/unascribed/sup/lib/brotli/**'
 	
-	exclude 'META-INF/**'
 	exclude '**/publicsuffixes.gz'
 	exclude '**/*.kotlin_metadata'
 	exclude '**/*.kotlin_builtins'
+	
+	reproducibleFileOrder = true
+	preserveFileTimestamps = false
+	
+	include 'com/unascribed/sup/lib/**'
+	
+	entryCompression 'stored'
+}
+
+task brotliLibsJar(type: Exec) {
+	dependsOn libsJar
+	outputs.file file(libsJar.archivePath.toString()+'.br')
+	
+	if (project.hasProperty('unsup.ci')) {
+		environment 'LD_LIBRARY_PATH', './.ci'
+		commandLine './.ci/brotli', '-Zk', libsJar.archivePath
+	} else {
+		commandLine 'brotli', '-Zk', libsJar.archivePath
+	}
+}
+
+task bootstrapLibsJar(type: Jar) {
+	dependsOn proguard
+	from(zipTree('build/tmp/proguard.jar'))
+	
+	archiveFileName = 'libs-bootstrap.jar'
+	destinationDirectory.set(file('build/tmp'))
+	
+	reproducibleFileOrder = true
+	preserveFileTimestamps = false
+	
+	include 'com/unascribed/sup/lib/brotli/**'
+	
+	entryCompression 'stored'
+}
+
+task gzipBootstrapLibsJar {
+	def out = file(bootstrapLibsJar.archivePath.toString()+'.gz')
+	dependsOn bootstrapLibsJar
+	outputs.file out
+	
+	doFirst {
+		out.withOutputStream { o ->
+			bootstrapLibsJar.archivePath.withInputStream { i ->
+				try (def gzip = new TunableGZIPOutputStream(o)) {
+					gzip.deflater.level = 9
+					gzip << i
+				}
+			}
+		}
+	}
+}
+
+task proguardJar(type: Jar) {
+	dependsOn proguard
+	dependsOn brotliLibsJar
+	dependsOn gzipBootstrapLibsJar
+	dependsOn brotliPublicSuffix
+	
+	from zipTree('build/tmp/proguard.jar')
+	from('build/tmp/publicsuffix/okhttp3/internal/publicsuffix/publicsuffixes.br') {
+		into 'com/unascribed/sup/lib/okhttp3/internal/publicsuffix'
+	}
+	from(file(libsJar.archivePath.toString()+'.br')) {
+		into 'com/unascribed/sup/lib'
+	}
+	from(file(bootstrapLibsJar.archivePath.toString()+'.gz')) {
+		into 'com/unascribed/sup/lib'
+	}
+	
+	exclude 'META-INF/**'
+	exclude 'com/unascribed/sup/lib/**'
 	exclude '**/*.ttc'
 	exclude '**/assets/fonts/locale/**'
 	
@@ -465,8 +538,8 @@ task proguardJar(type: Jar) {
 
 	manifest {
 		attributes (
-			'Main-Class': 'com.unascribed.sup.agent.Agent',
-			'Premain-Class': 'com.unascribed.sup.agent.Agent',
+			'Main-Class': 'com.unascribed.sup.agent.Bootstrap',
+			'Premain-Class': 'com.unascribed.sup.agent.Bootstrap',
 			
 			'Implementation-Title': 'unsup',
 			'Implementation-Version': ver
