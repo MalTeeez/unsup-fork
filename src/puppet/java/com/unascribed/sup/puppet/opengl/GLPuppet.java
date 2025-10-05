@@ -27,7 +27,7 @@ import org.lwjgl.system.MemoryUtil;
 import org.lwjgl.system.Platform;
 import org.lwjgl.util.freetype.FreeType;
 
-import com.unascribed.sup.Util;
+import com.unascribed.sup.bootstrap.Util;
 import com.unascribed.sup.data.AlertMessageType;
 import com.unascribed.sup.data.FlavorGroup;
 import com.unascribed.sup.data.SysPropDefs;

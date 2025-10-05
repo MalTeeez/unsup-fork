@@ -39,9 +39,7 @@ import java.util.function.Function;
 import com.grack.nanojson.JsonObject;
 import com.grack.nanojson.JsonParser;
 import com.grack.nanojson.JsonWriter;
-import com.unascribed.sup.LibBootstrap;
 import com.unascribed.sup.Unsup;
-import com.unascribed.sup.Util;
 import com.unascribed.sup.agent.PuppetHandler.AlertOption;
 import com.unascribed.sup.agent.PuppetHandler.AlertOptionType;
 import com.unascribed.sup.agent.pieces.MemoryCookieJar;
@@ -51,6 +49,8 @@ import com.unascribed.sup.agent.pieces.pseudolocale.AccentedEnglish;
 import com.unascribed.sup.agent.pieces.pseudolocale.PigLatin;
 import com.unascribed.sup.agent.signing.SigProvider;
 import com.unascribed.sup.agent.util.RequestHelper;
+import com.unascribed.sup.bootstrap.Bootstrapper;
+import com.unascribed.sup.bootstrap.Util;
 import com.unascribed.sup.data.AlertMessageType;
 import com.unascribed.sup.data.SysProps;
 import com.unascribed.sup.pieces.ExceptableRunnable;
@@ -59,6 +59,7 @@ import com.unascribed.sup.util.Resources;
 import okhttp3.Dns;
 import okhttp3.OkHttpClient;
 import okhttp3.brotli.BrotliInterceptor;
+import okhttp3.internal.concurrent.TaskRunner;
 import okhttp3.tls.HandshakeCertificates;
 
 public class Agent {
@@ -128,7 +129,7 @@ public class Agent {
 					}
 				})) {
 					Log.info("Reinitializing with newly updated config");
-					destroyOkHttp();
+					destroyOkHttp(false);
 					if (!preinit(arg)) return;
 				} else {
 					Log.info("No config update. Proceeding as normal.");
@@ -305,7 +306,7 @@ public class Agent {
 					var data = RequestHelper.loadAndVerify(new URI(SysProps.BOOTSTRAP_URL), 16*M, new URI(SysProps.BOOTSTRAP_URL+".sig"), key);
 					Files.write(configFile.toPath(), data);
 					Log.info("Successfully downloaded bootstrap config");
-					destroyOkHttp();
+					destroyOkHttp(false);
 					return loadConfig(lang);
 				} catch (Exception e) {
 					Log.error("Failed to download bootstrap config", e);
@@ -366,10 +367,15 @@ public class Agent {
 				.build();
 	}
 	
-	private static void destroyOkHttp() {
+	private static void destroyOkHttp(boolean wait) {
 		if (okhttp() != null) {
 			okhttp().dispatcher().executorService().shutdown();
 			okhttp().connectionPool().evictAll();
+			if (wait) {
+				try {
+					okhttp().dispatcher().executorService().awaitTermination(500, TimeUnit.MILLISECONDS);
+				} catch (InterruptedException e) {}
+			}
 			okhttp = null;
 		}
 	}
@@ -403,9 +409,19 @@ public class Agent {
 				er.run();
 			} catch (Throwable t) {}
 		}
-		destroyOkHttp();
-		LibBootstrap.multiverse.forget();
-		LibBootstrap.universe.forget();
+		destroyOkHttp(true);
+		var tarray = new Thread[16];
+		Thread.enumerate(tarray);
+		for (var t : tarray) {
+			if (t != null && "OkHttp TaskRunner".equals(t.getName())) {
+				// silence meaningless errors due to OkHttp not being designed for its background trash to ever be thrown away
+				t.setUncaughtExceptionHandler((x, e) -> {});
+			}
+		}
+		// not in destroyOkHttp as this is not reversible
+		TaskRunner.INSTANCE.cancelAll();
+		((TaskRunner.RealBackend)TaskRunner.INSTANCE.getBackend()).shutdown();
+		if (Bootstrapper.universe != null) Bootstrapper.universe.forget();
 		cleanup = null;
 	}
 	

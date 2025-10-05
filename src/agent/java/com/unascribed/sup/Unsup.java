@@ -19,6 +19,9 @@
 
 package com.unascribed.sup;
 
+import com.unascribed.sup.bootstrap.Bootstrapper;
+import com.unascribed.sup.bootstrap.Util;
+
 /**
  * Post-load API for accessing unsup data from within the launched program.
  */
@@ -44,7 +47,7 @@ public class Unsup {
 	// deal with classloading disaster
 	private static <T> T retrieve(String field) {
 		try {
-			return retrieve(Class.forName("com.unascribed.sup.agent.Agent", false, LibBootstrap.universe), field);
+			return retrieve(Class.forName("com.unascribed.sup.agent.Agent", false, Bootstrapper.universe), field);
 		} catch (ReflectiveOperationException | SecurityException e) {
 			throw new AssertionError(e);
 		}

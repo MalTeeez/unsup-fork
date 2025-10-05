@@ -50,12 +50,12 @@ import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 import org.brotli.dec.BrotliInputStream;
 
-import com.unascribed.sup.LibBootstrap;
 import com.unascribed.sup.PlatDetect;
 import com.unascribed.sup.PlatDetect.ArchType;
 import com.unascribed.sup.PlatDetect.OSType;
-import com.unascribed.sup.Util;
 import com.unascribed.sup.agent.util.RequestHelper;
+import com.unascribed.sup.bootstrap.Bootstrapper;
+import com.unascribed.sup.bootstrap.Util;
 import com.unascribed.sup.data.AlertMessageType;
 import com.unascribed.sup.data.FlavorGroup;
 import com.unascribed.sup.data.SysPropDefs;
@@ -100,7 +100,7 @@ public class PuppetHandler {
 		out: {
 			URI uri;
 			try {
-				uri = LibBootstrap.location.toURI();
+				uri = Bootstrapper.location.toURI();
 			} catch (URISyntaxException e) {
 				Log.warn("Cannot summon Puppet: Failed to find our own JAR file or directory.");
 				puppet = null;
@@ -224,7 +224,7 @@ public class PuppetHandler {
 					File errorFile = determineErrorFilePath();
 					args.add("-XX:ErrorFile="+errorFile.getAbsolutePath());
 					args.add("-XX:+ErrorLogSecondaryErrorDetails");
-					args.add("com.unascribed.sup.puppet.Bootstrap");
+					args.add(Util.DEVELOPMENT_ENVIRONMENT ? "com.unascribed.sup.puppet.Puppet" : "com.unascribed.sup.puppet.Bootstrap");
 					
 					StringJoiner printJ = new StringJoiner("' '", "'", "'");
 					for (String s : args) {

@@ -17,7 +17,7 @@
  * License along with unsup; if not, see <https://www.gnu.org/licenses/>.
  */
 
-package com.unascribed.sup;
+package com.unascribed.sup.bootstrap;
 
 import java.io.IOException;
 import java.io.InputStream;

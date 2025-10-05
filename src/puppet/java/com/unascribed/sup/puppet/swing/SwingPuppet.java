@@ -83,7 +83,7 @@ import javax.swing.plaf.basic.BasicSplitPaneUI;
 import javax.swing.plaf.metal.MetalLookAndFeel;
 import javax.swing.plaf.metal.OceanTheme;
 
-import com.unascribed.sup.Util;
+import com.unascribed.sup.bootstrap.Util;
 import com.unascribed.sup.data.AlertMessageType;
 import com.unascribed.sup.data.ColorChoice;
 import com.unascribed.sup.data.FlavorGroup;

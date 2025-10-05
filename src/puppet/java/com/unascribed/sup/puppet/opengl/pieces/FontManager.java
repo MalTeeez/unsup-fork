@@ -36,7 +36,7 @@ import org.lwjgl.util.freetype.FT_Bitmap;
 import org.lwjgl.util.freetype.FT_Face;
 
 import com.github.bsideup.jabel.Desugar;
-import com.unascribed.sup.Util;
+import com.unascribed.sup.bootstrap.Util;
 import com.unascribed.sup.data.SysProps;
 import com.unascribed.sup.puppet.FontResources;
 import com.unascribed.sup.puppet.Puppet;
