@@ -87,7 +87,6 @@ public class PuppetHandler {
 	private static final String[] copyableProps = {
 		"javax.accessibility.assistive_technologies",
 		"assistive_technologies",
-		"unsup.puppet.opengl.platform",
 		"sun.java2d.uiScale",
 		"unsup.scale"
 	};
@@ -139,9 +138,7 @@ public class PuppetHandler {
 				Process p;
 				try {
 					List<String> args = new ArrayList<>();
-					if (SysProps.PUPPET_WRAPPER_COMMAND != null) {
-						args.add(SysProps.PUPPET_WRAPPER_COMMAND);
-					}
+					SysProps.PUPPET_WRAPPER_COMMAND.ifPresent(args::add);
 					args.add(java);
 					args.add("-XX:+UseG1GC");
 					args.add("-Xms1M");
@@ -157,7 +154,7 @@ public class PuppetHandler {
 							args.add("-D"+prop+"="+v);
 						}
 					}
-					if (SysProps.PUPPET_PASS_ALL_LWJGL_ARGS) {
+					if (SysProps.PUPPET_PASS_ALL_LWJGL_ARGS.orBias()) {
 						for (String k : System.getProperties().stringPropertyNames()) {
 							if (k.startsWith("org.lwjgl.")) {
 								args.add("-D"+k+"="+System.getProperty(k));
@@ -357,7 +354,7 @@ public class PuppetHandler {
 			Log.error("The Puppet crashed in native code. Please report this issue, including the full unsup.log and "+determineErrorFileName());
 		}
 		
-		if (SysProps.ABORT_ON_PUPPET_CRASH) {
+		if (SysProps.ABORT_ON_PUPPET_CRASH.orBias()) {
 			Log.error("Puppet crashed! Exiting, as requested by -Dunsup.abortOnPuppetCrash=true!");
 			try {
 				exit();

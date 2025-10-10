@@ -249,9 +249,9 @@ public class FontManager {
 			File f = null;
 			if (LOCALE_FONT.equals(name) || LOCALE_FONT_BOLD.equals(name)) {
 				boolean bold = LOCALE_FONT_BOLD.equals(name);
-				f = CJK.getOSPreferredFont(SysProps.LANGUAGE, bold);
+				f = CJK.getOSPreferredFont(SysProps.LANGUAGE.orBias(), bold);
 				if (f == null) {
-					name = "locale/"+SysProps.LANGUAGE+"/"+(bold?"Bold":"Regular")+".otf";
+					name = "locale/"+SysProps.LANGUAGE.orBias()+"/"+(bold?"Bold":"Regular")+".otf";
 				}
 			}
 			if (f != null) {

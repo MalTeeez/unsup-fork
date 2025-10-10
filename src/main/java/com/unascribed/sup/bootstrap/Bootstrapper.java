@@ -67,7 +67,7 @@ public class Bootstrapper {
 		
 		@Override
 		protected Class<?> findClass(String name) throws ClassNotFoundException {
-			if (files == null) throw new ClassNotFoundException("unsup agent phase has ended, this classloader is no longer available");
+			if (files == null) throw new ClassNotFoundException(name+" - unsup agent phase has ended, this classloader is no longer available");
 			String path = name.replace('.', '/').concat(".class");
 			var d = files.get(path);
 			if (d != null) {

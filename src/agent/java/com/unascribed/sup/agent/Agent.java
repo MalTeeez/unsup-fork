@@ -30,9 +30,9 @@ import java.nio.file.Files;
 import java.security.cert.X509Certificate;
 import java.util.ArrayList;
 import java.util.List;
-import java.util.Locale;
 import java.util.Map;
 import java.util.Objects;
+import java.util.Optional;
 import java.util.concurrent.TimeUnit;
 import java.util.function.Function;
 
@@ -162,7 +162,7 @@ public class Agent {
 			
 			UpdateHandler.checkForUpdate(state, config().format(), config().source(),
 					!config().behavior().promptUpdates(),
-					SysProps.DRY_RUN,
+					SysProps.DRY_RUN.orBias(),
 					false,
 					res -> {}
 				);
@@ -184,7 +184,7 @@ public class Agent {
 				}
 			}
 			
-			if (SysProps.DRY_RUN) {
+			if (SysProps.DRY_RUN.orBias()) {
 				Log.warn("Performed a dry run, per your request. No files in the working directory were changed!");
 			}
 			if (updatedComponents) {
@@ -217,8 +217,7 @@ public class Agent {
 	}
 
 	private static boolean preinit(String arg) {
-		String lang = Locale.getDefault().toLanguageTag();
-		if (SysProps.LANGUAGE != null) lang = SysProps.LANGUAGE;
+		String lang = SysProps.LANGUAGE.orBias();
 		Log.debug("Language: "+lang);
 		var ini = loadConfig(lang);
 		if (ini == null) {
@@ -289,21 +288,16 @@ public class Agent {
 			}
 			return ini;
 		} else {
-			if (SysProps.BOOTSTRAP_URL != null) {
+			if (SysProps.BOOTSTRAP_URL.isPresent()) {
 				Log.info("No config found, bootstrapping from "+SysProps.BOOTSTRAP_URL);
-				SigProvider key = null;
-				if (SysProps.BOOTSTRAP_KEY != null) {
-					try {
-						key = SigProvider.parse(SysProps.BOOTSTRAP_KEY);
-					} catch (Exception e) {
-						Log.error("Failed to parse bootstrap key", e);
-						throw exit(EXIT_CONFIG_ERROR);
-					}
-				}
+				Optional<SigProvider> key = SysProps.BOOTSTRAP_KEY.map(Util.faulty(SigProvider::parse, e -> {
+					Log.error("Failed to parse bootstrap key", e);
+					throw exit(EXIT_CONFIG_ERROR);
+				}));
 				setupOkHttp();
 				int M = 1024*1024;
 				try {
-					var data = RequestHelper.loadAndVerify(new URI(SysProps.BOOTSTRAP_URL), 16*M, new URI(SysProps.BOOTSTRAP_URL+".sig"), key);
+					var data = RequestHelper.loadAndVerify(new URI(SysProps.BOOTSTRAP_URL.get()), 16*M, new URI(SysProps.BOOTSTRAP_URL+".sig"), key.orElse(null));
 					Files.write(configFile.toPath(), data);
 					Log.info("Successfully downloaded bootstrap config");
 					destroyOkHttp(false);

@@ -53,6 +53,7 @@ public class Unsup {
 		}
 	}
 
+	@SuppressWarnings("unchecked")
 	private static <T> T retrieve(Class<?> clazz, String field) {
 		try {
 			return (T)clazz.getField(field).get(null);

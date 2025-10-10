@@ -152,7 +152,7 @@ public class UpdateHandler {
 				Log.debug("Component "+en.getKey()+" will be updated from "+ours+" to "+en.getValue());
 			}
 		}
-		if (SysProps.DEBUG_PAUSE_BEFORE_UPDATE) {
+		if (SysProps.DEBUG_PAUSE_BEFORE_UPDATE.orBias()) {
 			Log.debug("Sound good? You have 4 seconds to kill the process if not.");
 			try {
 				Thread.sleep(4000);
@@ -259,8 +259,9 @@ public class UpdateHandler {
 			PuppetHandler.updateProgress((int)((sum*1000)/denom));
 		};
 		PuppetHandler.updateTitle(bootstrapping ? "title.bootstrapping" : "title.updating", true);
-		Log.debug("Using "+SysProps.DOWNLOAD_WORKERS+" download worker"+(SysProps.DOWNLOAD_WORKERS == 1 ? "" : "s"));
-		ExecutorService svc = Executors.newFixedThreadPool(SysProps.DOWNLOAD_WORKERS);
+		int workers = SysProps.DOWNLOAD_WORKERS.orBias();
+		Log.debug("Using "+workers+" download worker"+(workers == 1 ? "" : "s"));
+		ExecutorService svc = Executors.newFixedThreadPool(workers);
 		Set<String> files = new HashSet<>();
 		List<Future<?>> futures = new ArrayList<>();
 		Map<FilePlan, DownloadedFile> downloads = new IdentityHashMap<>();
@@ -474,7 +475,7 @@ public class UpdateHandler {
 
 	static String describe(URI url) {
 		if (url == null) return "(null)";
-		if (SysProps.DEBUG) return url.toString();
+		if (SysProps.DEBUG.orBias()) return url.toString();
 		String host = url.getHost();
 		if (host == null || host.isEmpty()) return url.toString();
 		Matcher m = domainPattern.matcher(host);

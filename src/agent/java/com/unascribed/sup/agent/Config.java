@@ -36,15 +36,12 @@ import java.util.Set;
 import java.util.function.Function;
 
 import com.github.bsideup.jabel.Desugar;
-import com.unascribed.sup.agent.auth.AWS4Authorizer;
 import com.unascribed.sup.agent.auth.Authorizer;
-import com.unascribed.sup.agent.auth.BasicAuthorizer;
-import com.unascribed.sup.agent.auth.BearerAuthorizer;
+import com.unascribed.sup.agent.auth.Authorizer.AuthorizerSpec;
 import com.unascribed.sup.agent.pieces.QDIni;
 import com.unascribed.sup.agent.signing.SigProvider;
 import com.unascribed.sup.data.ColorChoice;
 import com.unascribed.sup.data.SourceFormat;
-import com.unascribed.sup.data.SysPropDefs;
 import com.unascribed.sup.data.SysProps;
 import com.unascribed.sup.data.SysProps.Behavior;
 import com.unascribed.sup.data.SysProps.PuppetMode;
@@ -85,31 +82,42 @@ public record Config(
 		return dnsBuilder.apply(client);
 	}
 	
-	@SuppressWarnings("deprecation")
 	public static Config parse(QDIni config, String arg, String lang) {
+		// this is kind of a mess, but it's also very direct.
+		// could smother it in reflection to make it more "elegant" but who fucking cares man
+		// this whole codebase is kind of about stringing together a bunch of disparate nonsense
+		// at some point we've got to accept it's just gonna look like this.
+		// times we have wanted to rewrite this, tickled it a bit and then gave up: ||||
+		
 		boolean useEnvs = false;
-		boolean noGui = determineNoGui(config);
-		boolean enforceSecureHashes = config.getBoolean("enforce_secure_hashes", false);
-		SourceFormat format = config.getEnum("source_format", SourceFormat.class, null);
 		URI source = null;
-		boolean serverAuthority = config.getBoolean("server_authority", false);
-		boolean updateMMCPack = config.getBoolean("update_mmc_pack", false);
 		List<AuthorizerSpec> authorizers = new ArrayList<>();
-		Behavior behavior = Behavior.MANUAL;
-		SigProvider packSig = null;
-		SigProvider altPackSig = null;
 		String detectedEnv = null;
 		Set<String> validEnvs = new HashSet<>();
-		Function<OkHttpClient, Dns> dnsBuilder = client -> Dns.SYSTEM;
 		EnumMap<ColorChoice, String> colorChoices = new EnumMap<>(ColorChoice.class);
-		Geometry flavorDialogGeom = new Geometry(600, 400);
-		double flavorDialogBias = config.getDouble("flavor_dialog_bias", 0.5);
-		boolean offerChangeFlavors = config.getBoolean("offer_change_flavors", false);
-		PuppetMode puppetMode = PuppetMode.AUTO;
-		String initialSubtitle = config.get("subtitle", "");
 		Map<String, String> defaultFlavors = new HashMap<>();
 		Multimap<String, String> mmcComponentMap = new Multimap<>();
 		Map<String, String> strings = new HashMap<>();
+
+		Behavior behavior = SysProps.BEHAVIOR.orElse(config.getEnum("behavior", Behavior.class, Behavior.MANUAL));
+		PuppetMode puppetMode = SysProps.PUPPET_MODE.orElse(config.getEnum("puppet_mode", PuppetMode.class, PuppetMode.AUTO));
+		SigProvider packSig = parsePackSig(config, "public_key");
+		SigProvider altPackSig = parsePackSig(config, "alt_public_key");
+		Function<OkHttpClient, Dns> dnsBuilder = parseDns(config.get("dns", "system"))
+			.orElseGet(() -> {
+				Log.error("Config file error: dns is not valid at "+config.getBlame("dns")+" - expected 'system', 'quad9', or an HTTPS URL, but got '"+config.get("dns")+"'! Exiting.");
+				throw Agent.exit(Agent.EXIT_CONFIG_ERROR);
+			});
+		boolean noGui = determineNoGui(config);
+		boolean enforceSecureHashes = config.getBoolean("enforce_secure_hashes", false);
+		SourceFormat format = config.getEnum("source_format", SourceFormat.class, null);
+		boolean serverAuthority = config.getBoolean("server_authority", false);
+		boolean updateMMCPack = config.getBoolean("update_mmc_pack", false);
+		Geometry flavorDialogGeom = Optional.ofNullable(config.get("flavor_dialog_geom"))
+				.map(Geometry::parse).orElse(new Geometry(600, 400));
+		double flavorDialogBias = config.getDouble("flavor_dialog_bias", 0.5);
+		boolean offerChangeFlavors = config.getBoolean("offer_change_flavors", false);
+		String initialSubtitle = config.get("subtitle", "");
 		Optional<String> modpackName = Optional.ofNullable(config.get("branding.modpack_name"));
 		Optional<String> brandingIcon = Optional.ofNullable(config.get("branding.icon"));
 		
@@ -120,76 +128,11 @@ public record Config(
 			throw Agent.exit(Agent.EXIT_CONFIG_ERROR);
 		}
 		
-		if (System.getProperty(SysPropDefs.DISABLE_RECONCILIATION) != null || System.getProperty(SysPropDefs.BEHAVIOR) != null) {
-			behavior = SysProps.BEHAVIOR;
-		} else {
-			behavior = config.getEnum("behavior", Behavior.class, behavior);
-		}
-		
-		if (System.getProperty(SysPropDefs.PUPPET_MODE) != null) {
-			puppetMode = SysProps.PUPPET_MODE;
-		} else {
-			puppetMode = config.getEnum("puppet_mode", PuppetMode.class, puppetMode);
-		}
-		
-		if (config.containsKey("public_key")) {
-			packSig = parsePackSig(config, "public_key");
-			if (config.containsKey("alt_public_key")) {
-				altPackSig = parsePackSig(config, "alt_public_key");
-			}
-		}
-		
-		switch (config.get("dns", "system")) {
-			case "system":
-				Log.debug("Using system DNS for DNS queries");
-				dnsBuilder = client -> Dns.SYSTEM;
-				break;
-			case "quad9": {
-				List<InetAddress> quad9Hosts;
-				try {
-					quad9Hosts = Arrays.asList(
-						InetAddress.getByName("9.9.9.10"),
-						InetAddress.getByName("2620:fe::10"),
-						InetAddress.getByName("149.112.112.10"),
-						InetAddress.getByName("2620:fe::fe:10")
-					);
-				} catch (UnknownHostException e) {
-					// not a possible throw for a well-formed IP string
-					throw new AssertionError(e);
-				}
-				dnsBuilder = client -> new DnsOverHttps.Builder()
-						.url(HttpUrl.get("https://dns10.quad9.net/dns-query"))
-						.bootstrapDnsHosts(quad9Hosts)
-						.client(client)
-						.build();
-				Log.debug("Using Quad9 for DNS queries");
-				break;
-			}
-			default: {
-				String dnsStr = config.get("dns");
-				if (dnsStr.startsWith("https://")) {
-					dnsBuilder = client -> new DnsOverHttps.Builder()
-							.url(HttpUrl.get(dnsStr))
-							.client(client)
-							.build();
-					Log.debug("Using "+dnsStr+" for DNS queries");
-				} else {
-					Log.error("Config file error: dns is not valid at "+config.getBlame("dns")+" - expected 'system', 'quad9', or an HTTPS URL, but got '"+dnsStr+"'! Exiting.");
-					throw Agent.exit(Agent.EXIT_CONFIG_ERROR);
-				}
-				break;
-			}
-		}
-		
 		for (var cc : ColorChoice.values()) {
 			colorChoices.put(cc, config.get("colors."+cc.configName, Bases.intToHex(cc.defaultValue)));
 		}
 		
-		if (config.containsKey("flavor_dialog_geom")) {
-			flavorDialogGeom = Geometry.parse(config.get("flavor_dialog_geom"));
-		}
-		
-		Multimap<String, String> envMarkers = new Multimap<>();
+		var envMarkers = new Multimap<String, String>();
 		for (var k : config.keySet()) {
 			var spl = k.split("\\.", 2);
 			var sect = spl[0];
@@ -197,28 +140,13 @@ public record Config(
 			var v = config.get(k);
 			switch (sect) {
 				case "strings" -> strings.put(subkey, v);
+				case "mmc-component-map" -> mmcComponentMap.put(subkey, v);
+				case "flavors" -> defaultFlavors.put(subkey, v);
 				case "authorization" -> {
-					String[] vspl = v.split(" ", 2);
-					Authorizer a = switch (vspl[0]) {
-						case "Basic" -> {
-							if (vspl[1].contains(":")) {
-								yield BasicAuthorizer.fromStapled(vspl[1]);
-							}
-							yield BasicAuthorizer.fromToken(vspl[1]);
-						}
-						case "Bearer" -> new BearerAuthorizer(vspl[1]);
-						case "AWS4-HMAC-SHA256" -> {
-							String[] pieces = vspl[1].split(":", 3);
-							yield new AWS4Authorizer(pieces[0], pieces[1], pieces.length >= 3 ? pieces[2] : "us-east-1");
-						}
-						default -> null;
-					};
-					if (a != null) {
-						authorizers.add(new AuthorizerSpec(subkey, a));
-					} else {
+					authorizers.add(Authorizer.parseSpec(subkey, v).orElseGet(() -> {
 						Log.error("Config error: authorizer for "+subkey+" is malformed! Exiting.");
 						throw Agent.exit(Agent.EXIT_CONFIG_ERROR);
-					}
+					}));
 				}
 				case "env" -> {
 					if (subkey != null && subkey.endsWith(".marker")) {
@@ -227,16 +155,10 @@ public record Config(
 						envMarkers.put(env, v);
 					}
 				}
-				case "mmc-component-map" -> {
-					mmcComponentMap.put(subkey, v);
-				}
-				case "flavors" -> {
-					defaultFlavors.put(subkey, v);
-				}
 			}
 		}
 		
-		if (!SysProps.IGNORE_ENVS && config.getBoolean("use_envs", useEnvs)) {
+		if (config.getBoolean("use_envs", useEnvs) && !SysProps.IGNORE_ENVS.orBias()) {
 			useEnvs = true;
 			String forcedEnv = arg == null ? config.get("force_env") : arg;
 			if (Agent.standalone && forcedEnv == null) {
@@ -253,7 +175,10 @@ public record Config(
 							break;
 						} else {
 							checkedMarkers.add(possibility);
-							if (ClassLoader.getSystemClassLoader().getResource(possibility.replace('.', '/')+".class") != null) {
+							if (!possibility.contains("/")) {
+								possibility = possibility.replace('.', '/')+".class";
+							}
+							if (ClassLoader.getSystemClassLoader().getResource(possibility) != null) {
 								ourEnv = en.getKey();
 								break;
 							}
@@ -281,7 +206,7 @@ public record Config(
 				Log.error("Exiting.");
 				throw Agent.exit(Agent.EXIT_CONFIG_ERROR);
 			}
-			if (Agent.standalone) {
+			if (forcedEnv != null) {
 				Log.info("Declared env is "+ourEnv);
 			} else {
 				Log.info("Detected env is "+ourEnv);
@@ -298,18 +223,62 @@ public record Config(
 				flavorDialogGeom, flavorDialogBias, puppetMode, lang);
 	}
 
-	private static SigProvider parsePackSig(QDIni ini, String key) {
-		try {
-			return SigProvider.parse(ini.get(key));
-		} catch (Throwable t) {
-			Log.error("Config file error: "+key+" is not valid at "+ini.getBlame(key)+"! Exiting.", t);
-			Agent.exit(Agent.EXIT_CONFIG_ERROR);
+	private static Optional<Function<OkHttpClient, Dns>> parseDns(String v) {
+		switch (v) {
+			case "system" -> {
+				Log.debug("Using system DNS for DNS queries");
+				return Optional.of(client -> Dns.SYSTEM);
+			}
+			case "quad9" -> {
+				List<InetAddress> quad9Hosts;
+				try {
+					quad9Hosts = Arrays.asList(
+						InetAddress.getByName("9.9.9.10"),
+						InetAddress.getByName("2620:fe::10"),
+						InetAddress.getByName("149.112.112.10"),
+						InetAddress.getByName("2620:fe::fe:10")
+					);
+				} catch (UnknownHostException e) {
+					// not a possible throw for a well-formed IP string
+					throw new AssertionError(e);
+				}
+				Log.debug("Using Quad9 for DNS queries");
+				return Optional.of(client -> new DnsOverHttps.Builder()
+						.url(HttpUrl.get("https://dns10.quad9.net/dns-query"))
+						.bootstrapDnsHosts(quad9Hosts)
+						.client(client)
+						.build());
+			}
+			default -> {
+				if (v.startsWith("https://")) {
+					Log.debug("Using "+v+" for DNS queries");
+					return Optional.of(client -> new DnsOverHttps.Builder()
+							.url(HttpUrl.get(v))
+							.client(client)
+							.build());
+				} else {
+					return Optional.empty();
+				}
+			}
+		}
+	}
+
+	private static SigProvider parsePackSig(QDIni config, String key) {
+		if (config.containsKey(key)) {
+			try {
+				return SigProvider.parse(config.get(key));
+			} catch (Throwable t) {
+				Log.error("Config file error: "+key+" is not valid at "+config.getBlame(key)+"! Exiting.", t);
+				Agent.exit(Agent.EXIT_CONFIG_ERROR);
+				return null;
+			}
+		} else {
 			return null;
 		}
 	}
 
 	private static boolean determineNoGui(QDIni ini) {
-		if (Agent.standalone) return !SysProps.GUI_IN_STANDALONE;
+		if (Agent.standalone) return !SysProps.GUI_IN_STANDALONE.orBias();
 		if (ini.containsKey("no_gui")) return ini.getBoolean("no_gui", false);
 		if (ini.getBoolean("recognize_nogui", false)) {
 			String cmd = System.getProperty("sun.java.command");
@@ -345,8 +314,5 @@ public record Config(
 			return width+"x"+height;
 		}
 	}
-	
-	@Desugar
-	public record AuthorizerSpec(String urlPrefix, Authorizer auth) {}
 
 }

@@ -19,10 +19,43 @@
 
 package com.unascribed.sup.agent.auth;
 
+import java.util.Optional;
+
+import com.github.bsideup.jabel.Desugar;
+
 import okhttp3.Request;
 
 public interface Authorizer {
 
 	void authorize(Request orig, Request.Builder req);
+
+	static Optional<Authorizer> parse(String v) {
+		String[] vspl = v.split(" ", 2);
+		switch (vspl[0]) {
+			case "Basic" -> {
+				if (vspl[1].contains(":")) {
+					return Optional.of(BasicAuthorizer.fromStapled(vspl[1]));
+				}
+				return Optional.of(BasicAuthorizer.fromToken(vspl[1]));
+			}
+			case "Bearer" -> {
+				return Optional.of(new BearerAuthorizer(vspl[1]));
+			}
+			case "AWS4-HMAC-SHA256" -> {
+				String[] pieces = vspl[1].split(":", 3);
+				return Optional.of(new AWS4Authorizer(pieces[0], pieces[1], pieces.length >= 3 ? pieces[2] : "us-east-1"));
+			}
+			default -> {
+				return Optional.empty();
+			}
+		}
+	}
+
+	static Optional<AuthorizerSpec> parseSpec(String prefix, String v) {
+		return parse(v).map(a -> new AuthorizerSpec(prefix, a));
+	}
+	
+	@Desugar
+	public record AuthorizerSpec(String urlPrefix, Authorizer auth) {}
 	
 }

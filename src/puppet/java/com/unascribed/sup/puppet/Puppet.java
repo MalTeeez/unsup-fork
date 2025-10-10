@@ -85,7 +85,7 @@ public class Puppet {
 		
 		ColorChoice.delegate = Puppet::getColor;
 		
-		PuppetMode mode = SysProps.PUPPET_MODE;
+		PuppetMode mode = SysProps.PUPPET_MODE.orBias();
 		boolean didOverride = false;
 		PuppetDelegate delTmp = null;
 		if (mode == PuppetMode.AUTO) {

@@ -109,7 +109,7 @@ public class PackwizHandler extends AbstractFormatHandler {
 					}
 				}
 			}
-			boolean changeFlavors = SysProps.PACKWIZ_CHANGE_FLAVORS;
+			boolean changeFlavors = SysProps.PACKWIZ_CHANGE_FLAVORS.orBias();
 			boolean actualUpdate = hasIndexUpdate || hasComponentUpdate;
 			if (!actualUpdate && Agent.config().offerChangeFlavors()) {
 				if (PuppetHandler.openAlert("$$changeFlavorsOffer", "", AlertMessageType.NONE, AlertOptionType.YES_NO, AlertOption.NO) == AlertOption.YES) {
@@ -351,7 +351,7 @@ public class PackwizHandler extends AbstractFormatHandler {
 											if (data == null) throw new IOException("Size limit of 8K for "+path+" exceeded");
 											String computedHash = Bases.bytesToHex(func.createMessageDigest().digest(data));
 											if (computedHash.equals(hash)) {
-												if (SysProps.DEBUG_REQUESTS) {
+												if (SysProps.DEBUG_REQUESTS.orBias()) {
 													Log.debug("Using "+path+" from metafiles zip");
 												}
 												return new Metafile(name, path, hash, new Toml().read(new ByteArrayInputStream(data)));

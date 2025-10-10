@@ -79,18 +79,24 @@ public class RequestHelper {
 	
 	public static String checkSchemeMismatch(URI src, String url) throws URISyntaxException {
 		if (url == null) return null;
-		URI parsed = new URI(url);
-		boolean ok = false;
-		if (src.getScheme().equals("file")) {
-			// promoting from file to http is ok, as well as using files from files
-			ok = "http".equals(parsed.getScheme()) || "https".equals(parsed.getScheme())
-					|| "file".equals(parsed.getScheme());
-		} else if ("http".equals(src.getScheme()) || "https".equals(src.getScheme())) {
-			// going between http and https is ok
-			ok = "http".equals(parsed.getScheme()) || "https".equals(parsed.getScheme());
-		}
+		URI dst = new URI(url);
+		boolean ok = switch (src.getScheme()) {
+			case "file" ->
+				switch (dst.getScheme()) {
+					// promoting from file to http is ok, as well as using files from files
+					case "http", "https", "file" -> true;
+					default -> false;
+				};
+			case "http", "https" ->
+				switch (dst.getScheme()) {
+					// going between http and https is ok
+					case "http", "https" -> true;
+					default -> false;
+				};
+			default -> false;
+		};
 		if (!ok) {
-			Log.warn("Ignoring custom URL with bad scheme "+parsed.getScheme());
+			Log.warn("Ignoring custom URL with bad scheme "+dst.getScheme());
 		}
 		return ok ? url : null;
 	}
@@ -169,7 +175,7 @@ public class RequestHelper {
 	}
 	
 	public static ResourceRef get(URI url, boolean hostile, long startAt) throws IOException {
-		if (SysProps.DEBUG_REQUESTS) {
+		if (SysProps.DEBUG_REQUESTS.orBias()) {
 			Log.debug((hostile ? "Carefully r" : "R")+"etrieving "+url+(startAt == 0 ? "" : " (starting at byte "+startAt+")"));
 		}
 		if ("file".equals(url.getScheme())) {

@@ -24,6 +24,7 @@ import java.io.InputStream;
 import java.io.OutputStream;
 import java.net.URI;
 import java.net.URISyntaxException;
+import java.util.function.Function;
 
 public class Util {
 
@@ -49,6 +50,20 @@ public class Util {
 			if (read < 0) break;
 			to.write(buf, 0, read);
 		}
+	}
+	
+	public interface FaultyFunction<T, R> {
+		R apply(T t) throws Exception;
+	}
+	
+	public static <T, R> Function<T, R> faulty(FaultyFunction<T, R> func, Function<Exception, R> ctch) {
+		return t -> {
+			try {
+				return func.apply(t);
+			} catch (Exception e) {
+				return ctch.apply(e);
+			}
+		};
 	}
 
 }

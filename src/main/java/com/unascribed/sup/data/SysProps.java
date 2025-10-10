@@ -19,45 +19,67 @@
 
 package com.unascribed.sup.data;
 
-import static java.lang.Boolean.getBoolean;
-import static java.lang.Integer.getInteger;
-import static java.lang.System.getProperty;
-
 import java.util.Locale;
+import java.util.Optional;
+import com.unascribed.sup.util.BiasedOptional;
 
 public class SysProps {
 
-	public static final boolean DEBUG = getBoolean(SysPropDefs.DEBUG);
-	public static final boolean DEBUG_REQUESTS = getBoolean(SysPropDefs.DEBUG_REQUESTS);
-	public static final boolean DEBUG_PAUSE_BEFORE_UPDATE = getBoolean(SysPropDefs.DEBUG_PAUSE_BEFORE_UPDATE);
-	public static final boolean GUI_IN_STANDALONE = getBoolean(SysPropDefs.GUI_IN_STANDALONE);
-	public static final boolean IGNORE_ENVS = getBoolean(SysPropDefs.IGNORE_ENVS);
-	public static final boolean ABORT_ON_PUPPET_CRASH = getBoolean(SysPropDefs.ABORT_ON_PUPPET_CRASH);
-	public static final int DOWNLOAD_WORKERS = getInteger(SysPropDefs.DOWNLOAD_WORKERS, 6);
+	public static final BiasedOptional<Boolean> DEBUG = getBoolean(SysPropDefs.DEBUG, false);
+	public static final BiasedOptional<Boolean> DEBUG_REQUESTS = getBoolean(SysPropDefs.DEBUG_REQUESTS, false);
+	public static final BiasedOptional<Boolean> DEBUG_PAUSE_BEFORE_UPDATE = getBoolean(SysPropDefs.DEBUG_PAUSE_BEFORE_UPDATE, false);
+	public static final BiasedOptional<Boolean> GUI_IN_STANDALONE = getBoolean(SysPropDefs.GUI_IN_STANDALONE, false);
+	public static final BiasedOptional<Boolean> IGNORE_ENVS = getBoolean(SysPropDefs.IGNORE_ENVS, false);
+	public static final BiasedOptional<Boolean> ABORT_ON_PUPPET_CRASH = getBoolean(SysPropDefs.ABORT_ON_PUPPET_CRASH, false);
+	public static final BiasedOptional<Integer> DOWNLOAD_WORKERS = getInteger(SysPropDefs.DOWNLOAD_WORKERS, 6);
 	
 	@SuppressWarnings("deprecation")
-	public static final Behavior BEHAVIOR = Behavior.valueOf(getProperty(SysPropDefs.BEHAVIOR, getBoolean(SysPropDefs.DISABLE_RECONCILIATION) ? "auto" : "manual").toUpperCase(Locale.ROOT));
+	// todo else
+	public static final BiasedOptional<Behavior> BEHAVIOR = getEnum(SysPropDefs.BEHAVIOR, Behavior.class,
+			getBoolean(SysPropDefs.DISABLE_RECONCILIATION, false).orBias() ? Behavior.AUTO : Behavior.MANUAL);
 	public enum Behavior {
 		AUTO, SEMI, MANUAL;
 		
 		public boolean promptUpdates() { return this == MANUAL; }
 		public boolean promptConflicts() { return this != AUTO; }
 	}
-	public static final String LANGUAGE = getProperty("unsup.language");
-	public static final boolean DRY_RUN = getBoolean(SysPropDefs.DRY_RUN);
-	public static final String BOOTSTRAP_URL = getProperty(SysPropDefs.BOOTSTRAP_URL);
-	public static final String BOOTSTRAP_KEY = getProperty(SysPropDefs.BOOTSTRAP_KEY);
+	public static final BiasedOptional<String> LANGUAGE = getProperty(SysPropDefs.LANGUAGE, Locale.getDefault().toLanguageTag());
+	public static final BiasedOptional<Boolean> DRY_RUN = getBoolean(SysPropDefs.DRY_RUN, false);
+	public static final Optional<String> BOOTSTRAP_URL = getProperty(SysPropDefs.BOOTSTRAP_URL);
+	public static final Optional<String> BOOTSTRAP_KEY = getProperty(SysPropDefs.BOOTSTRAP_KEY);
 	
 	
-	public static final boolean PACKWIZ_CHANGE_FLAVORS = getBoolean("unsup.packwiz.changeFlavors");
+	public static final BiasedOptional<Boolean> PACKWIZ_CHANGE_FLAVORS = getBoolean(SysPropDefs.PACKWIZ_CHANGE_FLAVORS, false);
 	
 
-	public static final String PUPPET_WRAPPER_COMMAND = getProperty("unsup.puppet.wrapperCommand");
-	public static final boolean PUPPET_PASS_ALL_LWJGL_ARGS = getBoolean("unsup.puppet.passAllLwjglArgs");
+	public static final Optional<String> PUPPET_WRAPPER_COMMAND = getProperty(SysPropDefs.PUPPET_WRAPPER_COMMAND);
+	public static final BiasedOptional<Boolean> PUPPET_PASS_ALL_LWJGL_ARGS = getBoolean(SysPropDefs.PUPPET_PASS_ALL_LWJGL_ARGS, false);
 	
-	public static final PuppetMode PUPPET_MODE = PuppetMode.valueOf(getProperty("unsup.puppetMode", "auto").toUpperCase(Locale.ROOT));
+	public static final BiasedOptional<PuppetMode> PUPPET_MODE = getEnum(SysPropDefs.PUPPET_MODE, PuppetMode.class, PuppetMode.AUTO);
 	public enum PuppetMode {
 		AUTO, SWING, OPENGL;
+	}
+	
+	
+
+	private static Optional<String> getProperty(String prop) {
+		return Optional.ofNullable(System.getProperty(prop));
+	}
+	
+	private static BiasedOptional<String> getProperty(String prop, String bias) {
+		return new BiasedOptional<>(getProperty(prop), bias);
+	}
+	
+	private static BiasedOptional<Boolean> getBoolean(String prop, boolean bias) {
+		return new BiasedOptional<>(getProperty(prop).map(Boolean::parseBoolean), bias);
+	}
+	
+	private static BiasedOptional<Integer> getInteger(String prop, int bias) {
+		return new BiasedOptional<>(getProperty(prop).map(Integer::parseInt), bias);
+	}
+	
+	private static <E extends Enum<E>> BiasedOptional<E> getEnum(String prop, Class<E> clazz, E bias) {
+		return new BiasedOptional<>(getProperty(prop).map(s -> Enum.valueOf(clazz, s.toUpperCase(Locale.ROOT))), bias);
 	}
 	
 }
