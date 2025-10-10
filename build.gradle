@@ -467,7 +467,9 @@ task brotliDataJar(type: Exec) {
 	dependsOn dataJar
 	outputs.file file(dataJar.archivePath.toString()+'.br')
 	
-	if (project.hasProperty('unsup.ci')) {
+	if (project.hasProperty('unsup.fast')) {
+		commandLine 'brotli', '-3k', dataJar.archivePath
+	} else if (project.hasProperty('unsup.ci')) {
 		environment 'LD_LIBRARY_PATH', './.ci'
 		commandLine './.ci/brotli', '-Zk', dataJar.archivePath
 	} else {

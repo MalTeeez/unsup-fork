@@ -152,7 +152,9 @@ public record Config(
 					if (subkey != null && subkey.endsWith(".marker")) {
 						String env = subkey.substring(0, subkey.length()-7);
 						validEnvs.add(env);
-						envMarkers.put(env, v);
+						for (var av : config.getAll(k)) {
+							envMarkers.put(env, av);
+						}
 					}
 				}
 			}
@@ -168,19 +170,19 @@ public record Config(
 			List<String> checkedMarkers = new ArrayList<>();
 			String ourEnv = forcedEnv;
 			if (ourEnv == null) {
-				for (var en : envMarkers.mapEntries()) {
+				glass: for (var en : envMarkers.mapEntries()) {
 					for (String possibility : en.getValue()) {
 						if (possibility.equals("*")) {
 							ourEnv = en.getKey();
-							break;
+							break glass;
 						} else {
 							checkedMarkers.add(possibility);
 							if (!possibility.contains("/")) {
 								possibility = possibility.replace('.', '/')+".class";
 							}
-							if (ClassLoader.getSystemClassLoader().getResource(possibility) != null) {
+							if (Bootstrap.class.getClassLoader().getResource(possibility) != null) {
 								ourEnv = en.getKey();
-								break;
+								break glass;
 							}
 						}
 					}

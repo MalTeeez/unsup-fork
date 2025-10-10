@@ -407,7 +407,7 @@ public class Agent {
 		var tarray = new Thread[16];
 		Thread.enumerate(tarray);
 		for (var t : tarray) {
-			if (t != null && "OkHttp TaskRunner".equals(t.getName())) {
+			if (t != null && ("OkHttp TaskRunner".equals(t.getName()) || "com.unascribed.sup.lib.okhttp3.OkHttp TaskRunner".equals(t.getName()))) {
 				// silence meaningless errors due to OkHttp not being designed for its background trash to ever be thrown away
 				t.setUncaughtExceptionHandler((x, e) -> {});
 			}
