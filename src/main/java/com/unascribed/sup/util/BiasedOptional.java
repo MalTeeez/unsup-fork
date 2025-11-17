@@ -78,19 +78,4 @@ public record BiasedOptional<T>(Optional<T> unbiased, T bias) {
 		return unbiased.orElseThrow(exceptionSupplier);
 	}
 
-	@Override
-	public boolean equals(Object obj) {
-		return unbiased.equals(obj);
-	}
-
-	@Override
-	public int hashCode() {
-		return unbiased.hashCode();
-	}
-
-	@Override
-	public String toString() {
-		return unbiased.toString();
-	}
-
 }

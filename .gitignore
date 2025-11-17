@@ -12,3 +12,4 @@ out
 /run
 .unsup-tmp
 /ci-version.txt
+/.apt_generated/

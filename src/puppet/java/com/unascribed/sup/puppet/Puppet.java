@@ -375,8 +375,8 @@ public class Puppet {
 						sched.execute(fr);
 					}
 				}
-			} catch (IOException e) {
-				log("ERROR", "Failed to listen for orders", e);
+			} catch (Throwable t) {
+				log("ERROR", "Failed to listen for orders", t);
 			} finally {
 				System.exit(0);
 			}
