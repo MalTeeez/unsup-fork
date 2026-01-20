@@ -1,7 +1,7 @@
 /*
  * This file is part of unsup.
- * Copyright © 2025 Una Kearney
- * https://git.sleeping.town/unascribed/unsup
+ * Copyright © 2025 Exa Skye
+ * https://git.sleeping.town/exa/unsup
  *
  * unsup is free software; you can redistribute it and/or modify it
  * under the terms of the GNU Lesser General Public License as published
@@ -106,8 +106,8 @@ public class GLPuppet {
 		
 		check(SDL_SetAppMetadata("unsup", Util.VERSION, "com.unascribed.sup"));
 		check(SDL_SetAppMetadataProperty(SDL_PROP_APP_METADATA_URL_STRING, "https://git.sleeping.town/unascribed/unsup"));
-		check(SDL_SetAppMetadataProperty(SDL_PROP_APP_METADATA_CREATOR_STRING, "Una Kearney"));
-		check(SDL_SetAppMetadataProperty(SDL_PROP_APP_METADATA_COPYRIGHT_STRING, "Copyright (c) 2020 - 2025 Una Kearney and contributors. Released under the GNU LGPLv3"));
+		check(SDL_SetAppMetadataProperty(SDL_PROP_APP_METADATA_CREATOR_STRING, "Exa Skye"));
+		check(SDL_SetAppMetadataProperty(SDL_PROP_APP_METADATA_COPYRIGHT_STRING, "Copyright (c) 2020 - 2025 Exa Skye and contributors. Released under the GNU LGPLv3"));
 		check(SDL_SetAppMetadataProperty(SDL_PROP_APP_METADATA_TYPE_STRING, "application"));
 
 		if (!SDL_Init(SDL_INIT_VIDEO)) {

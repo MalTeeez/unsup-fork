@@ -1,7 +1,7 @@
 /*
  * This file is part of unsup.
- * Copyright © 2023-2025 Una Kearney
- * https://git.sleeping.town/unascribed/unsup
+ * Copyright © 2023-2025 Exa Skye
+ * https://git.sleeping.town/exa/unsup
  *
  * unsup is free software; you can redistribute it and/or modify it
  * under the terms of the GNU Lesser General Public License as published
@@ -450,7 +450,8 @@ public class RequestHelper {
 								read = in.read(buf);
 							} catch (IOException e) {
 								if (canUseRange) {
-									Log.warn("IO error while downloading "+url+"; trying to resume");
+									Log.debug("IO error while downloading "+url+"; trying to resume", e);
+									if (!SysProps.DEBUG.orBias()) Log.warn("IO error while downloading "+url+"; trying to resume");
 									try { ref.close(); } catch (Throwable t) {}
 									try {
 										ref = get(url, hostile, readTotal);
