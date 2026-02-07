@@ -20,6 +20,7 @@
 package com.unascribed.sup.agent;
 
 import java.io.File;
+import java.io.FileInputStream;
 import java.io.FileOutputStream;
 import java.io.IOException;
 import java.io.InputStream;
@@ -54,7 +55,9 @@ import com.unascribed.sup.agent.handler.AbstractFormatHandler.FileState;
 import com.unascribed.sup.agent.handler.AbstractFormatHandler.UpdatePlan;
 import com.unascribed.sup.agent.handler.NativeHandler;
 import com.unascribed.sup.agent.handler.PackwizHandler;
+import com.unascribed.sup.agent.util.CRLFHell;
 import com.unascribed.sup.agent.util.RequestHelper;
+import com.unascribed.sup.agent.util.CRLFHell.CorruptionType;
 import com.unascribed.sup.agent.util.RequestHelper.DownloadedFile;
 import com.unascribed.sup.agent.util.RequestHelper.Retry;
 import com.unascribed.sup.data.AlertMessageType;
@@ -456,15 +459,29 @@ public class UpdateHandler {
 						updateProgress.run();
 					}, to.func(), f.hostile);
 			if (!df.hash().equals(to.hash())) {
+				CorruptionType type = CRLFHell.checkForCorruption(to.func(), to.hash(), new FileInputStream(df.file()));
 				String extra = "";
+				switch (type) {
+					case UNKNOWN: {
+						// Can't provide any help here.
+						break;
+					}
+					case EXPECTED_DOS_GOT_UNIX: {
+						extra = " - it appears to have been corrupted by a DOS-to-Unix line-ending conversion. "
+								+ "Ensure autocrlf is disabled in Git for anyone that uses Windows to work on this pack.";
+						break;
+					}
+					case EXPECTED_UNIX_GOT_DOS: {
+						extra = " - it appears to have been corrupted by a Unix-to-DOS line-ending conversion.";
+						break;
+					}
+				}
 				if (path.endsWith(".js")) {
-					extra = " (Ensure JavaScript Minification is disabled on the host)";
+					extra += " (Ensure JavaScript Minification is disabled on the host)";
 				} else if (path.endsWith(".css")) {
-					extra = " (Ensure CSS Minification is disabled on the host)";
+					extra += " (Ensure CSS Minification is disabled on the host)";
 				} else if (path.endsWith(".png") || path.endsWith(".jpg") || path.endsWith(".jpeg")) {
-					extra = " (Ensure Image Optimization is disabled on the host)";
-				} else if (path.endsWith(".txt") || path.endsWith(".json") || path.endsWith(".snbt") || path.endsWith(".conf") || path.endsWith(".cfg")) {
-					extra = " (Ensure autocrlf is disabled in Git, if the pack is developed on Windows)";
+					extra += " (Ensure Image Optimization is disabled on the host)";
 				}
 				throw new Retry("Hash mismatch on downloaded file for "+path+" from "+url+" - expected "+ to.hash() +", got "+ df.hash()+extra,
 						IOException::new);

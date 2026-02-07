@@ -60,6 +60,7 @@ import com.unascribed.sup.agent.Agent;
 import com.unascribed.sup.agent.Log;
 import com.unascribed.sup.agent.data.HashFunction;
 import com.unascribed.sup.agent.signing.SigProvider;
+import com.unascribed.sup.agent.util.CRLFHell.CorruptionType;
 import com.unascribed.sup.bootstrap.Util;
 import com.unascribed.sup.data.SysProps;
 import com.unascribed.sup.pieces.NullOutputStream;
@@ -381,25 +382,11 @@ public class RequestHelper {
 		if (data == null) throw new IOException("Size limit of "+(sizeLimit/K)+"K for "+src+" exceeded");
 		String hash = Bases.bytesToHex(func.createMessageDigest().digest(data));
 		if (!hash.equals(expectedHash)) {
-			var dos = func.createMessageDigest();
-			var unix = func.createMessageDigest();
-			for (byte b : data) {
-				if (b == '\r') continue;
-				if (b == '\n') {
-					dos.update((byte)'\r');
-					dos.update((byte)'\n');
-					unix.update((byte)'\n');
-				} else {
-					dos.update(b);
-					unix.update(b);
-				}
-			}
-			String dosHash = Bases.bytesToHex(dos.digest());
-			String unixHash = Bases.bytesToHex(unix.digest());
+			CorruptionType type = CRLFHell.checkForCorruption(func, expectedHash, new ByteArrayInputStream(data));
 			String culprit = null;
-			if (dosHash.equals(hash) && unixHash.equals(expectedHash)) {
+			if (type == CorruptionType.EXPECTED_UNIX_GOT_DOS) {
 				culprit = "a Unix-to-DOS line ending conversion";
-			} else if (unixHash.equals(hash) && dosHash.equals(expectedHash)) {
+			} else if (type == CorruptionType.EXPECTED_DOS_GOT_UNIX) {
 				culprit = "a DOS-to-Unix line ending conversion";
 			}
 			String msg;
