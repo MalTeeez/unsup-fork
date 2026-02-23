@@ -48,6 +48,8 @@ import java.util.OptionalLong;
 import java.util.Set;
 import java.util.concurrent.TimeUnit;
 import java.util.function.Function;
+import java.util.regex.Pattern;
+
 import javax.net.ssl.SSLException;
 import javax.net.ssl.SSLHandshakeException;
 
@@ -154,7 +156,8 @@ public class RequestHelper {
 	
 	private static String currentFirefoxVersion;
 	private static final Set<String> alwaysHostile = new HashSet<>(Arrays.asList(Bases.b64ToString("YmV0YS5jdXJzZWZvcmdlLmNvbXx3d3cuY3Vyc2Vmb3JnZS5jb218Y3Vyc2Vmb3JnZS5jb218bWluZWNyYWZ0LmN1cnNlZm9yZ2UuY29tfG1lZGlhZmlsZXouZm9yZ2VjZG4ubmV0fG1lZGlhZmlsZXMuZm9yZ2VjZG4ubmV0fGZvcmdlY2RuLm5ldHxlZGdlLmZvcmdlY2RuLm5ldHxzdGF0aWMucGxhbmV0bWluZWNyYWZ0LmNvbQ==").split("\\|")));
-
+	private static final Pattern RAW_GITHUB = Pattern.compile("^/([^/]+/[^/]+)/raw/(.*)$");
+	
 	@Desugar
 	public record ResourceRef(InputStream stream, OptionalLong size, boolean supportsRange) implements Closeable {
 		
@@ -185,6 +188,17 @@ public class RequestHelper {
 			var ch = fis.getChannel();
 			ch.position(startAt);
 			return new ResourceRef(fis, ch.size()-startAt, true);
+		}
+		if ("github.com".equals(url.getHost())) {
+			var m = RAW_GITHUB.matcher(url.getRawPath());
+			if (m.matches()) {
+				try {
+					var corrected = new URI(url.getScheme(), url.getUserInfo(), "raw.githubusercontent.com", url.getPort(), "/"+m.group(1)+"/"+m.group(2), url.getRawQuery(), url.getRawFragment());
+					Log.debug("Correcting bad 502-prone github.com/*/*/raw/ URL to raw.githubusercontent.com ("+url+" -> "+corrected+")");
+					return get(corrected, hostile, startAt);
+				} catch (URISyntaxException e) {
+				}
+			}
 		}
 		if (!hostile && alwaysHostile.contains(url.getHost())) {
 			hostile = true;
