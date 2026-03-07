@@ -75,6 +75,8 @@ public class PackwizHandler extends AbstractFormatHandler {
 			var ourVersion = Version.fromJson(baseState.getObject("current_version"));
 			Toml pack = RequestHelper.loadToml(src, 4*K, src.resolve("unsup.sig"));
 			var fmt = pack.getString("pack-format");
+			if (fmt == null)
+				throw new IOException("pack-format key not found. Are you sure this is a pack.toml?");
 			if (!fmt.equals("unsup-packwiz") && (!fmt.startsWith("packwiz:") || FlexVerComparator.compare("packwiz:1.1.0", fmt) < 0))
 				throw new IOException("Cannot read unknown pack-format "+fmt);
 			var pwstate = baseState.getObject("packwiz");
