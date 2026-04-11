@@ -163,8 +163,11 @@ public class UpdateHandler {
 			}
 			Log.debug("Continuing.");
 		}
-		File wd = new File("");
-		if (Agent.config().useParentDirectory()) wd = wd.getAbsoluteFile().getParentFile();
+		File wd = Agent.config().useParentDirectory()
+				? new File("").getAbsoluteFile().getParentFile()
+				: new File("").getAbsoluteFile();
+		if (Agent.config().useParentDirectory())
+			Log.info("use_parent_directory is set; working directory root is "+wd.getAbsolutePath());
 		PuppetHandler.updateSubtitle("subtitle.verifying");
 		Set<String> moveAside = new HashSet<>();
 		Map<ConflictType, AlertOption> conflictPreload = new EnumMap<>(ConflictType.class);
@@ -173,7 +176,7 @@ public class UpdateHandler {
 			FileState from = plan.expectedState.getOrDefault(path, FileState.EMPTY);
 			FilePlan f = en.getValue();
 			FileState to = f.state;
-			File dest = new File(path);
+			File dest = new File(wd, path);
 			if (!dest.getAbsolutePath().startsWith(wd.getAbsolutePath()+File.separator))
 				throw new IOException("Refusing to download to a file outside of working directory");
 			ConflictType conflictType = ConflictType.NO_CONFLICT;
@@ -249,7 +252,7 @@ public class UpdateHandler {
 				}
 			}
 		}
-		File tmp = dryRun ? null : new File(".unsup-tmp");
+		File tmp = dryRun ? null : new File(wd, ".unsup-tmp");
 		if (tmp != null) {
 			Files.createDirectories(tmp.toPath());
 		}
@@ -373,9 +376,11 @@ public class UpdateHandler {
 							// Conflict dialog was rejected, skip this file.
 							continue;
 						}
-						File dest = new File(path);
+
+						File dest = new File(wd, path);
 						if (!dest.getAbsolutePath().startsWith(wd.getAbsolutePath()+File.separator))
 							throw new IOException("Refusing to download to a file outside of working directory");
+
 						Path destPath;
 						try {
 							destPath = dest.toPath();
@@ -414,7 +419,7 @@ public class UpdateHandler {
 							assert df != null;
 							Files.move(df.file().toPath(), destPath, StandardCopyOption.REPLACE_EXISTING);
 						}
-				}
+					}
 				}
 				if (!plan.skipStateApplication) {
 					plan.newState.put("current_version", res.theirVersion.toJson());
