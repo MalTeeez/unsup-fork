@@ -64,7 +64,7 @@ public record Config(
 		boolean useEnvs, String detectedEnv, Set<String> validEnvs,
 		Behavior behavior, boolean offerChangeFlavors,
 		SourceFormat format, URI source, boolean serverAuthority,
-		boolean updateMMCPack, boolean noGui,
+		boolean updateMMCPack, boolean noGui, boolean useParentDirectory,
 		String initialSubtitle,
 		List<AuthorizerSpec> authorizers,
 		Function<OkHttpClient, Dns> dnsBuilder,
@@ -113,6 +113,7 @@ public record Config(
 		SourceFormat format = config.getEnum("source_format", SourceFormat.class, null);
 		boolean serverAuthority = config.getBoolean("server_authority", false);
 		boolean updateMMCPack = config.getBoolean("update_mmc_pack", false);
+		boolean useParentDirectory = config.getBoolean("use_parent_directory", false);
 		Geometry flavorDialogGeom = Optional.ofNullable(config.get("flavor_dialog_geom"))
 				.map(Geometry::parse).orElse(new Geometry(600, 400));
 		double flavorDialogBias = config.getDouble("flavor_dialog_bias", 0.5);
@@ -217,7 +218,7 @@ public record Config(
 		}
 		
 		return new Config(enforceSecureHashes, useEnvs, detectedEnv, validEnvs, behavior,
-				offerChangeFlavors, format, source, serverAuthority, updateMMCPack, noGui,
+				offerChangeFlavors, format, source, serverAuthority, updateMMCPack, noGui, useParentDirectory,
 				initialSubtitle, Collections.unmodifiableList(authorizers), dnsBuilder,
 				Collections.unmodifiableMap(defaultFlavors), packSig, altPackSig,
 				mmcComponentMap.unmodifiable(), Collections.unmodifiableMap(colorChoices),

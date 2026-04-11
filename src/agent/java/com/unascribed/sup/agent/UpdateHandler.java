@@ -164,6 +164,7 @@ public class UpdateHandler {
 			Log.debug("Continuing.");
 		}
 		File wd = new File("");
+		if (Agent.config().useParentDirectory()) wd = wd.getAbsoluteFile().getParentFile();
 		PuppetHandler.updateSubtitle("subtitle.verifying");
 		Set<String> moveAside = new HashSet<>();
 		Map<ConflictType, AlertOption> conflictPreload = new EnumMap<>(ConflictType.class);
