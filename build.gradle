@@ -438,10 +438,6 @@ task brotliPublicSuffix(type: Exec) {
 
 	dependsOn popPublicSuffix
 	
-	doFirst {
-		file('build/tmp/publicsuffix/okhttp3/internal/publicsuffix/publicsuffixes.br').delete()
-	}
-	
 	if (project.hasProperty('unsup.ci')) {
 		environment 'LD_LIBRARY_PATH', './.ci'
 		commandLine './.ci/brotli', '-Zk', in
@@ -478,10 +474,6 @@ task brotliDataJar(type: Exec) {
 	dependsOn dataJar
 	inputs.file dataJar.archivePath
 	outputs.file file(dataJar.archivePath.toString()+'.br')
-	
-	doFirst {
-		file(dataJar.archivePath.toString()+'.br').delete()
-	}
 	
 	if (project.hasProperty('unsup.fast')) {
 		commandLine 'brotli', '-3k', dataJar.archivePath
