@@ -186,6 +186,7 @@ public class UpdateHandler {
 				if (from.hash() == null) {
 					if (to.sizeMatches(size) && to.hash().equals(RequestHelper.hash(to.func(), dest))) {
 						Log.info(path+" was created in this update and locally, but the local version matches the update. Skipping");
+						f.skip = true;
 						continue;
 					}
 					conflictType = ConflictType.LOCAL_AND_REMOTE_CREATED;
@@ -195,6 +196,7 @@ public class UpdateHandler {
 						Log.debug(path+" matches the expected from hash");
 					} else if (to.sizeMatches(size) && to.hash().equals(from.func() == to.func() ? hash : RequestHelper.hash(to.func(), dest))) {
 						Log.info(path+" matches the expected to hash, so has already been updated locally. Skipping");
+						f.skip = true;
 						continue;
 					} else {
 						Log.info("CONFLICT: "+path+" doesn't match the expected from hash ("+hash+" != "+ from.hash() +")");
@@ -202,6 +204,7 @@ public class UpdateHandler {
 					}
 				} else if (to.sizeMatches(size) && to.hash().equals(RequestHelper.hash(to.func(), dest))) {
 					Log.info(path+" matches the expected to hash, so has already been updated locally. Skipping");
+					f.skip = true;
 					continue;
 				} else {
 					Log.info("CONFLICT: "+path+" doesn't match the expected from size ("+size+" != "+ from.size() +")");
