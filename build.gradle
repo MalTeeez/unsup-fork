@@ -413,14 +413,21 @@ task extractPublicSuffix(type: Copy) {
 	into 'build/tmp/publicsuffix'
 }
 
-task popPublicSuffix(type: Exec) {
-	def in = 'build/tmp/publicsuffix/okhttp3/internal/publicsuffix/publicsuffixes.gz'
-	inputs.file(in)
-	outputs.file 'build/tmp/publicsuffix/okhttp3/internal/publicsuffix/publicsuffixes'
+task popPublicSuffix {
+	def inFile = file('build/tmp/publicsuffix/okhttp3/internal/publicsuffix/publicsuffixes.gz')
+	def outFile = file('build/tmp/publicsuffix/okhttp3/internal/publicsuffix/publicsuffixes')
+	inputs.file(inFile)
+	outputs.file(outFile)
 
 	dependsOn extractPublicSuffix
-	
-	commandLine 'gunzip', '-k', in
+
+	doLast {
+		outFile.withOutputStream { out ->
+			inFile.withInputStream { raw ->
+				out << new java.util.zip.GZIPInputStream(raw)
+			}
+		}
+	}
 }
 
 task brotliPublicSuffix(type: Exec) {
