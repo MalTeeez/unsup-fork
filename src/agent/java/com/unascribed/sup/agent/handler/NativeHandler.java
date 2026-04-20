@@ -32,6 +32,7 @@ import com.grack.nanojson.JsonArray;
 import com.grack.nanojson.JsonObject;
 import com.grack.nanojson.JsonParserException;
 import com.unascribed.sup.agent.Agent;
+import com.unascribed.sup.agent.ExitCode;
 import com.unascribed.sup.agent.Log;
 import com.unascribed.sup.agent.PuppetHandler;
 import com.unascribed.sup.agent.PuppetHandler.AlertOption;
@@ -42,6 +43,7 @@ import com.unascribed.sup.bootstrap.Util;
 import com.unascribed.sup.data.AlertMessageType;
 import com.unascribed.sup.data.FlavorChoice;
 import com.unascribed.sup.data.FlavorGroup;
+import com.unascribed.sup.data.SysProps;
 import com.unascribed.sup.data.Version;
 import com.unascribed.sup.util.Iterables;
 
@@ -61,8 +63,8 @@ public class NativeHandler extends AbstractFormatHandler {
 		if (!manifest.containsKey("versions")) throw new IOException("Manifest is missing versions field");
 		Version theirVersion = Version.fromJson(manifest.getObject("versions").getObject("current"));
 		if (theirVersion == null) throw new IOException("Manifest is missing current version field");
-		if (System.getProperty("unsup.debug.overrideRemoteVersionCode") != null) {
-			theirVersion = new Version(theirVersion.name(), Integer.getInteger("unsup.debug.overrideRemoteVersionCode", theirVersion.code()));
+		if (SysProps.DEBUG_OVERRIDE_REMOTE_VERSION_CODE.isPresent()) {
+			theirVersion = new Version(theirVersion.name(), SysProps.DEBUG_OVERRIDE_REMOTE_VERSION_CODE.get());
 		}
 		JsonObject newState = new JsonObject(baseState);
 		JsonArray ourFlavors = baseState.getArray("flavors");
@@ -236,8 +238,7 @@ public class NativeHandler extends AbstractFormatHandler {
 							AlertMessageType.QUESTION, AlertOptionType.YES_NO, AlertOption.YES);
 					if (updateResp == AlertOption.CLOSED) {
 						Log.info("User closed update dialog! Exiting...");
-						System.exit(Agent.EXIT_USER_REQUEST);
-						return null;
+						throw ExitCode.USER_REQUEST.exit();
 					}
 					if (updateResp == AlertOption.NO) {
 						Log.info("Ignoring update by user choice.");
@@ -296,8 +297,8 @@ public class NativeHandler extends AbstractFormatHandler {
 					} else {
 						url = new URI(urlStr);
 					}
-					if (plan.files.containsKey(path)) {
-						FileToDownloadWithCode to = plan.files.get(path);
+					FileToDownloadWithCode to = plan.files.get(path);
+					if (to != null) {
 						if (to.state.func() == func) {
 							if (!Objects.equals(to.state.hash(), fromHash) || to.state.size() != fromSize) {
 								throw new IOException("Bad update: "+path+" in "+to.code+" specified to become "+to.state+
@@ -312,7 +313,7 @@ public class NativeHandler extends AbstractFormatHandler {
 						to.fallbackUrl = fallbackUrl;
 						to.url = url;
 					} else {
-						FileToDownloadWithCode to = new FileToDownloadWithCode();
+						to = new FileToDownloadWithCode();
 						to.code = code;
 						to.state = new FileState(func, toHash, toSize);
 						to.fallbackUrl = fallbackUrl;

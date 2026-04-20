@@ -61,6 +61,7 @@ import com.unascribed.sup.agent.pieces.pseudolocale.AccentedEnglish;
 import com.unascribed.sup.agent.pieces.pseudolocale.PigLatin;
 import com.unascribed.sup.agent.signing.SigProvider;
 import com.unascribed.sup.agent.util.RequestHelper;
+import com.unascribed.sup.ann.NotNull;
 import com.unascribed.sup.bootstrap.Bootstrapper;
 import com.unascribed.sup.bootstrap.Util;
 import com.unascribed.sup.data.AlertMessageType;
@@ -79,12 +80,6 @@ import okio.ByteString;
 
 public class Agent {
 
-	public static final int EXIT_SUCCESS = 0;
-	public static final int EXIT_CONFIG_ERROR = 1;
-	public static final int EXIT_CONSISTENCY_ERROR = 2;
-	public static final int EXIT_BUG = 3;
-	public static final int EXIT_USER_REQUEST = 4;
-	
 	public static final long launchTime = System.nanoTime();
 
 	static volatile boolean awaitingExit = false;
@@ -93,7 +88,7 @@ public class Agent {
 	static boolean standalone;
 	
 	private static List<ExceptableRunnable> cleanup = new ArrayList<>();
-	private static Config config;
+	private static Config config = new Config();
 	
 	public static final SigProvider unsupSig = SigProvider.of("signify RWTSwM40VCzVER3YWt55m4Fvsg0sjZLEICikuU3cD91gR/2lii/jk67B");
 	
@@ -208,7 +203,7 @@ public class Agent {
 			}
 			if (updatedComponents) {
 				Log.info("A component update has been applied - exiting for game restart.");
-				exit(EXIT_SUCCESS);
+				throw ExitCode.SUCCESS.exit();
 			} else if (standalone) {
 				Log.info("Ran in standalone mode, no program will be started.");
 			} else {
@@ -225,8 +220,7 @@ public class Agent {
 			}
 		} catch (QDIniException e) {
 			Log.error("Config file error: "+e.getMessage()+"! Exiting.");
-			exit(EXIT_CONFIG_ERROR);
-			return;
+			throw ExitCode.CONFIG_ERROR.exit();
 		} catch (InterruptedException e) {
 			throw new AssertionError(e);
 		} finally {
@@ -254,8 +248,7 @@ public class Agent {
 				state = JsonParser.object().from(in);
 			} catch (Exception e) {
 				Log.error("Couldn't load state file! Exiting.", e);
-				exit(EXIT_CONSISTENCY_ERROR);
-				return false;
+				throw ExitCode.CONSISTENCY_ERROR.exit();
 			}
 		} else {
 			state = new JsonObject();
@@ -274,13 +267,13 @@ public class Agent {
 				Log.debug("Found and loaded unsup.ini. What secrets does it hold?");
 			} catch (Exception e) {
 				Log.error("Found unsup.ini, but couldn't parse it! Exiting.", e);
-				throw exit(EXIT_CONFIG_ERROR);
+				throw ExitCode.CONFIG_ERROR.exit();
 			}
 			checkRequiredKeys(ini, "version", "source_format", "source");
 			int version = ini.getInt("version", -1);
 			if (version != 1) {
 				Log.error("Config file error: Unknown version "+version+" at "+ini.getBlame("version")+"! Exiting.");
-				throw exit(EXIT_CONFIG_ERROR);
+				throw ExitCode.CONFIG_ERROR.exit();
 			}
 			if (!"en-US".equals(lang)) {
 				ini = mergePreset(ini, "lang/"+lang, false);
@@ -311,7 +304,7 @@ public class Agent {
 				Log.info("No config found, bootstrapping from "+SysProps.BOOTSTRAP_URL);
 				Optional<SigProvider> key = SysProps.BOOTSTRAP_KEY.map(Util.faulty(SigProvider::parse, e -> {
 					Log.error("Failed to parse bootstrap key", e);
-					throw exit(EXIT_CONFIG_ERROR);
+					throw ExitCode.CONFIG_ERROR.exit();
 				}));
 				setupOkHttp();
 				int M = 1024*1024;
@@ -323,7 +316,7 @@ public class Agent {
 					return loadConfig(lang);
 				} catch (Exception e) {
 					Log.error("Failed to download bootstrap config", e);
-					throw exit(EXIT_CONFIG_ERROR);
+					throw ExitCode.CONFIG_ERROR.exit();
 				}
 			}
 			Log.warn("No config file found? Doing nothing.");
@@ -334,7 +327,7 @@ public class Agent {
 	private static void checkForbiddenKey(QDIni ini, String key) {
 		if (ini.containsKey(key)) {
 			Log.error("Attempt to override a forbidden key: "+key);
-			exit(EXIT_CONFIG_ERROR);
+			throw ExitCode.CONFIG_ERROR.exit();
 		}
 	}
 
@@ -342,8 +335,7 @@ public class Agent {
 		for (String req : requiredKeys) {
 			if (!ini.containsKey(req)) {
 				Log.error("Config file error: "+req+" is required, but was not defined! Exiting.");
-				exit(EXIT_CONFIG_ERROR);
-				return;
+				throw ExitCode.CONFIG_ERROR.exit();
 			}
 		}
 	}
@@ -354,7 +346,7 @@ public class Agent {
 	private static void setupOkHttp() throws AssertionError {
 		HandshakeCertificates.Builder certsBldr = new HandshakeCertificates.Builder();
 		List<CertDef> certDefs = new ArrayList<>();
-		if (config() == null || config().usePlatformCaCerts()) {
+		if (config().usePlatformCaCerts()) {
 			try {
 				var tmf = TrustManagerFactory.getInstance(TrustManagerFactory.getDefaultAlgorithm());
 				tmf.init((KeyStore)null);
@@ -371,26 +363,24 @@ public class Agent {
 		} else {
 			Log.debug("Skipping addition of platform-provided CA certificates");
 		}
-		if (config() == null || config().useBuiltinCaCerts()) {
+		if (config().useBuiltinCaCerts()) {
 			for (var cert : CACerts.certs) {
 				certDefs.add(new CertDef("built-in", cert));
 			}
 		} else {
 			Log.debug("Skipping addition of built-in CA certificates");
 		}
-		if (config() != null) {
-			for (var cert : config().additionalCaCerts()) {
-				certDefs.add(new CertDef("config", cert));
-			}
-			for (String host : config().insecureHosts()) {
-				Log.debug("Adding insecure host "+host);
-				certsBldr.addInsecureHost(host);
-			}
+		for (var cert : config().additionalCaCerts()) {
+			certDefs.add(new CertDef("config", cert));
+		}
+		for (String host : config().insecureHosts()) {
+			Log.debug("Adding insecure host "+host);
+			certsBldr.addInsecureHost(host);
 		}
 		if (certDefs.isEmpty()) {
 			// the first connection attempt will crash with "the trustAnchors parameter must be non-empty" in this state
 			Log.error("Config error: No CA certificates were added! Exiting.");
-			throw Agent.exit(Agent.EXIT_CONFIG_ERROR);
+			throw ExitCode.CONFIG_ERROR.exit();
 		} else {
 			Multimap<ByteString, CertDef> defsByEncoded = new Multimap<>();
 			for (var def : certDefs) {
@@ -469,21 +459,19 @@ public class Agent {
 				return config;
 			}
 			Log.error("Config file error: Preset "+presetName+" not found at "+config.getBlame("preset")+"! Exiting.");
-			exit(EXIT_CONFIG_ERROR);
-			return null;
+			throw ExitCode.CONFIG_ERROR.exit();
 		}
 		try (InputStream in = u.openStream()) {
 			QDIni preset = QDIni.load("<preset "+presetName+">", in);
 			config = preset.merge(config);
 		} catch (IOException e) {
 			Log.error("Failed to load preset "+presetName+"! Exiting.", e);
-			exit(EXIT_CONFIG_ERROR);
-			return null;
+			throw ExitCode.CONFIG_ERROR.exit();
 		}
 		return config;
 	}
 	
-	private static void cleanup() {
+	public static void cleanup() {
 		config = null;
 		for (ExceptableRunnable er : cleanup) {
 			try {
@@ -516,12 +504,6 @@ public class Agent {
 		}
 	}
 	
-	public static AssertionError exit(int code) {
-		cleanup();
-		System.exit(code);
-		throw new AssertionError("unreachable");
-	}
-
 	/* (non-Javadoc)
 	 * used in the agent to suspend the update flow at a safe point if we're waiting for a
 	 * System.exit due to the user closing the puppet dialog (the puppet handling is multithreaded,
@@ -549,7 +531,7 @@ public class Agent {
 		cleanup.add(r);
 	}
 
-	public static Config config() {
+	public static @NotNull Config config() {
 		return config;
 	}
 

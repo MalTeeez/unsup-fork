@@ -269,6 +269,8 @@ dependencies {
 	def lwjglv = '3.4.1'
 	lwjgl(it, lwjglv, 'sdl', 'opengl', 'freetype')
 	ogldep "org.lwjgl:lwjgl-harfbuzz:${lwjglv}"
+	
+	compileOnly 'com.vegardit.no-npe:no-npe-eea-java-17:1.3.12'
 }
 
 tasks.withType(JavaCompile) {

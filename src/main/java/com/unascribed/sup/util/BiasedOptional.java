@@ -25,11 +25,12 @@ import java.util.function.Function;
 import java.util.function.Predicate;
 import java.util.function.Supplier;
 import com.github.bsideup.jabel.Desugar;
+import com.unascribed.sup.ann.NotNull;
 
 /**
  * An Optional with an inherent default value.
  */
-@Desugar
+@Desugar @NotNull
 public record BiasedOptional<T>(Optional<T> unbiased, T bias) {
 	
 	public T orBias() {

@@ -27,6 +27,8 @@ import java.util.List;
 import java.util.Map;
 import java.util.Set;
 
+import com.unascribed.sup.ann.NotNull;
+
 public class Multimap<K, V> {
 
 	protected final Map<K, List<V>> delegate;
@@ -56,7 +58,7 @@ public class Multimap<K, V> {
 		return delegate.entrySet();
 	}
 	
-	public Multimap<K, V> unmodifiable() {
+	public @NotNull Multimap<K, V> unmodifiable() {
 		Map<K, List<V>> out = new HashMap<>(delegate);
 		for (var en : out.entrySet()) {
 			en.setValue(Collections.unmodifiableList(en.getValue()));

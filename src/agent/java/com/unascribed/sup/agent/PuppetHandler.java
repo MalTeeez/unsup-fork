@@ -220,7 +220,7 @@ public class PuppetHandler {
 						}
 					}
 					if (Util.DEVELOPMENT_ENVIRONMENT) {
-						for (String s : System.getProperty("java.class.path").split(File.pathSeparator)) {
+						for (String s : System.getProperty("java.class.path", "").split(File.pathSeparator)) {
 							cp.add(s);
 						}
 					}
@@ -409,7 +409,7 @@ public class PuppetHandler {
 					p.destroyForcibly();
 				}
 			}
-			Agent.exit(Agent.EXIT_USER_REQUEST);
+			throw ExitCode.USER_REQUEST.exit();
 		}
 	}
 
@@ -529,7 +529,9 @@ public class PuppetHandler {
 			alertWaiters.put(name, latch);
 			tellPuppet("["+name+"]:alert="+title+":"+body+":"+messageType.name().toLowerCase(Locale.ROOT)+":"+optionType.name().toLowerCase(Locale.ROOT).replace("_", "")+":"+def.name().toLowerCase(Locale.ROOT).replace("_", ""));
 			latch.awaitUninterruptibly();
-			return AlertOption.valueOf(alertResults.remove(name).replace("option.", "").replace("_", "").toUpperCase(Locale.ROOT));
+			var res = alertResults.remove(name);
+			assert res != null;
+			return AlertOption.valueOf(res.replace("option.", "").replace("_", "").toUpperCase(Locale.ROOT));
 		}
 	}
 
@@ -572,7 +574,9 @@ public class PuppetHandler {
 			alertWaiters.put(name, latch);
 			tellPuppet("["+name+"]:pickFlavor="+groupJoiner.toString().replace(':', '\u001B'));
 			latch.awaitUninterruptibly();
-			return Arrays.asList(alertResults.remove(name).split("\u001C"));
+			var res = alertResults.remove(name);
+			assert res != null;
+			return Arrays.asList(res.split("\u001C"));
 		}
 	}
 

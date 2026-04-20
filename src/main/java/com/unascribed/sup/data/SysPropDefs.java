@@ -206,4 +206,11 @@ public class SysPropDefs {
 	 */
 	public static final String PUPPET_ASYNC = "unsup.puppetAsync";
 	
+	/**
+	 * {@value}: <b>Native mode only.</b> Explicitly specify a remote version code to update to,
+	 * instead of using the version specified by the remote.
+	 * @since 0.2.0-pre1
+	 */
+	public static final String DEBUG_OVERRIDE_REMOTE_VERSION_CODE = "unsup.debug.overrideRemoteVersionCode";
+	
 }

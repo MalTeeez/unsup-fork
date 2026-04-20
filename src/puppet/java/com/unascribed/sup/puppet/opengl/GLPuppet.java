@@ -82,7 +82,10 @@ public class GLPuppet {
 		scaleOverridden = oDpiScale.isPresent();
 		double dpiScale = oDpiScale.orElse(1);
 		
-		if (System.getProperty(SysPropDefs.PUPPET_PLATFORM) != null) {
+
+		@SuppressWarnings("deprecation")
+		var deprecatedPlatform = System.getProperty(SysPropDefs.PUPPET_PLATFORM);
+		if (deprecatedPlatform != null) {
 			Puppet.log("WARN", "-Dunsup.puppet.opengl.platform no longer does anything - use the SDL_VIDEO_DRIVER environment variable instead");
 		}
 		

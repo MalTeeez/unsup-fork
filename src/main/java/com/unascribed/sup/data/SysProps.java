@@ -62,6 +62,8 @@ public class SysProps {
 	
 	public static final BiasedOptional<Boolean> PUPPET_ASYNC = getBoolean(SysPropDefs.PUPPET_ASYNC, false);
 	
+	public static final Optional<Integer> DEBUG_OVERRIDE_REMOTE_VERSION_CODE = getProperty(SysPropDefs.DEBUG_OVERRIDE_REMOTE_VERSION_CODE).map(Integer::parseInt);
+	
 	
 
 	private static Optional<String> getProperty(String prop) {

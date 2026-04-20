@@ -71,7 +71,7 @@ public class MMCUpdater {
 		boolean changedOtherVer = false;
 		if (c.containsKey("mcVersion") && newVers.containsKey("net.minecraft")) {
 			// I have never ever seen this used in the wild. but I gotta support it
-			if (!newVers.get("net.minecraft").equals(c.getString("mcVersion"))) {
+			if (!c.getString("mcVersion").equals(newVers.get("net.minecraft"))) {
 				c.put("mcVersion", newVers.get("net.minecraft"));
 				changedOtherVer = true;
 			}
@@ -99,8 +99,9 @@ public class MMCUpdater {
 				}
 			});
 		} catch (UnsupportedOperationException e) {
-			if (e.getMessage() != null && e.getMessage().startsWith("!")) {
-				Log.warn("Cannot update component "+uid+": "+e.getMessage().substring(1));
+			var msg = e.getMessage();
+			if (msg != null && msg.startsWith("!")) {
+				Log.warn("Cannot update component "+uid+": "+msg.substring(1));
 				return null;
 			} else {
 				throw e;

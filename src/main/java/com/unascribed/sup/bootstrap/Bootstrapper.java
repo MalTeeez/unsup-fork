@@ -40,6 +40,7 @@ public class Bootstrapper {
 	public static final InnerClassLoader universe; static {
 		try {
 			var p = Bootstrapper.class.getClassLoader();
+			assert p != null;
 			universe = Util.DEVELOPMENT_ENVIRONMENT ? null : new InnerClassLoader(p,
 					new ZipInputStream(new BrotliInputStream(p.getResourceAsStream("com/unascribed/sup/data.jar.br"))));
 		} catch (IOException e) {
@@ -87,6 +88,7 @@ public class Bootstrapper {
 		@Override
 		protected Class<?> findClass(String name) throws ClassNotFoundException {
 			if (files == null) throw new ClassNotFoundException(name+" - unsup agent phase has ended, this classloader is no longer available");
+			if (name == null) throw new ClassNotFoundException("null");
 			String path = name.replace('.', '/').concat(".class");
 			var d = files.get(path);
 			if (d != null) {

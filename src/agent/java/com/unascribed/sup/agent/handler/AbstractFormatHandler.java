@@ -27,7 +27,7 @@ import java.util.Map;
 import com.github.bsideup.jabel.Desugar;
 import com.grack.nanojson.JsonArray;
 import com.grack.nanojson.JsonObject;
-import com.unascribed.sup.agent.Agent;
+import com.unascribed.sup.agent.ExitCode;
 import com.unascribed.sup.agent.Log;
 import com.unascribed.sup.agent.PuppetHandler;
 import com.unascribed.sup.agent.data.HashFunction;
@@ -110,8 +110,7 @@ public abstract class AbstractFormatHandler {
 						ourFlavors.add(grp.choices().get(0).id());
 					} else {
 						Log.error("No choice provided for flavor group "+grp.name()+" ("+grp.id()+")");
-						Agent.exit(Agent.EXIT_CONFIG_ERROR);
-						return null;
+						throw ExitCode.CONFIG_ERROR.exit();
 					}
 				}
 			}

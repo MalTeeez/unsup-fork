@@ -295,13 +295,18 @@ public class RequestHelper {
 				throw new Retry("Connection to "+url.getHost()+" failed",
 						ConnectException::new);
 			} catch (SSLHandshakeException e) {
-				if (e.getCause() != null && e.getCause().getMessage() != null && e.getCause().getMessage().contains(" path building failed ")) {
-					throw new Retry(url.getHost()+" has an invalid TLS certificate — incorrect system time or broken antivirus?",
-						e);
+				var cause = e.getCause();
+				if (cause != null) {
+					var msg = cause.getMessage();
+					if (msg != null && msg.contains(" path building failed ")) {
+						throw new Retry(url.getHost()+" has an invalid TLS certificate — incorrect system time or broken antivirus?",
+							e);
+					}
 				}
 				throw new IOException("Failed to retrieve "+url, e);
 			} catch (SSLException e) {
-				if (e.getMessage() != null && e.getMessage().contains(" unrecognized ")) {
+				var msg = e.getMessage();
+				if (msg != null && msg.contains(" unrecognized ")) {
 					throw new Retry(url.getHost()+" violated TLS protocol — weird VPN or parental controls?",
 						e);
 				}
@@ -309,7 +314,8 @@ public class RequestHelper {
 			} catch (FileNotFoundException e) {
 				throw e;
 			} catch (IOException e) {
-				if (e.getMessage() != null && e.getMessage().contains(" preface ")) {
+				var msg = e.getMessage();
+				if (msg != null && msg.contains(" preface ")) {
 					throw new Retry(url.getHost()+" violated HTTP/2 protocol — weird VPN?",
 						e);
 				}
@@ -365,7 +371,9 @@ public class RequestHelper {
 						TimeUnit.SECONDS.sleep(delay);
 					} catch (InterruptedException ignore) {}
 				} else {
-					throw (E)r.getCause();
+					var cause = r.getCause();
+					assert cause != null;
+					throw (E)cause;
 				}
 			}
 		}

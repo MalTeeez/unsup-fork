@@ -26,11 +26,17 @@ import java.net.URI;
 import java.net.URISyntaxException;
 import java.util.function.Function;
 
+import com.unascribed.sup.ann.NotNull;
+import com.unascribed.sup.ann.Nullable;
+
 public class Util {
 
-	private static final String implVer = Util.class.getPackage().getImplementationVersion();
+	private static final @Nullable String implVer; static {
+		var pkg = Util.class.getPackage();
+		implVer = pkg == null ? null : pkg.getImplementationVersion();
+	}
 	
-	public static final String VERSION = implVer == null ? "DEV" : implVer;
+	public static final @NotNull String VERSION = implVer == null ? "DEV" : implVer;
 	public static final boolean DEVELOPMENT_ENVIRONMENT = implVer == null;
 
 	/**

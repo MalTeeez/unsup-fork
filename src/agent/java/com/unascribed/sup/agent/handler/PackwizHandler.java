@@ -49,6 +49,7 @@ import com.grack.nanojson.JsonObject;
 import com.moandjiezana.toml.Toml;
 import com.unascribed.flexver.FlexVerComparator;
 import com.unascribed.sup.agent.Agent;
+import com.unascribed.sup.agent.ExitCode;
 import com.unascribed.sup.agent.Log;
 import com.unascribed.sup.agent.MMCUpdater;
 import com.unascribed.sup.agent.PuppetHandler;
@@ -142,8 +143,7 @@ public class PackwizHandler extends AbstractFormatHandler {
 							body, AlertMessageType.QUESTION, AlertOptionType.YES_NO, AlertOption.YES);
 					if (updateResp == AlertOption.CLOSED) {
 						Log.info("User closed update dialog! Exiting...");
-						System.exit(Agent.EXIT_USER_REQUEST);
-						return null;
+						throw ExitCode.USER_REQUEST.exit();
 					}
 					if (updateResp == AlertOption.NO) {
 						Log.info("Ignoring update by user choice.");
@@ -377,9 +377,10 @@ public class PackwizHandler extends AbstractFormatHandler {
 						f.url = src.resolve(Util.uriOfPath(path));
 						toDelete.remove(alias);
 						postState.put(alias, f.state);
-						if (!plan.expectedState.containsKey(alias)) {
+						var aliasState = plan.expectedState.get(alias);
+						if (aliasState == null) {
 							plan.expectedState.put(alias, FileState.EMPTY);
-						} else if (plan.expectedState.get(alias).equals(f.state)) {
+						} else if (aliasState.equals(f.state)) {
 							continue;
 						}
 						plan.files.put(alias, f);
@@ -529,9 +530,10 @@ public class PackwizHandler extends AbstractFormatHandler {
 					}
 					f.state = new FileState(thisFunc, thisHash, -1);
 					postState.put(path, f.state);
-					if (!plan.expectedState.containsKey(path)) {
+					var pathState = plan.expectedState.get(path);
+					if (pathState == null) {
 						plan.expectedState.put(path, FileState.EMPTY);
-					} else if (plan.expectedState.get(path).equals(f.state)) {
+					} else if (pathState.equals(f.state)) {
 						continue;
 					}
 					String url = download.getString("url");
