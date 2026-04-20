@@ -343,10 +343,12 @@ public class Agent {
 			}
 		}
 	}
+
+	@Desugar
+	private record CertDef(String source, X509Certificate cert) {}
 	
 	private static void setupOkHttp() throws AssertionError {
 		HandshakeCertificates.Builder certsBldr = new HandshakeCertificates.Builder();
-		@Desugar record CertDef(String source, X509Certificate cert) {}
 		List<CertDef> certDefs = new ArrayList<>();
 		if (config() == null || config().usePlatformCaCerts()) {
 			try {
