@@ -60,6 +60,8 @@ public class SysProps {
 		AUTO, SWING, OPENGL;
 	}
 	
+	public static final BiasedOptional<Boolean> PUPPET_ASYNC = getBoolean(SysPropDefs.PUPPET_ASYNC, false);
+	
 	
 
 	private static Optional<String> getProperty(String prop) {

@@ -196,4 +196,14 @@ public class SysPropDefs {
 	@Deprecated
 	public static final String PUPPET_PLATFORM = "unsup.puppet.opengl.platform";
 	
+	/**
+	 * {@value}: Explicitly request asynchronous or synchronous puppet starting.
+	 * <ul>
+	 * <li><b>true</b>: Force async puppet start.</li>
+	 * <li><b>false</b>: Force sync puppet start. (Default)</li>
+	 * </ul>
+	 * @since 1.2.2
+	 */
+	public static final String PUPPET_ASYNC = "unsup.puppetAsync";
+	
 }

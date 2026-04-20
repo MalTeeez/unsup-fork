@@ -152,7 +152,11 @@ public class Agent {
 			}
 			
 			if (!config().noGui()) {
-				new Thread(PuppetHandler::create, "Puppet starter").start();
+				if (SysProps.PUPPET_ASYNC.orBias()) {
+					new Thread(PuppetHandler::create, "Puppet starter").start();
+				} else {
+					PuppetHandler.create();
+				}
 				addCleanupAction(PuppetHandler::destroy);
 			}
 			
