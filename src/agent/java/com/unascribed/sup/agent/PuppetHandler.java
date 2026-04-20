@@ -82,7 +82,7 @@ public class PuppetHandler {
 	public enum AlertOptionType { OK, OK_CANCEL, YES_NO, YES_NO_CANCEL, YES_NO_TO_ALL_CANCEL }
 	public enum AlertOption { CLOSED, OK, YES, NO, CANCEL, YESTOALL, NOTOALL }
 
-	private static final String bundleVersion = "3.4.0+7";
+	private static final String bundleVersion = "3.4.1";
 	
 	private static final String[] copyableProps = {
 		"javax.accessibility.assistive_technologies",
