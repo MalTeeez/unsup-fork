@@ -436,7 +436,14 @@ public class PackwizHandler extends AbstractFormatHandler {
 							.choices(choices)
 							.defChoice(defChoice)
 							.defChoiceName(defChoice);
-						boolean defOn = changeFlavors ? Iterables.contains(ourFlavors, mf.name+"_on") : option.getBoolean("default", false);
+						boolean defOn = option.getBoolean("default", false);
+						if (changeFlavors) {
+							if (Iterables.contains(ourFlavors, mf.name+"_on")) {
+								defOn = true;
+							} else if (Iterables.contains(ourFlavors, mf.name+"_off")) {
+								defOn = false;
+							}
+						}
 						FlavorChoice on;
 						choices.add(on = FlavorChoice.builder()
 								.id(mf.name+"_on")
@@ -491,9 +498,13 @@ public class PackwizHandler extends AbstractFormatHandler {
 						throw new AssertionError(e);
 					}
 					
-					List<String> mfFlavors = metafileFlavors.get(mf.name);
-					if (mfFlavors != null) Log.debug("Flavors for "+mf.name+": "+mfFlavors);
-					if (mfFlavors != null && !Iterables.intersects(mfFlavors, ourFlavors)) {
+					List<String> mfFlavors = new ArrayList<>();
+					List<String> pathFlavors = metafileFlavors.get("/"+mf.path);
+					List<String> nameFlavors = metafileFlavors.get(mf.name);
+					if (pathFlavors != null) mfFlavors.addAll(pathFlavors);
+					if (nameFlavors != null) mfFlavors.addAll(nameFlavors);
+					Log.debug("Flavors for /"+mf.path+" ("+mf.name+"): "+mfFlavors);
+					if (!mfFlavors.isEmpty() && !Iterables.intersects(mfFlavors, ourFlavors)) {
 						Log.info("Skipping "+mf.target+" as it's not eligible for our selected flavors");
 						continue;
 					}

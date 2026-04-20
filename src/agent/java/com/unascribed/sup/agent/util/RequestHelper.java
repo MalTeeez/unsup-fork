@@ -208,7 +208,7 @@ public class RequestHelper {
 				JsonObject data = loadJson(new URI("https://product-details.mozilla.org/1.0/firefox_versions.json"), 4*K, null);
 				currentFirefoxVersion = data.getString("LATEST_FIREFOX_VERSION");
 			} catch (Throwable t) {
-				currentFirefoxVersion = "133.0";
+				currentFirefoxVersion = "149.0";
 			}
 			int firstDot = currentFirefoxVersion.indexOf('.');
 			if (firstDot != -1) {
@@ -233,7 +233,7 @@ public class RequestHelper {
 				}
 				if (fhostile) {
 					reqbldr.header("Accept", "text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8");
-					reqbldr.header("Accept-Language", "en-US,en;q=0.5");
+					reqbldr.header("Accept-Language", "en-US,en;q=0.9");
 					reqbldr.header("Accept-Encoding", "gzip, deflate, br, zstd");
 					reqbldr.header("Sec-Fetch-Dest", "document");
 					reqbldr.header("Sec-Fetch-Mode", "navigate");
