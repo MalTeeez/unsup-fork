@@ -137,7 +137,7 @@ public class Agent {
 			}
 			
 			if (!config().noGui()) {
-				PuppetHandler.create();
+				new Thread(PuppetHandler::create, "Puppet starter").start();
 				addCleanupAction(PuppetHandler::destroy);
 			}
 			

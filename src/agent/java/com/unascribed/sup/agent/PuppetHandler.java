@@ -44,12 +44,14 @@ import java.util.concurrent.ExecutionException;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
 import java.util.concurrent.Future;
+import java.util.concurrent.LinkedBlockingQueue;
 import java.util.concurrent.ThreadLocalRandom;
 import java.util.concurrent.TimeUnit;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 import org.brotli.dec.BrotliInputStream;
 
+import com.unascribed.flexver.FlexVerComparator;
 import com.unascribed.sup.PlatDetect;
 import com.unascribed.sup.PlatDetect.ArchType;
 import com.unascribed.sup.PlatDetect.OSType;
@@ -65,8 +67,12 @@ import com.unascribed.sup.pieces.Latch;
 
 public class PuppetHandler {
 	
-	public static Process puppet;
-	public static OutputStream puppetOut;
+	public static volatile Process puppet;
+	public static volatile OutputStream puppetOut;
+	
+	private static final LinkedBlockingQueue<String> commandQueue = new LinkedBlockingQueue<>();
+	
+	private static volatile boolean destroyed = false;
 	
 	private static String title;
 	private static int lastReportedProgress = 0;
@@ -92,7 +98,8 @@ public class PuppetHandler {
 	};
 	
 	public static void destroy() {
-		puppet.destroy();
+		destroyed = true;
+		if (puppet != null) puppet.destroy();
 	}
 	
 	public static void create() {
@@ -148,6 +155,9 @@ public class PuppetHandler {
 					args.add("-Djbr.catch.SIGABRT=true");
 					args.add("-D"+SysPropDefs.LANGUAGE+"="+Agent.config().lang());
 					args.add("-D"+SysPropDefs.PUPPET_MODE+"="+Agent.config().puppetMode());
+					if (FlexVerComparator.compare(System.getProperty("java.version"), "17") >= 0) {
+						args.add("--enable-native-access=ALL-UNNAMED");
+					}
 					for (String prop : copyableProps) {
 						String v = System.getProperty(prop);
 						if (v != null) {
@@ -250,6 +260,7 @@ public class PuppetHandler {
 		if (puppet == null) {
 			Log.warn("Failed to summon a Puppet. Continuing without a GUI.");
 		} else {
+			if (checkEarlyDestroy()) return;
 			Thread puppetErr = new Thread(() -> {
 				try (BufferedReader br = new BufferedReader(new InputStreamReader(puppet.getErrorStream(), StandardCharsets.UTF_8))) {
 					while (true) {
@@ -259,6 +270,8 @@ public class PuppetHandler {
 						if (imk.find()) {
 							// sigh
 							Log.log("DEBUG", "puppet", "macOS chose the "+imk.group(1)+" IMKClient implementation");
+						} else if (line.startsWith("WARNING: ") && (line.contains("sun.misc.Unsafe") || line.contains("Please consider reporting this"))) {
+							// ignore unsafe deprecation warnings
 						} else if (line.contains("|")) {
 							int idx = line.indexOf('|');
 							Log.log(line.substring(0, idx), "puppet", line.substring(idx+1));
@@ -279,6 +292,7 @@ public class PuppetHandler {
 			} catch (IOException e) {
 				t = e;
 			}
+			if (checkEarlyDestroy()) return;
 			if (firstLine == null) {
 				Log.warn("Puppet failed to come alive. Continuing without a GUI.", t);
 				puppet.destroy();
@@ -292,11 +306,16 @@ public class PuppetHandler {
 			} else {
 				Log.debug("Puppet is alive! Continuing.");
 				puppetOut = new BufferedOutputStream(puppet.getOutputStream(), 512);
+				while (true) {
+					var delayedOrder = commandQueue.poll();
+					if (delayedOrder == null) break;
+					tellPuppet(delayedOrder);
+				}
 				Thread puppetThread = new Thread(() -> {
 					try (BufferedReader br2 = br) {
 						String eatenLine = null;
 						int crashState = 0;
-						while (true) {
+						while (!destroyed) {
 							String line = br.readLine();
 							if (line == null) return;
 							if (line.equals("closeRequested")) {
@@ -331,6 +350,9 @@ public class PuppetHandler {
 							}
 						}
 					} catch (IOException | InterruptedException e) {}
+					try {
+						if (puppet != null) puppet.destroyForcibly();
+					} catch (Throwable t2) {}
 				}, "unsup puppet out parser");
 				puppetThread.setDaemon(true);
 				puppetThread.start();
@@ -338,6 +360,15 @@ public class PuppetHandler {
 		}
 	}
 	
+	private static boolean checkEarlyDestroy() {
+		if (destroyed) {
+			Log.debug("Puppet was destroyed before it finished starting.");
+			puppet.destroy();
+			return true;
+		}
+		return false;
+	}
+
 	private static String determineErrorFileName() {
 		return "unsup-puppet-native-crash-"+crashId+".log";
 	}
@@ -429,7 +460,10 @@ public class PuppetHandler {
 	}
 
 	public static void tellPuppet(String order) {
-		if (puppetOut == null) return;
+		if (!destroyed && puppetOut == null) {
+			commandQueue.add(order);
+			return;
+		}
 		synchronized (puppetOut) {
 			try {
 				byte[] utf = order.getBytes(StandardCharsets.UTF_8);
