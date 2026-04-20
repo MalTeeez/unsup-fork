@@ -453,7 +453,7 @@ public class PackwizHandler extends AbstractFormatHandler {
 						choices.add(FlavorChoice.builder()
 								.id(mf.name+"_off")
 								.name("Off")
-								.def(defOn)
+								.def(!defOn)
 								.build());
 						metafileFlavors.put(mf.name, Collections.singletonList(on.id()));
 						syntheticGroups.put(mf.name, synth.build());
