@@ -45,7 +45,6 @@ class CACerts {
 			while ((en = zis.getNextEntry()) != null) {
 				try {
 					out.add((X509Certificate)CertificateFactory.getInstance("X.509").generateCertificate(zis));
-					Log.debug("Loaded CA cert "+en.getName());
 				} catch (CertificateException e) {
 					Log.error("Failed to parse CA cert "+en.getName(), e);
 				}

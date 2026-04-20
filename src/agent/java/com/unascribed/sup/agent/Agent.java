@@ -24,24 +24,36 @@ import java.io.FileInputStream;
 import java.io.FileOutputStream;
 import java.io.IOException;
 import java.io.InputStream;
+import java.net.ProxySelector;
 import java.net.URI;
 import java.net.URL;
 import java.nio.file.Files;
+import java.security.KeyStore;
+import java.security.cert.CertificateEncodingException;
 import java.security.cert.X509Certificate;
 import java.util.ArrayList;
+import java.util.LinkedHashSet;
 import java.util.List;
+import java.util.Locale;
 import java.util.Map;
 import java.util.Objects;
 import java.util.Optional;
+import java.util.Set;
+import java.util.StringJoiner;
 import java.util.concurrent.TimeUnit;
 import java.util.function.Function;
 
+import javax.net.ssl.TrustManagerFactory;
+import javax.net.ssl.X509TrustManager;
+
+import com.github.bsideup.jabel.Desugar;
 import com.grack.nanojson.JsonObject;
 import com.grack.nanojson.JsonParser;
 import com.grack.nanojson.JsonWriter;
 import com.unascribed.sup.Unsup;
 import com.unascribed.sup.agent.PuppetHandler.AlertOption;
 import com.unascribed.sup.agent.PuppetHandler.AlertOptionType;
+import com.unascribed.sup.agent.data.HashFunction;
 import com.unascribed.sup.agent.pieces.MemoryCookieJar;
 import com.unascribed.sup.agent.pieces.QDIni;
 import com.unascribed.sup.agent.pieces.QDIni.QDIniException;
@@ -54,6 +66,8 @@ import com.unascribed.sup.bootstrap.Util;
 import com.unascribed.sup.data.AlertMessageType;
 import com.unascribed.sup.data.SysProps;
 import com.unascribed.sup.pieces.ExceptableRunnable;
+import com.unascribed.sup.util.Bases;
+import com.unascribed.sup.util.Multimap;
 import com.unascribed.sup.util.Resources;
 
 import okhttp3.Dns;
@@ -61,6 +75,7 @@ import okhttp3.OkHttpClient;
 import okhttp3.brotli.BrotliInterceptor;
 import okhttp3.internal.concurrent.TaskRunner;
 import okhttp3.tls.HandshakeCertificates;
+import okio.ByteString;
 
 public class Agent {
 
@@ -330,10 +345,75 @@ public class Agent {
 	}
 	
 	private static void setupOkHttp() throws AssertionError {
-		HandshakeCertificates.Builder certsBldr = new HandshakeCertificates.Builder()
-				.addPlatformTrustedCertificates();
-		for (X509Certificate cert : CACerts.certs) {
-			certsBldr.addTrustedCertificate(cert);
+		HandshakeCertificates.Builder certsBldr = new HandshakeCertificates.Builder();
+		@Desugar record CertDef(String source, X509Certificate cert) {}
+		List<CertDef> certDefs = new ArrayList<>();
+		if (config() == null || config().usePlatformCaCerts()) {
+			try {
+				var tmf = TrustManagerFactory.getInstance(TrustManagerFactory.getDefaultAlgorithm());
+				tmf.init((KeyStore)null);
+				if (tmf.getTrustManagers()[0] instanceof X509TrustManager x509) {
+					for (var cert : x509.getAcceptedIssuers()) {
+						certDefs.add(new CertDef("platform", cert));
+					}
+				} else {
+					Log.error("Can't add platform CA certificates as the first default trust manager is not an X509TrustManager??");
+				}
+			} catch (Throwable t) {
+				Log.error("Can't add platform CA certificates due to an unexpected exception", t);
+			}
+		} else {
+			Log.debug("Skipping addition of platform-provided CA certificates");
+		}
+		if (config() == null || config().useBuiltinCaCerts()) {
+			for (var cert : CACerts.certs) {
+				certDefs.add(new CertDef("built-in", cert));
+			}
+		} else {
+			Log.debug("Skipping addition of built-in CA certificates");
+		}
+		if (config() != null) {
+			for (var cert : config().additionalCaCerts()) {
+				certDefs.add(new CertDef("config", cert));
+			}
+			for (String host : config().insecureHosts()) {
+				Log.debug("Adding insecure host "+host);
+				certsBldr.addInsecureHost(host);
+			}
+		}
+		if (certDefs.isEmpty()) {
+			// the first connection attempt will crash with "the trustAnchors parameter must be non-empty" in this state
+			Log.error("Config error: No CA certificates were added! Exiting.");
+			throw Agent.exit(Agent.EXIT_CONFIG_ERROR);
+		} else {
+			Multimap<ByteString, CertDef> defsByEncoded = new Multimap<>();
+			for (var def : certDefs) {
+				byte[] encoded;
+				try {
+					encoded = def.cert.getEncoded();
+				} catch (CertificateEncodingException e) {
+					throw new AssertionError(e);
+				}
+				defsByEncoded.put(ByteString.of(encoded), def);
+			}
+			Set<String> locations = new LinkedHashSet<>();
+			for (var en : defsByEncoded.mapEntries()) {
+				var def = en.getValue().get(0);
+				for (var specificDef : en.getValue()) {
+					locations.add(specificDef.source);
+				}
+				String fp = Bases.bytesToHex(
+								HashFunction.SHA2_256.createMessageDigest()
+									.digest(en.getKey().toByteArray())
+							).toUpperCase(Locale.ROOT).replaceAll("..(?!$)", "$0:");
+				var sj = new StringJoiner(", ");
+				for (var loc : locations) {
+					sj.add(loc);
+				}
+				Log.debug("Adding CA cert "+def.cert.getSubjectX500Principal().getName()+" (defined by "+sj+" - SHA256 fingerprint: "+fp+")");
+				certsBldr.addTrustedCertificate(def.cert);
+				locations.clear();
+			}
 		}
 		HandshakeCertificates certs = certsBldr.build();
 		OkHttpClient bootstrapOkHttp = new OkHttpClient.Builder()
@@ -354,6 +434,7 @@ public class Agent {
 				return chain.proceed(req);
 			})
 			.addInterceptor(BrotliInterceptor.INSTANCE)
+			.proxySelector(config() == null ? ProxySelector.getDefault() : config().proxySelector())
 			.build();
 		okhttp = bootstrapOkHttp.newBuilder()
 				.cookieJar(new MemoryCookieJar())

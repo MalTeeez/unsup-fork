@@ -19,12 +19,20 @@
 
 package com.unascribed.sup.agent;
 
+import java.io.ByteArrayInputStream;
 import java.net.InetAddress;
+import java.net.InetSocketAddress;
+import java.net.Proxy;
+import java.net.ProxySelector;
 import java.net.URI;
 import java.net.URISyntaxException;
 import java.net.UnknownHostException;
+import java.security.cert.CertificateException;
+import java.security.cert.CertificateFactory;
+import java.security.cert.X509Certificate;
 import java.util.ArrayList;
 import java.util.Arrays;
+import java.util.Base64;
 import java.util.Collections;
 import java.util.EnumMap;
 import java.util.HashMap;
@@ -40,6 +48,7 @@ import com.unascribed.sup.agent.auth.Authorizer;
 import com.unascribed.sup.agent.auth.Authorizer.AuthorizerSpec;
 import com.unascribed.sup.agent.pieces.QDIni;
 import com.unascribed.sup.agent.signing.SigProvider;
+import com.unascribed.sup.agent.util.SimpleProxySelector;
 import com.unascribed.sup.data.ColorChoice;
 import com.unascribed.sup.data.SourceFormat;
 import com.unascribed.sup.data.SysProps;
@@ -75,7 +84,10 @@ public record Config(
 		Map<String, String> strings,
 		Optional<String> modpackName, Optional<String> brandingIcon,
 		Geometry flavorDialogGeom, double flavorDialogBias,
-		PuppetMode puppetMode, String lang
+		PuppetMode puppetMode, String lang,
+		ProxySelector proxySelector, List<X509Certificate> additionalCaCerts,
+		List<String> insecureHosts,
+		boolean usePlatformCaCerts, boolean useBuiltinCaCerts
 	) {
 	
 	public Dns dns(OkHttpClient client) {
@@ -120,6 +132,11 @@ public record Config(
 		String initialSubtitle = config.get("subtitle", "");
 		Optional<String> modpackName = Optional.ofNullable(config.get("branding.modpack_name"));
 		Optional<String> brandingIcon = Optional.ofNullable(config.get("branding.icon"));
+		ProxySelector proxySelector = ProxySelector.getDefault();
+		List<X509Certificate> additionalCaCerts = new ArrayList<>();
+		List<String> insecureHosts = new ArrayList<>();
+		boolean usePlatformCaCerts = config.getBoolean("http.use_platform_cacerts", true);
+		boolean useBuiltinCaCerts = config.getBoolean("http.use_builtin_cacerts", true);
 		
 		try {
 			source = new URI(config.get("source"));
@@ -155,6 +172,19 @@ public record Config(
 						for (var av : config.getAll(k)) {
 							envMarkers.put(env, av);
 						}
+					}
+				}
+				case "http" -> {
+					if ("additional_cacert".equals(subkey)) {
+						try {
+							additionalCaCerts.add((X509Certificate)CertificateFactory.getInstance("X.509")
+									.generateCertificate(new ByteArrayInputStream(Base64.getDecoder().decode(v))));
+						} catch (CertificateException e) {
+							Log.error("Config error: CA certificate data for "+subkey+" is malformed! Exiting.", e);
+							throw Agent.exit(Agent.EXIT_CONFIG_ERROR);
+						}
+					} else if ("insecure_host".equals(subkey)) {
+						insecureHosts.add(v);
 					}
 				}
 			}
@@ -215,6 +245,54 @@ public record Config(
 			}
 			detectedEnv = ourEnv;
 		}
+
+		var proxyStr = config.get("http.proxy");
+		if (proxyStr != null) {
+			if ("none".equals(proxyStr)) {
+				Log.debug("Using no proxy");
+				proxySelector = new SimpleProxySelector(Proxy.NO_PROXY);
+			} else if ("default".equals(proxyStr)) {
+				Log.debug("Using default proxy");
+				proxySelector = ProxySelector.getDefault();
+			} else {
+				try {
+					URI proxyUri = new URI(proxyStr);
+					if (proxyUri.getRawUserInfo() != null) {
+						Log.error("Config error: HTTP proxy URI is malformed! Authentication is not supported. Exiting.");
+						throw Agent.exit(Agent.EXIT_CONFIG_ERROR);
+					}
+					if ((proxyUri.getRawPath() != null && proxyUri.getRawPath().length() > 1) || proxyUri.getRawQuery() != null || proxyUri.getRawFragment() != null) {
+						Log.error("Config error: HTTP proxy URI is malformed! A path must not be specified. Exiting.");
+						throw Agent.exit(Agent.EXIT_CONFIG_ERROR);
+					}
+					int defaultPort;
+					Proxy.Type type;
+					switch (proxyUri.getScheme()) {
+						case "http" -> {
+							defaultPort = 80;
+							type = Proxy.Type.HTTP;
+						}
+						case "socks", "socks4", "socks5" -> {
+							defaultPort = 1080;
+							type = Proxy.Type.SOCKS;
+						}
+						default -> {
+							Log.error("Config error: HTTP proxy URI is malformed! Unknown scheme "+proxyUri.getScheme()+". Exiting.");
+							throw Agent.exit(Agent.EXIT_CONFIG_ERROR);
+						}
+					};
+					int port = proxyUri.getPort();
+					if (port == -1) port = defaultPort;
+					Log.debug("Using "+type.name()+" proxy at "+proxyUri.getHost()+":"+port);
+					proxySelector = new SimpleProxySelector(new Proxy(type, new InetSocketAddress(proxyUri.getHost(), port)));
+				} catch (URISyntaxException e) {
+					Log.error("Config error: HTTP proxy URI is malformed! "+e.getMessage()+". Exiting.");
+					throw Agent.exit(Agent.EXIT_CONFIG_ERROR);
+				}
+			}
+		} else {
+			Log.debug("Using default proxy");
+		}
 		
 		return new Config(enforceSecureHashes, useEnvs, detectedEnv, validEnvs, behavior,
 				offerChangeFlavors, format, source, serverAuthority, updateMMCPack, noGui,
@@ -222,7 +300,9 @@ public record Config(
 				Collections.unmodifiableMap(defaultFlavors), packSig, altPackSig,
 				mmcComponentMap.unmodifiable(), Collections.unmodifiableMap(colorChoices),
 				Collections.unmodifiableMap(strings), modpackName, brandingIcon,
-				flavorDialogGeom, flavorDialogBias, puppetMode, lang);
+				flavorDialogGeom, flavorDialogBias, puppetMode, lang, proxySelector,
+				Collections.unmodifiableList(additionalCaCerts), Collections.unmodifiableList(insecureHosts),
+				usePlatformCaCerts, useBuiltinCaCerts);
 	}
 
 	private static Optional<Function<OkHttpClient, Dns>> parseDns(String v) {
