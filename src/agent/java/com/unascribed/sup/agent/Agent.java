@@ -316,7 +316,7 @@ public class Agent {
 				setupOkHttp();
 				int M = 1024*1024;
 				try {
-					var data = RequestHelper.loadAndVerify(new URI(SysProps.BOOTSTRAP_URL.get()), 16*M, new URI(SysProps.BOOTSTRAP_URL+".sig"), key.orElse(null));
+					var data = RequestHelper.loadAndVerify(new URI(SysProps.BOOTSTRAP_URL.get()), 16*M, new URI(SysProps.BOOTSTRAP_URL.get()+".sig"), key.orElse(null));
 					Files.write(configFile.toPath(), data);
 					Log.info("Successfully downloaded bootstrap config");
 					destroyOkHttp(false);
