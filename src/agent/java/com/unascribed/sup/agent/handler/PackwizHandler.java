@@ -350,7 +350,7 @@ public class PackwizHandler extends AbstractFormatHandler {
 									if (ze != null) {
 										try (var in = metafilesZip.getInputStream(ze)) {
 											var dataOpt = RequestHelper.collectLimited(in, 8*K);
-											if (dataOpt.isEmpty()) throw new IOException("Size limit of 8K for "+path+" exceeded");
+											if (!dataOpt.isPresent()) throw new IOException("Size limit of 8K for "+path+" exceeded");
 											var data = dataOpt.get();
 											String computedHash = Bases.bytesToHex(func.createMessageDigest().digest(data));
 											if (computedHash.equals(hash)) {
