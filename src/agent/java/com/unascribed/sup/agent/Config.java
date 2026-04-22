@@ -183,6 +183,11 @@ public record Config(
 			throw ExitCode.CONFIG_ERROR.exit();
 		}
 		
+		if (source.getRawUserInfo() != null) {
+			Log.error("Config error: source URL is malformed! Authorization in the URL is ambiguous and must be specified by prefix in the [authorization] section. Exiting.");
+			throw ExitCode.CONFIG_ERROR.exit();
+		}
+		
 		for (var cc : ColorChoice.values()) {
 			colorChoices.put(cc, config.get("colors."+cc.configName, Bases.intToHex(cc.defaultValue)));
 		}

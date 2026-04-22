@@ -24,7 +24,9 @@ import java.io.FileInputStream;
 import java.io.FileOutputStream;
 import java.io.IOException;
 import java.io.InputStream;
+import java.net.InetAddress;
 import java.net.URI;
+import java.net.UnknownHostException;
 import java.nio.file.Files;
 import java.nio.file.InvalidPathException;
 import java.nio.file.Path;
@@ -93,7 +95,11 @@ public class UpdateHandler {
 			} else {
 				Log.debug("Retrieving from "+src+" in "+fmt+" format");
 				if ("http".equals(src.getScheme()) && Agent.config().packSig() == null) {
-					Log.warn("Using unencrypted HTTP without manifest signing - this is a very bad idea!");
+					try {
+						if (!InetAddress.getByName(src.getHost()).isAnyLocalAddress()) {
+							Log.warn("Using unencrypted HTTP without manifest signing - this is a very bad idea!");
+						}
+					} catch (UnknownHostException e) {}
 				}
 				res = switch (fmt) {
 					case NONE ->

@@ -6,6 +6,7 @@ public enum ExitCode {
 	CONSISTENCY_ERROR,
 	BUG,
 	USER_REQUEST,
+	BOOTSTRAP_FAILED,
 	;
 
 	public AssertionError exit() {

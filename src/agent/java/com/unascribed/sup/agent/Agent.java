@@ -25,6 +25,7 @@ import java.io.FileOutputStream;
 import java.io.IOException;
 import java.io.InputStream;
 import java.net.URI;
+import java.net.URISyntaxException;
 import java.net.URL;
 import java.nio.file.Files;
 import java.security.KeyStore;
@@ -300,23 +301,46 @@ public class Agent {
 			return ini;
 		} else {
 			if (SysProps.BOOTSTRAP_URL.isPresent()) {
-				Log.info("No config found, bootstrapping from "+SysProps.BOOTSTRAP_URL.get());
-				Optional<SigProvider> key = SysProps.BOOTSTRAP_KEY.map(Util.faulty(SigProvider::parse, e -> {
-					Log.error("Failed to parse bootstrap key", e);
+				var rawUri = SysProps.BOOTSTRAP_URL.get();
+				URI uri;
+				try {
+					uri = new URI(SysProps.BOOTSTRAP_URL.get());
+					var censoredUserInfo = uri.getRawUserInfo();
+					if (censoredUserInfo != null) censoredUserInfo = censoredUserInfo.replaceAll("[^:]", "*");
+					Log.info("No config found, bootstrapping from "+new URI(uri.getScheme(), censoredUserInfo, uri.getHost(), uri.getPort(), uri.getRawPath(), uri.getRawQuery(), uri.getRawFragment()));
+				} catch (URISyntaxException e) {
+					Log.error("Bootstrap error: failed to parse URL! Exiting.", e);
+					throw ExitCode.CONFIG_ERROR.exit();
+				}
+				Optional<SigProvider> key = SysProps.BOOTSTRAP_KEY.map(s -> s.replaceFirst("^([^ %]+)%", "$1 ")).map(Util.faulty(SigProvider::parse, e -> {
+					Log.error("Bootstrap error: failed to parse key! Exiting.", e);
 					throw ExitCode.CONFIG_ERROR.exit();
 				}));
-				setupOkHttp(Authorizer.parseSpec(SysProps.BOOTSTRAP_URL.get(), SysProps.BOOTSTRAP_AUTH.orElse("").replaceFirst("^([^ %]+)%", "$1 ")));
+				Optional<AuthorizerSpec> auth;
+				if (SysProps.BOOTSTRAP_AUTH.isPresent()) {
+					if (uri.getRawUserInfo() != null) {
+						Log.error("Bootstrap error: Cannot specify an explicit authorizer and in-URL authentication at the same time! Exiting.");
+						throw ExitCode.CONFIG_ERROR.exit();
+					}
+					auth = Authorizer.parseSpec(rawUri, SysProps.BOOTSTRAP_AUTH.orElse("").replaceFirst("^([^ %]+)%", "$1 "));
+				} else if (uri.getRawUserInfo() != null) {
+					auth = Authorizer.parseSpec(rawUri, "Basic "+uri.getUserInfo());
+				} else {
+					auth = Optional.empty();
+				}
+				System.out.println(auth);
+				setupOkHttp(auth);
 				int M = 1024*1024;
 				try {
-					var data = RequestHelper.loadAndVerify(new URI(SysProps.BOOTSTRAP_URL.get()), 16*M,
+					var data = RequestHelper.loadAndVerify(uri, 16*M,
 							new URI(SysProps.BOOTSTRAP_URL.get()+".sig"), key.orElse(null));
 					Files.write(configFile.toPath(), data);
 					Log.info("Successfully downloaded bootstrap config");
 					destroyOkHttp(false);
 					return loadConfig(lang);
 				} catch (Exception e) {
-					Log.error("Failed to download bootstrap config", e);
-					throw ExitCode.CONFIG_ERROR.exit();
+					Log.error("Bootstrap error: Download failed! Exiting.", e);
+					throw ExitCode.BOOTSTRAP_FAILED.exit();
 				}
 			}
 			Log.warn("No config file found? Doing nothing.");

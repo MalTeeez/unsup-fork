@@ -136,7 +136,8 @@ public class SysPropDefs {
 
 	/**
 	 * {@value}: The public key to use to verify {@code ${unsup.bootstrapUrl}.sig}, in the same
-	 * format as {@code public_key} in the config.
+	 * format as {@code public_key} in the config. As of 1.2.3, the first space may be optionally
+	 * replaced with a percent sign ({@code %}).
 	 * @since 1.1.3
 	 */
 	public static final String BOOTSTRAP_KEY = "unsup.bootstrapKey";
