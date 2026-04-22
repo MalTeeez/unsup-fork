@@ -92,13 +92,17 @@ public class UpdateHandler {
 				return true;
 			} else {
 				Log.debug("Retrieving from "+src+" in "+fmt+" format");
-				if (fmt == SourceFormat.UNSUP) {
-					res = NativeHandler.check(src, autoaccept, forceFlavorDefaults, baseState);
-				} else if (fmt == SourceFormat.PACKWIZ) {
-					res = PackwizHandler.check(src, autoaccept, forceFlavorDefaults, baseState);
-				} else {
-					throw new AssertionError();
+				if ("http".equals(src.getScheme()) && Agent.config().packSig() == null) {
+					Log.warn("Using unencrypted HTTP without manifest signing - this is a very bad idea!");
 				}
+				res = switch (fmt) {
+					case NONE ->
+						throw new AssertionError("Config must be initialized by this point");
+					case UNSUP ->
+						NativeHandler.check(src, autoaccept, forceFlavorDefaults, baseState);
+					case PACKWIZ ->
+						PackwizHandler.check(src, autoaccept, forceFlavorDefaults, baseState);
+				};
 			}
 			if (res != null) {
 				Agent.sourceVersion = res.ourVersion.name();

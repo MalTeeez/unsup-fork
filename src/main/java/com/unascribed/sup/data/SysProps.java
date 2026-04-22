@@ -47,6 +47,7 @@ public class SysProps {
 	public static final BiasedOptional<Boolean> DRY_RUN = getBoolean(SysPropDefs.DRY_RUN, false);
 	public static final Optional<String> BOOTSTRAP_URL = getProperty(SysPropDefs.BOOTSTRAP_URL);
 	public static final Optional<String> BOOTSTRAP_KEY = getProperty(SysPropDefs.BOOTSTRAP_KEY);
+	public static final Optional<String> BOOTSTRAP_AUTH = getProperty(SysPropDefs.BOOTSTRAP_AUTH);
 	
 	
 	public static final BiasedOptional<Boolean> PACKWIZ_CHANGE_FLAVORS = getBoolean(SysPropDefs.PACKWIZ_CHANGE_FLAVORS, false);

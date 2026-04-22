@@ -24,7 +24,6 @@ import java.io.FileInputStream;
 import java.io.FileOutputStream;
 import java.io.IOException;
 import java.io.InputStream;
-import java.net.ProxySelector;
 import java.net.URI;
 import java.net.URL;
 import java.nio.file.Files;
@@ -53,6 +52,8 @@ import com.grack.nanojson.JsonWriter;
 import com.unascribed.sup.Unsup;
 import com.unascribed.sup.agent.PuppetHandler.AlertOption;
 import com.unascribed.sup.agent.PuppetHandler.AlertOptionType;
+import com.unascribed.sup.agent.auth.Authorizer;
+import com.unascribed.sup.agent.auth.Authorizer.AuthorizerSpec;
 import com.unascribed.sup.agent.data.HashFunction;
 import com.unascribed.sup.agent.pieces.MemoryCookieJar;
 import com.unascribed.sup.agent.pieces.QDIni;
@@ -71,7 +72,6 @@ import com.unascribed.sup.util.Bases;
 import com.unascribed.sup.util.Multimap;
 import com.unascribed.sup.util.Resources;
 
-import okhttp3.Dns;
 import okhttp3.OkHttpClient;
 import okhttp3.brotli.BrotliInterceptor;
 import okhttp3.internal.concurrent.TaskRunner;
@@ -88,7 +88,7 @@ public class Agent {
 	static boolean standalone;
 	
 	private static List<ExceptableRunnable> cleanup = new ArrayList<>();
-	private static Config config = new Config();
+	private static @NotNull Config config = new Config();
 	
 	public static final SigProvider unsupSig = SigProvider.of("signify RWTSwM40VCzVER3YWt55m4Fvsg0sjZLEICikuU3cD91gR/2lii/jk67B");
 	
@@ -240,7 +240,7 @@ public class Agent {
 		}
 		config = Config.parse(ini, arg, lang);
 		
-		setupOkHttp();
+		setupOkHttp(Optional.empty());
 		
 		stateFile = new File(".unsup-state.json");
 		if (stateFile.exists()) {
@@ -262,8 +262,7 @@ public class Agent {
 			QDIni ini;
 			try {
 				ini = QDIni.load(configFile);
-				checkForbiddenKey(ini, "strings.dialog.progress.title");
-				checkForbiddenKey(ini, "strings.dialog.progress.title.branded");
+				checkForbiddenKeys(ini, "strings.dialog.progress.title", "strings.dialog.progress.title.branded");
 				Log.debug("Found and loaded unsup.ini. What secrets does it hold?");
 			} catch (Exception e) {
 				Log.error("Found unsup.ini, but couldn't parse it! Exiting.", e);
@@ -301,15 +300,16 @@ public class Agent {
 			return ini;
 		} else {
 			if (SysProps.BOOTSTRAP_URL.isPresent()) {
-				Log.info("No config found, bootstrapping from "+SysProps.BOOTSTRAP_URL);
+				Log.info("No config found, bootstrapping from "+SysProps.BOOTSTRAP_URL.get());
 				Optional<SigProvider> key = SysProps.BOOTSTRAP_KEY.map(Util.faulty(SigProvider::parse, e -> {
 					Log.error("Failed to parse bootstrap key", e);
 					throw ExitCode.CONFIG_ERROR.exit();
 				}));
-				setupOkHttp();
+				setupOkHttp(Authorizer.parseSpec(SysProps.BOOTSTRAP_URL.get(), SysProps.BOOTSTRAP_AUTH.orElse("").replaceFirst("^([^ %]+)%", "$1 ")));
 				int M = 1024*1024;
 				try {
-					var data = RequestHelper.loadAndVerify(new URI(SysProps.BOOTSTRAP_URL.get()), 16*M, new URI(SysProps.BOOTSTRAP_URL.get()+".sig"), key.orElse(null));
+					var data = RequestHelper.loadAndVerify(new URI(SysProps.BOOTSTRAP_URL.get()), 16*M,
+							new URI(SysProps.BOOTSTRAP_URL.get()+".sig"), key.orElse(null));
 					Files.write(configFile.toPath(), data);
 					Log.info("Successfully downloaded bootstrap config");
 					destroyOkHttp(false);
@@ -324,10 +324,12 @@ public class Agent {
 		}
 	}
 	
-	private static void checkForbiddenKey(QDIni ini, String key) {
-		if (ini.containsKey(key)) {
-			Log.error("Attempt to override a forbidden key: "+key);
-			throw ExitCode.CONFIG_ERROR.exit();
+	private static void checkForbiddenKeys(QDIni ini, String... keys) {
+		for (var key : keys) {
+			if (ini.containsKey(key)) {
+				Log.error("Attempt to override a forbidden key: "+key);
+				throw ExitCode.CONFIG_ERROR.exit();
+			}
 		}
 	}
 
@@ -343,7 +345,7 @@ public class Agent {
 	@Desugar
 	private record CertDef(String source, X509Certificate cert) {}
 	
-	private static void setupOkHttp() throws AssertionError {
+	private static void setupOkHttp(Optional<AuthorizerSpec> additionalAuthorizer) throws AssertionError {
 		HandshakeCertificates.Builder certsBldr = new HandshakeCertificates.Builder();
 		List<CertDef> certDefs = new ArrayList<>();
 		if (config().usePlatformCaCerts()) {
@@ -411,6 +413,11 @@ public class Agent {
 				locations.clear();
 			}
 		}
+		var authorizers = new ArrayList<AuthorizerSpec>();
+		if (additionalAuthorizer.isPresent()) {
+			authorizers.add(additionalAuthorizer.get());
+		}
+		authorizers.addAll(config().authorizers());
 		HandshakeCertificates certs = certsBldr.build();
 		OkHttpClient bootstrapOkHttp = new OkHttpClient.Builder()
 			.connectTimeout(30, TimeUnit.SECONDS)
@@ -420,7 +427,7 @@ public class Agent {
 			.addInterceptor(chain -> {
 				String url = chain.request().url().toString();
 				var req = chain.request();
-				for (var en : config().authorizers()) {
+				for (var en : authorizers) {
 					if (url.startsWith(en.urlPrefix())) {
 						var bldr = req.newBuilder();
 						en.auth().authorize(req, bldr);
@@ -430,11 +437,11 @@ public class Agent {
 				return chain.proceed(req);
 			})
 			.addInterceptor(BrotliInterceptor.INSTANCE)
-			.proxySelector(config() == null ? ProxySelector.getDefault() : config().proxySelector())
+			.proxySelector(config().proxySelector())
 			.build();
 		okhttp = bootstrapOkHttp.newBuilder()
 				.cookieJar(new MemoryCookieJar())
-				.dns(config() == null ? Dns.SYSTEM : config().dns(bootstrapOkHttp))
+				.dns(config().dns(bootstrapOkHttp))
 				.build();
 	}
 	

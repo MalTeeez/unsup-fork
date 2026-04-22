@@ -140,6 +140,15 @@ public class SysPropDefs {
 	 * @since 1.1.3
 	 */
 	public static final String BOOTSTRAP_KEY = "unsup.bootstrapKey";
+
+	/**
+	 * {@value}: The authorizer to use to retrieve the bootstrapUrl, formatted the same as a value
+	 * in the {@code [authorization]} config section, but with the first space optionally replaced
+	 * with a percent sign ({@code %}). The URL prefix will be the value of
+	 * bootstrapUrl.
+	 * @since 1.2.3
+	 */
+	public static final String BOOTSTRAP_AUTH = "unsup.bootstrapAuth";
 	
 	
 	/**

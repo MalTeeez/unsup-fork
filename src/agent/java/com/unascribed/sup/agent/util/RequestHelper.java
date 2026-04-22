@@ -44,6 +44,7 @@ import java.time.format.DateTimeParseException;
 import java.time.temporal.ChronoUnit;
 import java.util.Arrays;
 import java.util.HashSet;
+import java.util.Optional;
 import java.util.OptionalLong;
 import java.util.Set;
 import java.util.concurrent.TimeUnit;
@@ -63,6 +64,7 @@ import com.unascribed.sup.agent.Log;
 import com.unascribed.sup.agent.data.HashFunction;
 import com.unascribed.sup.agent.signing.SigProvider;
 import com.unascribed.sup.agent.util.CRLFHell.CorruptionType;
+import com.unascribed.sup.ann.NotNull;
 import com.unascribed.sup.bootstrap.Util;
 import com.unascribed.sup.data.SysProps;
 import com.unascribed.sup.pieces.NullOutputStream;
@@ -142,8 +144,9 @@ public class RequestHelper {
 		return withRetries(10, () -> {
 			try {
 				InputStream conn = get(url).stream();
-				byte[] resp = RequestHelper.collectLimited(conn, sizeLimit);
-				return resp;
+				var resp = RequestHelper.collectLimited(conn, sizeLimit);
+				if (resp.isPresent()) return resp.get();
+				throw new IOException("Received more than "+sizeLimit+" bytes from server");
 			} catch (SocketTimeoutException e) {
 				throw new Retry("Connection to "+url.getHost()+" timed out",
 						SocketTimeoutException::new);
@@ -267,8 +270,9 @@ public class RequestHelper {
 							.definedDelay(delay);
 					}
 					if (res.code() == 404 || res.code() == 410) throw new FileNotFoundException(url.toString());
-					byte[] b = RequestHelper.collectLimited(res.body().byteStream(), 512);
-					String s = b == null ? "(response too long)" : new String(b, StandardCharsets.UTF_8);
+					String s = RequestHelper.collectLimited(res.body().byteStream(), 512)
+							.map(b -> new String(b, StandardCharsets.UTF_8))
+							.orElse("(response too long)");
 					res.close();
 					if (res.code()/100 == 500) {
 						throw new Retry(url.getHost()+" responded with a server error for "+url+" ("+res.code()+")",
@@ -530,9 +534,9 @@ public class RequestHelper {
 	 * Closes the stream when done.
 	 */
 	@SuppressFBWarnings("PZLA_PREFER_ZERO_LENGTH_ARRAYS")
-	public static byte[] collectLimited(InputStream in, int limit) throws IOException {
+	public static @NotNull Optional<byte[]> collectLimited(InputStream in, int limit) throws IOException {
 		try (in) {
-			ByteArrayOutputStream baos = new ByteArrayOutputStream();
+			var baos = new ByteArrayOutputStream();
 			int totalRead = 0;
 			byte[] buf = new byte[limit / 4];
 			while (true) {
@@ -540,11 +544,11 @@ public class RequestHelper {
 				if (read == -1) break;
 				totalRead += read;
 				if (totalRead > limit) {
-					return null;
+					return Optional.empty();
 				}
 				baos.write(buf, 0, read);
 			}
-			return baos.toByteArray();
+			return Optional.of(baos.toByteArray());
 		}
 	}
 

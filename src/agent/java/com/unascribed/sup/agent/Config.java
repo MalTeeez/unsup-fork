@@ -69,26 +69,26 @@ import okhttp3.dnsoverhttps.DnsOverHttps;
  * An immutable snapshot of an "effective configuration", pulled from the config file (unsup.ini),
  * system properties, heuristics, etc.
  */
-@Desugar @NotNull
+@Desugar
 public record Config(
 		boolean enforceSecureHashes,
-		boolean useEnvs, @Nullable String detectedEnv, Set<String> validEnvs,
-		Behavior behavior, boolean offerChangeFlavors,
-		SourceFormat format, URI source, boolean serverAuthority,
+		boolean useEnvs, @Nullable String detectedEnv, @NotNull Set<String> validEnvs,
+		@NotNull Behavior behavior, boolean offerChangeFlavors,
+		@NotNull SourceFormat format, @NotNull URI source, boolean serverAuthority,
 		boolean updateMMCPack, boolean noGui,
-		String initialSubtitle,
-		List<AuthorizerSpec> authorizers,
-		Function<OkHttpClient, @NotNull Dns> dnsBuilder,
-		Map<String, String> defaultFlavors,
+		@NotNull String initialSubtitle,
+		@NotNull List<AuthorizerSpec> authorizers,
+		@NotNull Function<OkHttpClient, @NotNull Dns> dnsBuilder,
+		@NotNull Map<String, String> defaultFlavors,
 		@Nullable SigProvider packSig, @Nullable SigProvider altPackSig,
-		Multimap<String, String> mmcComponentMap,
-		Map<ColorChoice, String> colorChoices,
-		Map<String, String> strings,
-		Optional<String> modpackName, Optional<String> brandingIcon,
-		Geometry flavorDialogGeom, double flavorDialogBias,
-		PuppetMode puppetMode, String lang,
-		@Nullable ProxySelector proxySelector, List<X509Certificate> additionalCaCerts,
-		List<String> insecureHosts,
+		@NotNull Multimap<String, String> mmcComponentMap,
+		@NotNull Map<ColorChoice, String> colorChoices,
+		@NotNull Map<String, String> strings,
+		@NotNull Optional<String> modpackName, @NotNull Optional<String> brandingIcon,
+		@NotNull Geometry flavorDialogGeom, double flavorDialogBias,
+		@NotNull PuppetMode puppetMode, @NotNull String lang,
+		@Nullable ProxySelector proxySelector, @NotNull List<X509Certificate> additionalCaCerts,
+		@NotNull List<String> insecureHosts,
 		boolean usePlatformCaCerts, boolean useBuiltinCaCerts
 	) {
 	
