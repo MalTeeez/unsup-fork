@@ -57,7 +57,7 @@ public class NativeHandler extends AbstractFormatHandler {
 	
 	public static CheckResult check(URI src, boolean autoaccept, boolean forceFlavorDefaults, JsonObject baseState) throws IOException, JsonParserException, URISyntaxException {
 		Log.info("Loading unsup-format manifest from "+src);
-		JsonObject manifest = RequestHelper.loadJson(src, 32*K, src.resolve("manifest.sig"));
+		JsonObject manifest = RequestHelper.loadJson(src, 1*M, src.resolve("manifest.sig"));
 		checkManifestFlavor(manifest, "root", it -> it == 1);
 		Version ourVersion = Version.fromJson(baseState.getObject("current_version"));
 		if (!manifest.containsKey("versions")) throw new IOException("Manifest is missing versions field");
@@ -174,7 +174,7 @@ public class NativeHandler extends AbstractFormatHandler {
 			Log.info("Update available! We have nothing, they have "+theirVersion);
 			JsonObject bootstrap = null;
 			try {
-				bootstrap = RequestHelper.loadJson(src.resolve("bootstrap.json"), 2*M, src.resolve("bootstrap.sig"));
+				bootstrap = RequestHelper.loadJson(src.resolve("bootstrap.json"), 16*M, src.resolve("bootstrap.sig"));
 			} catch (FileNotFoundException e) {
 				Log.info("Bootstrap manifest missing, will have to retrieve and collapse every update");
 			}
@@ -257,7 +257,7 @@ public class NativeHandler extends AbstractFormatHandler {
 			int updates = theirVersion.code() - ourVersion.code();
 			for (int i = 0; i < updates; i++) {
 				int code = ourVersion.code() +(i+1);
-				JsonObject ver = RequestHelper.loadJson(src.resolve(Util.uriOfPath("versions/"+code+".json")), 2*M,
+				JsonObject ver = RequestHelper.loadJson(src.resolve(Util.uriOfPath("versions/"+code+".json")), 4*M,
 						src.resolve(Util.uriOfPath("versions/"+code+".sig")));
 				checkManifestFlavor(ver, "update", it -> it == 1);
 				HashFunction func = HashFunction.byName(ver.getString("hash_function", DEFAULT_HASH_FUNCTION));
