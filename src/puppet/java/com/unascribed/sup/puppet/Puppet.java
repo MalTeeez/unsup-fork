@@ -45,10 +45,10 @@ import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicReference;
 import java.util.zip.GZIPInputStream;
 
-import javax.annotation.NotNull;
-
 import org.brotli.dec.BrotliInputStream;
 
+import com.unascribed.sup.ann.NotNull;
+import com.unascribed.sup.ann.Nullable;
 import com.unascribed.sup.data.AlertMessageType;
 import com.unascribed.sup.data.ColorChoice;
 import com.unascribed.sup.data.FlavorGroup;
@@ -232,8 +232,9 @@ public class Puppet {
 						case "belay" -> {
 							r = () -> {
 								synchronized (orders) {
-									if (orders.containsKey(arg)) {
-										orders.remove(arg).cancel(false);
+									var toBelay = orders.remove(arg);
+									if (toBelay != null) {
+										toBelay.cancel(false);
 										orderRunnables.remove(arg);
 									}
 								}
@@ -243,8 +244,9 @@ public class Puppet {
 							r = () -> {
 								Runnable inner = null;
 								synchronized (orders) {
-									if (orders.containsKey(arg)) {
-										if (orders.remove(arg).cancel(false)) {
+									var toExpedite = orders.remove(arg);
+									if (toExpedite != null) {
+										if (toExpedite.cancel(false)) {
 											// we don't want to be holding the orders mutex while we run
 											// the original order
 											inner = orderRunnables.remove(arg);
@@ -439,7 +441,7 @@ public class Puppet {
 		}
 	}
 	
-	public static <T> T submitToMainThread(Callable<T> r) throws InterruptedException, ExecutionException {
+	public static <@Nullable T> T submitToMainThread(Callable<T> r) throws InterruptedException, ExecutionException {
 		if (isMainThread()) {
 			try {
 				return r.call();
@@ -448,7 +450,7 @@ public class Puppet {
 			}
 		} else {
 			var ref = new AtomicReference<T>(null);
-			var err = new AtomicReference<Throwable>(null);
+			var err = new AtomicReference<@Nullable Throwable>(null);
 			var latch = new Latch();
 			mainThreadWorkQueue.add(() -> {
 				try {

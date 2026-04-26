@@ -136,10 +136,20 @@ public class SysPropDefs {
 
 	/**
 	 * {@value}: The public key to use to verify {@code ${unsup.bootstrapUrl}.sig}, in the same
-	 * format as {@code public_key} in the config.
+	 * format as {@code public_key} in the config. As of 1.2.3, the first space may be optionally
+	 * replaced with a percent sign ({@code %}).
 	 * @since 1.1.3
 	 */
 	public static final String BOOTSTRAP_KEY = "unsup.bootstrapKey";
+
+	/**
+	 * {@value}: The authorizer to use to retrieve the bootstrapUrl, formatted the same as a value
+	 * in the {@code [authorization]} config section, but with the first space optionally replaced
+	 * with a percent sign ({@code %}). The URL prefix will be the value of
+	 * bootstrapUrl.
+	 * @since 1.2.3
+	 */
+	public static final String BOOTSTRAP_AUTH = "unsup.bootstrapAuth";
 	
 	
 	/**
@@ -195,5 +205,22 @@ public class SysPropDefs {
 	 */
 	@Deprecated
 	public static final String PUPPET_PLATFORM = "unsup.puppet.opengl.platform";
+	
+	/**
+	 * {@value}: Explicitly request asynchronous or synchronous puppet starting.
+	 * <ul>
+	 * <li><b>true</b>: Force async puppet start.</li>
+	 * <li><b>false</b>: Force sync puppet start. (Default)</li>
+	 * </ul>
+	 * @since 1.2.2
+	 */
+	public static final String PUPPET_ASYNC = "unsup.puppetAsync";
+	
+	/**
+	 * {@value}: <b>Native mode only.</b> Explicitly specify a remote version code to update to,
+	 * instead of using the version specified by the remote.
+	 * @since 0.2.0-pre1
+	 */
+	public static final String DEBUG_OVERRIDE_REMOTE_VERSION_CODE = "unsup.debug.overrideRemoteVersionCode";
 	
 }

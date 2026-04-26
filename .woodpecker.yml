@@ -66,7 +66,7 @@ steps:
       from_secret: forgejo_key
   depends_on: [clone, restore-cache]
   commands:
-  - gradle clean build publish -Punsup.ci --info
+  - gradle --dependency-verification strict clean build publish -Punsup.ci --info
   - gradle --stop
   - rm -rf .gradle-user/daemon
   - chmod +x ./update-snapshot-release.sh

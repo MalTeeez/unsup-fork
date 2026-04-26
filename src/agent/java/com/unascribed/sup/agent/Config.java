@@ -19,12 +19,20 @@
 
 package com.unascribed.sup.agent;
 
+import java.io.ByteArrayInputStream;
 import java.net.InetAddress;
+import java.net.InetSocketAddress;
+import java.net.Proxy;
+import java.net.ProxySelector;
 import java.net.URI;
 import java.net.URISyntaxException;
 import java.net.UnknownHostException;
+import java.security.cert.CertificateException;
+import java.security.cert.CertificateFactory;
+import java.security.cert.X509Certificate;
 import java.util.ArrayList;
 import java.util.Arrays;
+import java.util.Base64;
 import java.util.Collections;
 import java.util.EnumMap;
 import java.util.HashMap;
@@ -40,6 +48,9 @@ import com.unascribed.sup.agent.auth.Authorizer;
 import com.unascribed.sup.agent.auth.Authorizer.AuthorizerSpec;
 import com.unascribed.sup.agent.pieces.QDIni;
 import com.unascribed.sup.agent.signing.SigProvider;
+import com.unascribed.sup.agent.util.SimpleProxySelector;
+import com.unascribed.sup.ann.NotNull;
+import com.unascribed.sup.ann.Nullable;
 import com.unascribed.sup.data.ColorChoice;
 import com.unascribed.sup.data.SourceFormat;
 import com.unascribed.sup.data.SysProps;
@@ -61,28 +72,68 @@ import okhttp3.dnsoverhttps.DnsOverHttps;
 @Desugar
 public record Config(
 		boolean enforceSecureHashes,
-		boolean useEnvs, String detectedEnv, Set<String> validEnvs,
-		Behavior behavior, boolean offerChangeFlavors,
-		SourceFormat format, URI source, boolean serverAuthority,
-		boolean updateMMCPack, boolean noGui, boolean useParentDirectory,
-		String initialSubtitle,
-		List<AuthorizerSpec> authorizers,
-		Function<OkHttpClient, Dns> dnsBuilder,
-		Map<String, String> defaultFlavors,
-		SigProvider packSig, SigProvider altPackSig,
-		Multimap<String, String> mmcComponentMap,
-		Map<ColorChoice, String> colorChoices,
-		Map<String, String> strings,
-		Optional<String> modpackName, Optional<String> brandingIcon,
-		Geometry flavorDialogGeom, double flavorDialogBias,
-		PuppetMode puppetMode, String lang
+		boolean useEnvs, @Nullable String detectedEnv, @NotNull Set<String> validEnvs,
+		@NotNull Behavior behavior, boolean offerChangeFlavors,
+		@NotNull SourceFormat format, @NotNull URI source, boolean serverAuthority,
+		boolean updateMMCPack, boolean noGui,
+        boolean useParentDirectory,
+		@NotNull String initialSubtitle,
+		@NotNull List<AuthorizerSpec> authorizers,
+		@NotNull Function<OkHttpClient, @NotNull Dns> dnsBuilder,
+		@NotNull Map<String, String> defaultFlavors,
+		@Nullable SigProvider packSig, @Nullable SigProvider altPackSig,
+		@NotNull Multimap<String, String> mmcComponentMap,
+		@NotNull Map<ColorChoice, String> colorChoices,
+		@NotNull Map<String, String> strings,
+		@NotNull Optional<String> modpackName, @NotNull Optional<String> brandingIcon,
+		@NotNull Geometry flavorDialogGeom, double flavorDialogBias,
+		@NotNull PuppetMode puppetMode, @NotNull String lang,
+		@Nullable ProxySelector proxySelector, @NotNull List<X509Certificate> additionalCaCerts,
+		@NotNull List<String> insecureHosts,
+		boolean usePlatformCaCerts, boolean useBuiltinCaCerts
 	) {
 	
+	public Config() {
+		this(
+			/*boolean enforceSecureHashes*/false,
+			/*boolean useEnvs*/false,
+			/*@Nullable String detectedEnv*/null,
+			/*Set<String> validEnvs*/Collections.emptySet(),
+			/*Behavior behavior*/Behavior.MANUAL,
+			/*boolean offerChangeFlavors*/false,
+			/*SourceFormat format*/SourceFormat.NONE,
+			/*URI source*/URI.create("invalid://invalid.invalid"),
+			/*boolean serverAuthority*/false,
+			/*boolean updateMMCPack*/false,
+			/*boolean noGui*/false,
+			/*String initialSubtitle*/"",
+			/*List<AuthorizerSpec> authorizers*/Collections.emptyList(),
+			/*Function<OkHttpClient, @NotNull Dns> dnsBuilder*/c -> Dns.SYSTEM,
+			/*Map<String, String> defaultFlavors*/Collections.emptyMap(),
+			/*@Nullable SigProvider packSig*/null,
+			/*@Nullable SigProvider altPackSig*/null,
+			/*Multimap<String, String> mmcComponentMap*/new Multimap<String, String>().unmodifiable(),
+			/*Map<ColorChoice, String> colorChoices*/Collections.emptyMap(),
+			/*Map<String, String> strings*/Collections.emptyMap(),
+			/*Optional<String> modpackName*/Optional.empty(),
+			/*Optional<String> brandingIcon*/Optional.empty(),
+			/*Geometry flavorDialogGeom*/new Geometry(600, 400),
+			/*double flavorDialogBias*/0.5,
+			/*PuppetMode puppetMode*/PuppetMode.AUTO,
+			/*String lang*/SysProps.LANGUAGE.orBias(),
+			/*ProxySelector proxySelector*/ProxySelector.getDefault(),
+			/*List<X509Certificate> additionalCaCerts*/Collections.emptyList(),
+			/*List<String> insecureHosts*/Collections.emptyList(),
+			/*boolean usePlatformCaCerts*/true,
+			/*boolean useBuiltinCaCerts*/true
+		);
+	}
+
 	public Dns dns(OkHttpClient client) {
 		return dnsBuilder.apply(client);
 	}
 	
-	public static Config parse(QDIni config, String arg, String lang) {
+	public static Config parse(QDIni config, @Nullable String arg, String lang) {
 		// this is kind of a mess, but it's also very direct.
 		// could smother it in reflection to make it more "elegant" but who fucking cares man
 		// this whole codebase is kind of about stringing together a bunch of disparate nonsense
@@ -106,7 +157,7 @@ public record Config(
 		Function<OkHttpClient, Dns> dnsBuilder = parseDns(config.get("dns", "system"))
 			.orElseGet(() -> {
 				Log.error("Config file error: dns is not valid at "+config.getBlame("dns")+" - expected 'system', 'quad9', or an HTTPS URL, but got '"+config.get("dns")+"'! Exiting.");
-				throw Agent.exit(Agent.EXIT_CONFIG_ERROR);
+				throw ExitCode.CONFIG_ERROR.exit();
 			});
 		boolean noGui = determineNoGui(config);
 		boolean enforceSecureHashes = config.getBoolean("enforce_secure_hashes", false);
@@ -121,12 +172,22 @@ public record Config(
 		String initialSubtitle = config.get("subtitle", "");
 		Optional<String> modpackName = Optional.ofNullable(config.get("branding.modpack_name"));
 		Optional<String> brandingIcon = Optional.ofNullable(config.get("branding.icon"));
-		
+		ProxySelector proxySelector = ProxySelector.getDefault();
+		List<X509Certificate> additionalCaCerts = new ArrayList<>();
+		List<String> insecureHosts = new ArrayList<>();
+		boolean usePlatformCaCerts = config.getBoolean("http.use_platform_cacerts", true);
+		boolean useBuiltinCaCerts = config.getBoolean("http.use_builtin_cacerts", true);
+
 		try {
 			source = new URI(config.get("source"));
 		} catch (URISyntaxException e) {
 			Log.error("Config error: source URL is malformed! "+e.getMessage()+". Exiting.");
-			throw Agent.exit(Agent.EXIT_CONFIG_ERROR);
+			throw ExitCode.CONFIG_ERROR.exit();
+		}
+
+		if (source.getRawUserInfo() != null) {
+			Log.error("Config error: source URL is malformed! Authorization in the URL is ambiguous and must be specified by prefix in the [authorization] section. Exiting.");
+			throw ExitCode.CONFIG_ERROR.exit();
 		}
 		
 		for (var cc : ColorChoice.values()) {
@@ -146,7 +207,7 @@ public record Config(
 				case "authorization" -> {
 					authorizers.add(Authorizer.parseSpec(subkey, v).orElseGet(() -> {
 						Log.error("Config error: authorizer for "+subkey+" is malformed! Exiting.");
-						throw Agent.exit(Agent.EXIT_CONFIG_ERROR);
+						throw ExitCode.CONFIG_ERROR.exit();
 					}));
 				}
 				case "env" -> {
@@ -158,6 +219,19 @@ public record Config(
 						}
 					}
 				}
+				case "http" -> {
+					if ("additional_cacert".equals(subkey)) {
+						try {
+							additionalCaCerts.add((X509Certificate)CertificateFactory.getInstance("X.509")
+									.generateCertificate(new ByteArrayInputStream(Base64.getDecoder().decode(v))));
+						} catch (CertificateException e) {
+							Log.error("Config error: CA certificate data for "+subkey+" is malformed! Exiting.", e);
+							throw ExitCode.CONFIG_ERROR.exit();
+						}
+					} else if ("insecure_host".equals(subkey)) {
+						insecureHosts.add(v);
+					}
+				}
 			}
 		}
 		
@@ -166,7 +240,7 @@ public record Config(
 			String forcedEnv = arg == null ? config.get("force_env") : arg;
 			if (Agent.standalone && forcedEnv == null) {
 				Log.error("Cannot sync an env-based config in standalone mode unless an argument is given specifying the env! Exiting.");
-				throw Agent.exit(Agent.EXIT_CONFIG_ERROR);
+				throw ExitCode.CONFIG_ERROR.exit();
 			}
 			List<String> checkedMarkers = new ArrayList<>();
 			String ourEnv = forcedEnv;
@@ -181,7 +255,9 @@ public record Config(
 							if (!possibility.contains("/")) {
 								possibility = possibility.replace('.', '/')+".class";
 							}
-							if (Bootstrap.class.getClassLoader().getResource(possibility) != null) {
+							var cl = Bootstrap.class.getClassLoader();
+							assert cl != null;
+							if (cl.getResource(possibility) != null) {
 								ourEnv = en.getKey();
 								break glass;
 							}
@@ -191,7 +267,7 @@ public record Config(
 			}
 			if (validEnvs.isEmpty()) {
 				Log.error("use_envs is true, but found no env declarations! Exiting.");
-				throw Agent.exit(Agent.EXIT_CONFIG_ERROR);
+				throw ExitCode.CONFIG_ERROR.exit();
 			}
 			if (ourEnv == null) {
 				Log.error("use_envs is true, and we found no env markers! Checked for the following markers:");
@@ -199,7 +275,7 @@ public record Config(
 					Log.error("- "+s);
 				}
 				Log.error("Exiting.");
-				throw Agent.exit(Agent.EXIT_CONFIG_ERROR);
+				throw ExitCode.CONFIG_ERROR.exit();
 			}
 			if (!validEnvs.contains(ourEnv)) {
 				Log.error("Invalid env specified: \""+ourEnv+"\"! Valid envs:");
@@ -207,7 +283,7 @@ public record Config(
 					Log.error("- "+s);
 				}
 				Log.error("Exiting.");
-				throw Agent.exit(Agent.EXIT_CONFIG_ERROR);
+				throw ExitCode.CONFIG_ERROR.exit();
 			}
 			if (forcedEnv != null) {
 				Log.info("Declared env is "+ourEnv);
@@ -216,17 +292,68 @@ public record Config(
 			}
 			detectedEnv = ourEnv;
 		}
-		
+
+		var proxyStr = config.get("http.proxy");
+		if (proxyStr != null) {
+			if ("none".equals(proxyStr)) {
+				Log.debug("Using no proxy");
+				proxySelector = new SimpleProxySelector(Proxy.NO_PROXY);
+			} else if ("default".equals(proxyStr)) {
+				Log.debug("Using default proxy");
+				proxySelector = ProxySelector.getDefault();
+			} else {
+				try {
+					URI proxyUri = new URI(proxyStr);
+					if (proxyUri.getRawUserInfo() != null) {
+						Log.error("Config error: HTTP proxy URI is malformed! Authentication is not supported. Exiting.");
+						throw ExitCode.CONFIG_ERROR.exit();
+					}
+					if ((proxyUri.getRawPath() != null && proxyUri.getRawPath().length() > 1) || proxyUri.getRawQuery() != null || proxyUri.getRawFragment() != null) {
+						Log.error("Config error: HTTP proxy URI is malformed! A path must not be specified. Exiting.");
+						throw ExitCode.CONFIG_ERROR.exit();
+					}
+					int defaultPort;
+					Proxy.Type type;
+					switch (proxyUri.getScheme()) {
+						case "http" -> {
+							defaultPort = 80;
+							type = Proxy.Type.HTTP;
+						}
+						case "socks", "socks4", "socks5" -> {
+							defaultPort = 1080;
+							type = Proxy.Type.SOCKS;
+						}
+						default -> {
+							Log.error("Config error: HTTP proxy URI is malformed! Unknown scheme "+proxyUri.getScheme()+". Exiting.");
+							throw ExitCode.CONFIG_ERROR.exit();
+						}
+					};
+					int port = proxyUri.getPort();
+					if (port == -1) port = defaultPort;
+					Log.debug("Using "+type.name()+" proxy at "+proxyUri.getHost()+":"+port);
+					proxySelector = new SimpleProxySelector(new Proxy(type, new InetSocketAddress(proxyUri.getHost(), port)));
+				} catch (URISyntaxException e) {
+					Log.error("Config error: HTTP proxy URI is malformed! "+e.getMessage()+". Exiting.");
+					throw ExitCode.CONFIG_ERROR.exit();
+				}
+			}
+		} else {
+			Log.debug("Using default proxy");
+		}
+
 		return new Config(enforceSecureHashes, useEnvs, detectedEnv, validEnvs, behavior,
-				offerChangeFlavors, format, source, serverAuthority, updateMMCPack, noGui, useParentDirectory,
+				offerChangeFlavors, format, source, serverAuthority, updateMMCPack, noGui,
+        		useParentDirectory,
 				initialSubtitle, Collections.unmodifiableList(authorizers), dnsBuilder,
 				Collections.unmodifiableMap(defaultFlavors), packSig, altPackSig,
 				mmcComponentMap.unmodifiable(), Collections.unmodifiableMap(colorChoices),
 				Collections.unmodifiableMap(strings), modpackName, brandingIcon,
-				flavorDialogGeom, flavorDialogBias, puppetMode, lang);
+				flavorDialogGeom, flavorDialogBias, puppetMode, lang, proxySelector,
+				Collections.unmodifiableList(additionalCaCerts), Collections.unmodifiableList(insecureHosts),
+				usePlatformCaCerts, useBuiltinCaCerts);
 	}
 
-	private static Optional<Function<OkHttpClient, Dns>> parseDns(String v) {
+	private static Optional<Function<OkHttpClient, @NotNull Dns>> parseDns(String v) {
 		switch (v) {
 			case "system" -> {
 				Log.debug("Using system DNS for DNS queries");
@@ -266,14 +393,13 @@ public record Config(
 		}
 	}
 
-	private static SigProvider parsePackSig(QDIni config, String key) {
+	private static @Nullable SigProvider parsePackSig(QDIni config, String key) {
 		if (config.containsKey(key)) {
 			try {
 				return SigProvider.parse(config.get(key));
 			} catch (Throwable t) {
 				Log.error("Config file error: "+key+" is not valid at "+config.getBlame(key)+"! Exiting.", t);
-				Agent.exit(Agent.EXIT_CONFIG_ERROR);
-				return null;
+				throw ExitCode.CONFIG_ERROR.exit();
 			}
 		} else {
 			return null;

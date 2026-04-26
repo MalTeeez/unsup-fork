@@ -23,8 +23,8 @@ import java.io.FileNotFoundException;
 import java.io.InputStream;
 import java.net.URL;
 
-import javax.annotation.NotNull;
-import javax.annotation.Nullable;
+import com.unascribed.sup.ann.NotNull;
+import com.unascribed.sup.ann.Nullable;
 
 public class Resources {
 	
@@ -33,7 +33,9 @@ public class Resources {
 	}
 
 	public static @Nullable InputStream open(String name) {
-		return Resources.class.getClassLoader().getResourceAsStream(path(name));
+		var cl = Resources.class.getClassLoader();
+		assert cl != null;
+		return cl.getResourceAsStream(path(name));
 	}
 
 	public static @NotNull InputStream openNonnull(String name) throws FileNotFoundException {
@@ -43,7 +45,9 @@ public class Resources {
 	}
 	
 	public static @Nullable URL get(String name) {
-		return Resources.class.getClassLoader().getResource(path(name));
+		var cl = Resources.class.getClassLoader();
+		assert cl != null;
+		return cl.getResource(path(name));
 	}
 	
 }

@@ -45,6 +45,7 @@ import java.util.function.Function;
 import java.util.function.Supplier;
 
 import com.github.bsideup.jabel.Desugar;
+import com.unascribed.sup.ann.Nullable;
 
 /**
  * A quick-and-dirty INI parser.
@@ -91,7 +92,8 @@ public class QDIni {
 	}
 	
 	public boolean containsKey(String key) {
-		return data.containsKey(key) && !data.get(key).isEmpty();
+		var value = data.get(key);
+		return value != null && !value.isEmpty();
 	}
 	
 	/**
@@ -144,7 +146,7 @@ public class QDIni {
 	/**
 	 * Return the last defined value for the given key.
 	 */
-	public String get(String key) {
+	public @Nullable String get(String key) {
 		return getLast(getAll(key));
 	}
 	
@@ -184,7 +186,10 @@ public class QDIni {
 		return getParsed(key, s -> Enum.valueOf(clazz, s.toUpperCase(Locale.ROOT)), () -> {
 			StringBuilder sb = new StringBuilder("one of ");
 			boolean first = true;
-			for (E e : clazz.getEnumConstants()) {
+			var consts = clazz.getEnumConstants();
+			assert consts != null;
+			for (E e : consts) {
+				assert e != null;
 				if (first) {
 					first = false;
 				} else {
@@ -206,7 +211,7 @@ public class QDIni {
 		}
 	}
 
-	private <T> T getLast(List<T> list) {
+	private <T> @Nullable T getLast(@Nullable List<T> list) {
 		return list == null || list.isEmpty() ? null : list.get(list.size()-1);
 	}
 
@@ -278,8 +283,9 @@ public class QDIni {
 		Map<String, List<BlameString>> newData = new LinkedHashMap<>(Math.max(this.size(), that.size()));
 		newData.putAll(data);
 		for (Map.Entry<String, List<BlameString>> en : that.data.entrySet()) {
-			if (newData.containsKey(en.getKey())) {
-				List<BlameString> merged = new ArrayList<>(newData.get(en.getKey()).size()+en.getValue().size());
+			var v = newData.get(en.getKey());
+			if (v != null) {
+				List<BlameString> merged = new ArrayList<>(v.size()+en.getValue().size());
 				merged.addAll(newData.get(en.getKey()));
 				merged.addAll(en.getValue());
 				newData.put(en.getKey(), Collections.unmodifiableList(merged));
@@ -365,7 +371,8 @@ public class QDIni {
 	}
 	
 	public static QDIni load(String fileName, InputStream in) throws IOException {
-		return load(fileName, new InputStreamReader(in, StandardCharsets.UTF_8));
+		var isr = new InputStreamReader(in, StandardCharsets.UTF_8);
+		return load(fileName, isr);
 	}
 	
 	public static QDIni load(String fileName, Reader r) throws IOException {
@@ -373,7 +380,7 @@ public class QDIni {
 	}
 
 	public static QDIni loadAndTransform(String fileName, Reader r, IniTransformer transformer, Writer w) throws IOException, SyntaxErrorException {
-		var br = r instanceof BufferedReader brr ? brr : new BufferedReader(r);
+		var br = r instanceof BufferedReader ? (BufferedReader)r : new BufferedReader(r);
 		Map<String, List<BlameString>> data = new LinkedHashMap<>();
 		int lineNum = 1;
 		String path = "";

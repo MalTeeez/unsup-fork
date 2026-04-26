@@ -25,23 +25,37 @@ import java.io.FileOutputStream;
 import java.io.IOException;
 import java.io.InputStream;
 import java.net.URI;
+import java.net.URISyntaxException;
 import java.net.URL;
 import java.nio.file.Files;
+import java.security.KeyStore;
+import java.security.cert.CertificateEncodingException;
 import java.security.cert.X509Certificate;
 import java.util.ArrayList;
+import java.util.LinkedHashSet;
 import java.util.List;
+import java.util.Locale;
 import java.util.Map;
 import java.util.Objects;
 import java.util.Optional;
+import java.util.Set;
+import java.util.StringJoiner;
 import java.util.concurrent.TimeUnit;
 import java.util.function.Function;
 
+import javax.net.ssl.TrustManagerFactory;
+import javax.net.ssl.X509TrustManager;
+
+import com.github.bsideup.jabel.Desugar;
 import com.grack.nanojson.JsonObject;
 import com.grack.nanojson.JsonParser;
 import com.grack.nanojson.JsonWriter;
 import com.unascribed.sup.Unsup;
 import com.unascribed.sup.agent.PuppetHandler.AlertOption;
 import com.unascribed.sup.agent.PuppetHandler.AlertOptionType;
+import com.unascribed.sup.agent.auth.Authorizer;
+import com.unascribed.sup.agent.auth.Authorizer.AuthorizerSpec;
+import com.unascribed.sup.agent.data.HashFunction;
 import com.unascribed.sup.agent.pieces.MemoryCookieJar;
 import com.unascribed.sup.agent.pieces.QDIni;
 import com.unascribed.sup.agent.pieces.QDIni.QDIniException;
@@ -49,27 +63,24 @@ import com.unascribed.sup.agent.pieces.pseudolocale.AccentedEnglish;
 import com.unascribed.sup.agent.pieces.pseudolocale.PigLatin;
 import com.unascribed.sup.agent.signing.SigProvider;
 import com.unascribed.sup.agent.util.RequestHelper;
+import com.unascribed.sup.ann.NotNull;
 import com.unascribed.sup.bootstrap.Bootstrapper;
 import com.unascribed.sup.bootstrap.Util;
 import com.unascribed.sup.data.AlertMessageType;
 import com.unascribed.sup.data.SysProps;
 import com.unascribed.sup.pieces.ExceptableRunnable;
+import com.unascribed.sup.util.Bases;
+import com.unascribed.sup.util.Multimap;
 import com.unascribed.sup.util.Resources;
 
-import okhttp3.Dns;
 import okhttp3.OkHttpClient;
 import okhttp3.brotli.BrotliInterceptor;
 import okhttp3.internal.concurrent.TaskRunner;
 import okhttp3.tls.HandshakeCertificates;
+import okio.ByteString;
 
 public class Agent {
 
-	public static final int EXIT_SUCCESS = 0;
-	public static final int EXIT_CONFIG_ERROR = 1;
-	public static final int EXIT_CONSISTENCY_ERROR = 2;
-	public static final int EXIT_BUG = 3;
-	public static final int EXIT_USER_REQUEST = 4;
-	
 	public static final long launchTime = System.nanoTime();
 
 	static volatile boolean awaitingExit = false;
@@ -78,7 +89,7 @@ public class Agent {
 	static boolean standalone;
 	
 	private static List<ExceptableRunnable> cleanup = new ArrayList<>();
-	private static Config config;
+	private static @NotNull Config config = new Config();
 	
 	public static final SigProvider unsupSig = SigProvider.of("signify RWTSwM40VCzVER3YWt55m4Fvsg0sjZLEICikuU3cD91gR/2lii/jk67B");
 	
@@ -137,7 +148,11 @@ public class Agent {
 			}
 			
 			if (!config().noGui()) {
-				PuppetHandler.create();
+				if (SysProps.PUPPET_ASYNC.orBias()) {
+					new Thread(PuppetHandler::create, "Puppet starter").start();
+				} else {
+					PuppetHandler.create();
+				}
 				addCleanupAction(PuppetHandler::destroy);
 			}
 			
@@ -189,7 +204,7 @@ public class Agent {
 			}
 			if (updatedComponents) {
 				Log.info("A component update has been applied - exiting for game restart.");
-				exit(EXIT_SUCCESS);
+				throw ExitCode.SUCCESS.exit();
 			} else if (standalone) {
 				Log.info("Ran in standalone mode, no program will be started.");
 			} else {
@@ -206,8 +221,7 @@ public class Agent {
 			}
 		} catch (QDIniException e) {
 			Log.error("Config file error: "+e.getMessage()+"! Exiting.");
-			exit(EXIT_CONFIG_ERROR);
-			return;
+			throw ExitCode.CONFIG_ERROR.exit();
 		} catch (InterruptedException e) {
 			throw new AssertionError(e);
 		} finally {
@@ -227,7 +241,7 @@ public class Agent {
 		}
 		config = Config.parse(ini, arg, lang);
 		
-		setupOkHttp();
+		setupOkHttp(Optional.empty());
 		
 		stateFile = new File(".unsup-state.json");
 		if (stateFile.exists()) {
@@ -235,8 +249,7 @@ public class Agent {
 				state = JsonParser.object().from(in);
 			} catch (Exception e) {
 				Log.error("Couldn't load state file! Exiting.", e);
-				exit(EXIT_CONSISTENCY_ERROR);
-				return false;
+				throw ExitCode.CONSISTENCY_ERROR.exit();
 			}
 		} else {
 			state = new JsonObject();
@@ -250,18 +263,17 @@ public class Agent {
 			QDIni ini;
 			try {
 				ini = QDIni.load(configFile);
-				checkForbiddenKey(ini, "strings.dialog.progress.title");
-				checkForbiddenKey(ini, "strings.dialog.progress.title.branded");
+				checkForbiddenKeys(ini, "strings.dialog.progress.title", "strings.dialog.progress.title.branded");
 				Log.debug("Found and loaded unsup.ini. What secrets does it hold?");
 			} catch (Exception e) {
 				Log.error("Found unsup.ini, but couldn't parse it! Exiting.", e);
-				throw exit(EXIT_CONFIG_ERROR);
+				throw ExitCode.CONFIG_ERROR.exit();
 			}
 			checkRequiredKeys(ini, "version", "source_format", "source");
 			int version = ini.getInt("version", -1);
 			if (version != 1) {
 				Log.error("Config file error: Unknown version "+version+" at "+ini.getBlame("version")+"! Exiting.");
-				throw exit(EXIT_CONFIG_ERROR);
+				throw ExitCode.CONFIG_ERROR.exit();
 			}
 			if (!"en-US".equals(lang)) {
 				ini = mergePreset(ini, "lang/"+lang, false);
@@ -289,22 +301,46 @@ public class Agent {
 			return ini;
 		} else {
 			if (SysProps.BOOTSTRAP_URL.isPresent()) {
-				Log.info("No config found, bootstrapping from "+SysProps.BOOTSTRAP_URL);
-				Optional<SigProvider> key = SysProps.BOOTSTRAP_KEY.map(Util.faulty(SigProvider::parse, e -> {
-					Log.error("Failed to parse bootstrap key", e);
-					throw exit(EXIT_CONFIG_ERROR);
+				var rawUri = SysProps.BOOTSTRAP_URL.get();
+				URI uri;
+				try {
+					uri = new URI(SysProps.BOOTSTRAP_URL.get());
+					var censoredUserInfo = uri.getRawUserInfo();
+					if (censoredUserInfo != null) censoredUserInfo = censoredUserInfo.replaceAll("[^:]", "*");
+					Log.info("No config found, bootstrapping from "+new URI(uri.getScheme(), censoredUserInfo, uri.getHost(), uri.getPort(), uri.getRawPath(), uri.getRawQuery(), uri.getRawFragment()));
+				} catch (URISyntaxException e) {
+					Log.error("Bootstrap error: failed to parse URL! Exiting.", e);
+					throw ExitCode.CONFIG_ERROR.exit();
+				}
+				Optional<SigProvider> key = SysProps.BOOTSTRAP_KEY.map(s -> s.replaceFirst("^([^ %]+)%", "$1 ")).map(Util.faulty(SigProvider::parse, e -> {
+					Log.error("Bootstrap error: failed to parse key! Exiting.", e);
+					throw ExitCode.CONFIG_ERROR.exit();
 				}));
-				setupOkHttp();
+				Optional<AuthorizerSpec> auth;
+				if (SysProps.BOOTSTRAP_AUTH.isPresent()) {
+					if (uri.getRawUserInfo() != null) {
+						Log.error("Bootstrap error: Cannot specify an explicit authorizer and in-URL authentication at the same time! Exiting.");
+						throw ExitCode.CONFIG_ERROR.exit();
+					}
+					auth = Authorizer.parseSpec(rawUri, SysProps.BOOTSTRAP_AUTH.orElse("").replaceFirst("^([^ %]+)%", "$1 "));
+				} else if (uri.getRawUserInfo() != null) {
+					auth = Authorizer.parseSpec(rawUri, "Basic "+uri.getUserInfo());
+				} else {
+					auth = Optional.empty();
+				}
+				System.out.println(auth);
+				setupOkHttp(auth);
 				int M = 1024*1024;
 				try {
-					var data = RequestHelper.loadAndVerify(new URI(SysProps.BOOTSTRAP_URL.get()), 16*M, new URI(SysProps.BOOTSTRAP_URL+".sig"), key.orElse(null));
+					var data = RequestHelper.loadAndVerify(uri, 16*M,
+							new URI(SysProps.BOOTSTRAP_URL.get()+".sig"), key.orElse(null));
 					Files.write(configFile.toPath(), data);
 					Log.info("Successfully downloaded bootstrap config");
 					destroyOkHttp(false);
 					return loadConfig(lang);
 				} catch (Exception e) {
-					Log.error("Failed to download bootstrap config", e);
-					throw exit(EXIT_CONFIG_ERROR);
+					Log.error("Bootstrap error: Download failed! Exiting.", e);
+					throw ExitCode.BOOTSTRAP_FAILED.exit();
 				}
 			}
 			Log.warn("No config file found? Doing nothing.");
@@ -312,10 +348,12 @@ public class Agent {
 		}
 	}
 	
-	private static void checkForbiddenKey(QDIni ini, String key) {
-		if (ini.containsKey(key)) {
-			Log.error("Attempt to override a forbidden key: "+key);
-			exit(EXIT_CONFIG_ERROR);
+	private static void checkForbiddenKeys(QDIni ini, String... keys) {
+		for (var key : keys) {
+			if (ini.containsKey(key)) {
+				Log.error("Attempt to override a forbidden key: "+key);
+				throw ExitCode.CONFIG_ERROR.exit();
+			}
 		}
 	}
 
@@ -323,18 +361,87 @@ public class Agent {
 		for (String req : requiredKeys) {
 			if (!ini.containsKey(req)) {
 				Log.error("Config file error: "+req+" is required, but was not defined! Exiting.");
-				exit(EXIT_CONFIG_ERROR);
-				return;
+				throw ExitCode.CONFIG_ERROR.exit();
 			}
 		}
 	}
+
+	@Desugar
+	private record CertDef(String source, X509Certificate cert) {}
 	
-	private static void setupOkHttp() throws AssertionError {
-		HandshakeCertificates.Builder certsBldr = new HandshakeCertificates.Builder()
-				.addPlatformTrustedCertificates();
-		for (X509Certificate cert : CACerts.certs) {
-			certsBldr.addTrustedCertificate(cert);
+	private static void setupOkHttp(Optional<AuthorizerSpec> additionalAuthorizer) throws AssertionError {
+		HandshakeCertificates.Builder certsBldr = new HandshakeCertificates.Builder();
+		List<CertDef> certDefs = new ArrayList<>();
+		if (config().usePlatformCaCerts()) {
+			try {
+				var tmf = TrustManagerFactory.getInstance(TrustManagerFactory.getDefaultAlgorithm());
+				tmf.init((KeyStore)null);
+				if (tmf.getTrustManagers()[0] instanceof X509TrustManager x509) {
+					for (var cert : x509.getAcceptedIssuers()) {
+						certDefs.add(new CertDef("platform", cert));
+					}
+				} else {
+					Log.error("Can't add platform CA certificates as the first default trust manager is not an X509TrustManager??");
+				}
+			} catch (Throwable t) {
+				Log.error("Can't add platform CA certificates due to an unexpected exception", t);
+			}
+		} else {
+			Log.debug("Skipping addition of platform-provided CA certificates");
 		}
+		if (config().useBuiltinCaCerts()) {
+			for (var cert : CACerts.certs) {
+				certDefs.add(new CertDef("built-in", cert));
+			}
+		} else {
+			Log.debug("Skipping addition of built-in CA certificates");
+		}
+		for (var cert : config().additionalCaCerts()) {
+			certDefs.add(new CertDef("config", cert));
+		}
+		for (String host : config().insecureHosts()) {
+			Log.debug("Adding insecure host "+host);
+			certsBldr.addInsecureHost(host);
+		}
+		if (certDefs.isEmpty()) {
+			// the first connection attempt will crash with "the trustAnchors parameter must be non-empty" in this state
+			Log.error("Config error: No CA certificates were added! Exiting.");
+			throw ExitCode.CONFIG_ERROR.exit();
+		} else {
+			Multimap<ByteString, CertDef> defsByEncoded = new Multimap<>();
+			for (var def : certDefs) {
+				byte[] encoded;
+				try {
+					encoded = def.cert.getEncoded();
+				} catch (CertificateEncodingException e) {
+					throw new AssertionError(e);
+				}
+				defsByEncoded.put(ByteString.of(encoded), def);
+			}
+			Set<String> locations = new LinkedHashSet<>();
+			for (var en : defsByEncoded.mapEntries()) {
+				var def = en.getValue().get(0);
+				for (var specificDef : en.getValue()) {
+					locations.add(specificDef.source);
+				}
+				String fp = Bases.bytesToHex(
+								HashFunction.SHA2_256.createMessageDigest()
+									.digest(en.getKey().toByteArray())
+							).toUpperCase(Locale.ROOT).replaceAll("..(?!$)", "$0:");
+				var sj = new StringJoiner(", ");
+				for (var loc : locations) {
+					sj.add(loc);
+				}
+				Log.debug("Adding CA cert "+def.cert.getSubjectX500Principal().getName()+" (defined by "+sj+" - SHA256 fingerprint: "+fp+")");
+				certsBldr.addTrustedCertificate(def.cert);
+				locations.clear();
+			}
+		}
+		var authorizers = new ArrayList<AuthorizerSpec>();
+		if (additionalAuthorizer.isPresent()) {
+			authorizers.add(additionalAuthorizer.get());
+		}
+		authorizers.addAll(config().authorizers());
 		HandshakeCertificates certs = certsBldr.build();
 		OkHttpClient bootstrapOkHttp = new OkHttpClient.Builder()
 			.connectTimeout(30, TimeUnit.SECONDS)
@@ -344,7 +451,7 @@ public class Agent {
 			.addInterceptor(chain -> {
 				String url = chain.request().url().toString();
 				var req = chain.request();
-				for (var en : config().authorizers()) {
+				for (var en : authorizers) {
 					if (url.startsWith(en.urlPrefix())) {
 						var bldr = req.newBuilder();
 						en.auth().authorize(req, bldr);
@@ -354,10 +461,11 @@ public class Agent {
 				return chain.proceed(req);
 			})
 			.addInterceptor(BrotliInterceptor.INSTANCE)
+			.proxySelector(config().proxySelector())
 			.build();
 		okhttp = bootstrapOkHttp.newBuilder()
 				.cookieJar(new MemoryCookieJar())
-				.dns(config() == null ? Dns.SYSTEM : config().dns(bootstrapOkHttp))
+				.dns(config().dns(bootstrapOkHttp))
 				.build();
 	}
 	
@@ -382,21 +490,19 @@ public class Agent {
 				return config;
 			}
 			Log.error("Config file error: Preset "+presetName+" not found at "+config.getBlame("preset")+"! Exiting.");
-			exit(EXIT_CONFIG_ERROR);
-			return null;
+			throw ExitCode.CONFIG_ERROR.exit();
 		}
 		try (InputStream in = u.openStream()) {
 			QDIni preset = QDIni.load("<preset "+presetName+">", in);
 			config = preset.merge(config);
 		} catch (IOException e) {
 			Log.error("Failed to load preset "+presetName+"! Exiting.", e);
-			exit(EXIT_CONFIG_ERROR);
-			return null;
+			throw ExitCode.CONFIG_ERROR.exit();
 		}
 		return config;
 	}
 	
-	private static void cleanup() {
+	public static void cleanup() {
 		config = null;
 		for (ExceptableRunnable er : cleanup) {
 			try {
@@ -429,12 +535,6 @@ public class Agent {
 		}
 	}
 	
-	public static AssertionError exit(int code) {
-		cleanup();
-		System.exit(code);
-		throw new AssertionError("unreachable");
-	}
-
 	/* (non-Javadoc)
 	 * used in the agent to suspend the update flow at a safe point if we're waiting for a
 	 * System.exit due to the user closing the puppet dialog (the puppet handling is multithreaded,
@@ -462,7 +562,7 @@ public class Agent {
 		cleanup.add(r);
 	}
 
-	public static Config config() {
+	public static @NotNull Config config() {
 		return config;
 	}
 

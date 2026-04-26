@@ -24,7 +24,9 @@ import java.io.FileInputStream;
 import java.io.FileOutputStream;
 import java.io.IOException;
 import java.io.InputStream;
+import java.net.InetAddress;
 import java.net.URI;
+import java.net.UnknownHostException;
 import java.nio.file.Files;
 import java.nio.file.InvalidPathException;
 import java.nio.file.Path;
@@ -92,13 +94,21 @@ public class UpdateHandler {
 				return true;
 			} else {
 				Log.debug("Retrieving from "+src+" in "+fmt+" format");
-				if (fmt == SourceFormat.UNSUP) {
-					res = NativeHandler.check(src, autoaccept, forceFlavorDefaults, baseState);
-				} else if (fmt == SourceFormat.PACKWIZ) {
-					res = PackwizHandler.check(src, autoaccept, forceFlavorDefaults, baseState);
-				} else {
-					throw new AssertionError();
+				if ("http".equals(src.getScheme()) && Agent.config().packSig() == null) {
+					try {
+						if (!InetAddress.getByName(src.getHost()).isAnyLocalAddress()) {
+							Log.warn("Using unencrypted HTTP without manifest signing - this is a very bad idea!");
+						}
+					} catch (UnknownHostException e) {}
 				}
+				res = switch (fmt) {
+					case NONE ->
+						throw new AssertionError("Config must be initialized by this point");
+					case UNSUP ->
+						NativeHandler.check(src, autoaccept, forceFlavorDefaults, baseState);
+					case PACKWIZ ->
+						PackwizHandler.check(src, autoaccept, forceFlavorDefaults, baseState);
+				};
 			}
 			if (res != null) {
 				Agent.sourceVersion = res.ourVersion.name();
@@ -121,7 +131,7 @@ public class UpdateHandler {
 					"dialog.error."+(Agent.standalone ? "standalone" : "normal"),
 					AlertMessageType.ERROR, Agent.standalone ? AlertOptionType.OK : AlertOptionType.OK_CANCEL, AlertOption.OK) == AlertOption.CANCEL) {
 				Log.info("User cancelled error dialog! Exiting.");
-				Agent.exit(Agent.EXIT_USER_REQUEST);
+				throw ExitCode.USER_REQUEST.exit();
 			}
 			return false;
 		} finally {
@@ -134,10 +144,11 @@ public class UpdateHandler {
 		boolean bootstrapping = plan.isBootstrap;
 		Log.debug("Alright, so here's what I'm thinking:");
 		Set<String> unchanged = new HashSet<>(plan.expectedState.keySet());
-		for (Map.Entry<String, ? extends FilePlan> en : plan.files.entrySet()) {
+		for (var en : plan.files.entrySet()) {
 			unchanged.remove(en.getKey());
 			FileState from = plan.expectedState.get(en.getKey());
 			FilePlan to = en.getValue();
+			assert to != null;
 			Log.debug("- "+en.getKey()+" is currently "+ponder(from));
 			Log.debug("  It has been changed to "+ponder(to.state));
 			if (to.url != null) {
@@ -171,10 +182,11 @@ public class UpdateHandler {
 		PuppetHandler.updateSubtitle("subtitle.verifying");
 		Set<String> moveAside = new HashSet<>();
 		Map<ConflictType, AlertOption> conflictPreload = new EnumMap<>(ConflictType.class);
-		for (Map.Entry<String, ? extends FilePlan> en : plan.files.entrySet()) {
+		for (var en : plan.files.entrySet()) {
 			String path = en.getKey();
 			FileState from = plan.expectedState.getOrDefault(path, FileState.EMPTY);
 			FilePlan f = en.getValue();
+			assert f != null;
 			FileState to = f.state;
 			File dest = new File(wd, path);
 			if (!dest.getAbsolutePath().startsWith(wd.getAbsolutePath()+File.separator))
@@ -248,7 +260,7 @@ public class UpdateHandler {
 					continue;
 				} else if (resp == AlertOption.CANCEL) {
 					Log.info("User cancelled conflict dialog! Exiting.");
-					throw Agent.exit(Agent.EXIT_USER_REQUEST);
+					throw ExitCode.USER_REQUEST.exit();
 				}
 				if (dest.exists() && Agent.config().behavior().promptConflicts()) {
 					moveAside.add(path);
@@ -289,9 +301,10 @@ public class UpdateHandler {
 			}
 		};
 		int i = 0;
-		for (Map.Entry<String, ? extends FilePlan> en : plan.files.entrySet()) {
+		for (var en : plan.files.entrySet()) {
 			String path = en.getKey();
 			FilePlan f = en.getValue();
+			assert f != null;
 			if (f.skip) {
 				Log.info("Skipping download of "+path);
 				progresses.set(i, 1000);
@@ -370,9 +383,10 @@ public class UpdateHandler {
 			synchronized (Agent.dangerMutex) {
 				PuppetHandler.updateSubtitle("subtitle.applying");
 				for (int pass = 0; pass < 2; pass++) {
-					for (Map.Entry<String, ? extends FilePlan> en : plan.files.entrySet()) {
+					for (var en : plan.files.entrySet()) {
 						String path = en.getKey();
 						FilePlan f = en.getValue();
+						assert f != null;
 						FileState to = f.state;
 						DownloadedFile df = downloads.get(f);
 						if (df == null && to.size() != 0) {
@@ -391,7 +405,10 @@ public class UpdateHandler {
 							if (pass == 0) Log.error("Destination file path "+dest+" is not valid on this OS/filesystem/charset combination!", e);
 							continue;
 						}
-						if (pass == 1 && dest.getParentFile() != null) Files.createDirectories(dest.getParentFile().toPath());
+						if (pass == 1) {
+							var parent = dest.getParentFile();
+							if (parent != null) Files.createDirectories(parent.toPath());
+						}
 						if (pass == 0 && moveAside.contains(path)) {
 							Log.debug("Displacing "+path);
 							Files.move(destPath, destPath.resolveSibling(destPath.getFileName().toString()+".orig"), StandardCopyOption.REPLACE_EXISTING);

@@ -47,6 +47,7 @@ public class SysProps {
 	public static final BiasedOptional<Boolean> DRY_RUN = getBoolean(SysPropDefs.DRY_RUN, false);
 	public static final Optional<String> BOOTSTRAP_URL = getProperty(SysPropDefs.BOOTSTRAP_URL);
 	public static final Optional<String> BOOTSTRAP_KEY = getProperty(SysPropDefs.BOOTSTRAP_KEY);
+	public static final Optional<String> BOOTSTRAP_AUTH = getProperty(SysPropDefs.BOOTSTRAP_AUTH);
 	
 	
 	public static final BiasedOptional<Boolean> PACKWIZ_CHANGE_FLAVORS = getBoolean(SysPropDefs.PACKWIZ_CHANGE_FLAVORS, false);
@@ -59,6 +60,10 @@ public class SysProps {
 	public enum PuppetMode {
 		AUTO, SWING, OPENGL;
 	}
+	
+	public static final BiasedOptional<Boolean> PUPPET_ASYNC = getBoolean(SysPropDefs.PUPPET_ASYNC, false);
+	
+	public static final Optional<Integer> DEBUG_OVERRIDE_REMOTE_VERSION_CODE = getProperty(SysPropDefs.DEBUG_OVERRIDE_REMOTE_VERSION_CODE).map(Integer::parseInt);
 	
 	
 

@@ -32,6 +32,7 @@ import com.grack.nanojson.JsonArray;
 import com.grack.nanojson.JsonObject;
 import com.grack.nanojson.JsonParserException;
 import com.unascribed.sup.agent.Agent;
+import com.unascribed.sup.agent.ExitCode;
 import com.unascribed.sup.agent.Log;
 import com.unascribed.sup.agent.PuppetHandler;
 import com.unascribed.sup.agent.PuppetHandler.AlertOption;
@@ -42,6 +43,7 @@ import com.unascribed.sup.bootstrap.Util;
 import com.unascribed.sup.data.AlertMessageType;
 import com.unascribed.sup.data.FlavorChoice;
 import com.unascribed.sup.data.FlavorGroup;
+import com.unascribed.sup.data.SysProps;
 import com.unascribed.sup.data.Version;
 import com.unascribed.sup.util.Iterables;
 
@@ -55,14 +57,14 @@ public class NativeHandler extends AbstractFormatHandler {
 	
 	public static CheckResult check(URI src, boolean autoaccept, boolean forceFlavorDefaults, JsonObject baseState) throws IOException, JsonParserException, URISyntaxException {
 		Log.info("Loading unsup-format manifest from "+src);
-		JsonObject manifest = RequestHelper.loadJson(src, 32*K, src.resolve("manifest.sig"));
+		JsonObject manifest = RequestHelper.loadJson(src, 1*M, src.resolve("manifest.sig"));
 		checkManifestFlavor(manifest, "root", it -> it == 1);
 		Version ourVersion = Version.fromJson(baseState.getObject("current_version"));
 		if (!manifest.containsKey("versions")) throw new IOException("Manifest is missing versions field");
 		Version theirVersion = Version.fromJson(manifest.getObject("versions").getObject("current"));
 		if (theirVersion == null) throw new IOException("Manifest is missing current version field");
-		if (System.getProperty("unsup.debug.overrideRemoteVersionCode") != null) {
-			theirVersion = new Version(theirVersion.name(), Integer.getInteger("unsup.debug.overrideRemoteVersionCode", theirVersion.code()));
+		if (SysProps.DEBUG_OVERRIDE_REMOTE_VERSION_CODE.isPresent()) {
+			theirVersion = new Version(theirVersion.name(), SysProps.DEBUG_OVERRIDE_REMOTE_VERSION_CODE.get());
 		}
 		JsonObject newState = new JsonObject(baseState);
 		JsonArray ourFlavors = baseState.getArray("flavors");
@@ -172,7 +174,7 @@ public class NativeHandler extends AbstractFormatHandler {
 			Log.info("Update available! We have nothing, they have "+theirVersion);
 			JsonObject bootstrap = null;
 			try {
-				bootstrap = RequestHelper.loadJson(src.resolve("bootstrap.json"), 2*M, src.resolve("bootstrap.sig"));
+				bootstrap = RequestHelper.loadJson(src.resolve("bootstrap.json"), 16*M, src.resolve("bootstrap.sig"));
 			} catch (FileNotFoundException e) {
 				Log.info("Bootstrap manifest missing, will have to retrieve and collapse every update");
 			}
@@ -236,8 +238,7 @@ public class NativeHandler extends AbstractFormatHandler {
 							AlertMessageType.QUESTION, AlertOptionType.YES_NO, AlertOption.YES);
 					if (updateResp == AlertOption.CLOSED) {
 						Log.info("User closed update dialog! Exiting...");
-						System.exit(Agent.EXIT_USER_REQUEST);
-						return null;
+						throw ExitCode.USER_REQUEST.exit();
 					}
 					if (updateResp == AlertOption.NO) {
 						Log.info("Ignoring update by user choice.");
@@ -256,7 +257,7 @@ public class NativeHandler extends AbstractFormatHandler {
 			int updates = theirVersion.code() - ourVersion.code();
 			for (int i = 0; i < updates; i++) {
 				int code = ourVersion.code() +(i+1);
-				JsonObject ver = RequestHelper.loadJson(src.resolve(Util.uriOfPath("versions/"+code+".json")), 2*M,
+				JsonObject ver = RequestHelper.loadJson(src.resolve(Util.uriOfPath("versions/"+code+".json")), 4*M,
 						src.resolve(Util.uriOfPath("versions/"+code+".sig")));
 				checkManifestFlavor(ver, "update", it -> it == 1);
 				HashFunction func = HashFunction.byName(ver.getString("hash_function", DEFAULT_HASH_FUNCTION));
@@ -296,8 +297,8 @@ public class NativeHandler extends AbstractFormatHandler {
 					} else {
 						url = new URI(urlStr);
 					}
-					if (plan.files.containsKey(path)) {
-						FileToDownloadWithCode to = plan.files.get(path);
+					FileToDownloadWithCode to = plan.files.get(path);
+					if (to != null) {
 						if (to.state.func() == func) {
 							if (!Objects.equals(to.state.hash(), fromHash) || to.state.size() != fromSize) {
 								throw new IOException("Bad update: "+path+" in "+to.code+" specified to become "+to.state+
@@ -312,7 +313,7 @@ public class NativeHandler extends AbstractFormatHandler {
 						to.fallbackUrl = fallbackUrl;
 						to.url = url;
 					} else {
-						FileToDownloadWithCode to = new FileToDownloadWithCode();
+						to = new FileToDownloadWithCode();
 						to.code = code;
 						to.state = new FileState(func, toHash, toSize);
 						to.fallbackUrl = fallbackUrl;

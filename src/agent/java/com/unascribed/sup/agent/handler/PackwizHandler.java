@@ -49,6 +49,7 @@ import com.grack.nanojson.JsonObject;
 import com.moandjiezana.toml.Toml;
 import com.unascribed.flexver.FlexVerComparator;
 import com.unascribed.sup.agent.Agent;
+import com.unascribed.sup.agent.ExitCode;
 import com.unascribed.sup.agent.Log;
 import com.unascribed.sup.agent.MMCUpdater;
 import com.unascribed.sup.agent.PuppetHandler;
@@ -142,8 +143,7 @@ public class PackwizHandler extends AbstractFormatHandler {
 							body, AlertMessageType.QUESTION, AlertOptionType.YES_NO, AlertOption.YES);
 					if (updateResp == AlertOption.CLOSED) {
 						Log.info("User closed update dialog! Exiting...");
-						System.exit(Agent.EXIT_USER_REQUEST);
-						return null;
+						throw ExitCode.USER_REQUEST.exit();
 					}
 					if (updateResp == AlertOption.NO) {
 						Log.info("Ignoring update by user choice.");
@@ -349,8 +349,9 @@ public class PackwizHandler extends AbstractFormatHandler {
 									var ze = metafilesZip.getEntry(path);
 									if (ze != null) {
 										try (var in = metafilesZip.getInputStream(ze)) {
-											byte[] data = RequestHelper.collectLimited(in, 8*K);
-											if (data == null) throw new IOException("Size limit of 8K for "+path+" exceeded");
+											var dataOpt = RequestHelper.collectLimited(in, 8*K);
+											if (!dataOpt.isPresent()) throw new IOException("Size limit of 8K for "+path+" exceeded");
+											var data = dataOpt.get();
 											String computedHash = Bases.bytesToHex(func.createMessageDigest().digest(data));
 											if (computedHash.equals(hash)) {
 												if (SysProps.DEBUG_REQUESTS.orBias()) {
@@ -377,9 +378,10 @@ public class PackwizHandler extends AbstractFormatHandler {
 						f.url = src.resolve(Util.uriOfPath(path));
 						toDelete.remove(alias);
 						postState.put(alias, f.state);
-						if (!plan.expectedState.containsKey(alias)) {
+						var aliasState = plan.expectedState.get(alias);
+						if (aliasState == null) {
 							plan.expectedState.put(alias, FileState.EMPTY);
-						} else if (plan.expectedState.get(alias).equals(f.state)) {
+						} else if (aliasState.equals(f.state)) {
 							continue;
 						}
 						plan.files.put(alias, f);
@@ -436,7 +438,14 @@ public class PackwizHandler extends AbstractFormatHandler {
 							.choices(choices)
 							.defChoice(defChoice)
 							.defChoiceName(defChoice);
-						boolean defOn = changeFlavors ? Iterables.contains(ourFlavors, mf.name+"_on") : option.getBoolean("default", false);
+						boolean defOn = option.getBoolean("default", false);
+						if (changeFlavors) {
+							if (Iterables.contains(ourFlavors, mf.name+"_on")) {
+								defOn = true;
+							} else if (Iterables.contains(ourFlavors, mf.name+"_off")) {
+								defOn = false;
+							}
+						}
 						FlavorChoice on;
 						choices.add(on = FlavorChoice.builder()
 								.id(mf.name+"_on")
@@ -446,7 +455,7 @@ public class PackwizHandler extends AbstractFormatHandler {
 						choices.add(FlavorChoice.builder()
 								.id(mf.name+"_off")
 								.name("Off")
-								.def(defOn)
+								.def(!defOn)
 								.build());
 						metafileFlavors.put(mf.name, Collections.singletonList(on.id()));
 						syntheticGroups.put(mf.name, synth.build());
@@ -491,9 +500,13 @@ public class PackwizHandler extends AbstractFormatHandler {
 						throw new AssertionError(e);
 					}
 					
-					List<String> mfFlavors = metafileFlavors.get(mf.name);
-					if (mfFlavors != null) Log.debug("Flavors for "+mf.name+": "+mfFlavors);
-					if (mfFlavors != null && !Iterables.intersects(mfFlavors, ourFlavors)) {
+					List<String> mfFlavors = new ArrayList<>();
+					List<String> pathFlavors = metafileFlavors.get("/"+mf.path);
+					List<String> nameFlavors = metafileFlavors.get(mf.name);
+					if (pathFlavors != null) mfFlavors.addAll(pathFlavors);
+					if (nameFlavors != null) mfFlavors.addAll(nameFlavors);
+					Log.debug("Flavors for /"+mf.path+" ("+mf.name+"): "+mfFlavors);
+					if (!mfFlavors.isEmpty() && !Iterables.intersects(mfFlavors, ourFlavors)) {
 						Log.info("Skipping "+mf.target+" as it's not eligible for our selected flavors");
 						continue;
 					}
@@ -518,9 +531,10 @@ public class PackwizHandler extends AbstractFormatHandler {
 					}
 					f.state = new FileState(thisFunc, thisHash, -1);
 					postState.put(path, f.state);
-					if (!plan.expectedState.containsKey(path)) {
+					var pathState = plan.expectedState.get(path);
+					if (pathState == null) {
 						plan.expectedState.put(path, FileState.EMPTY);
-					} else if (plan.expectedState.get(path).equals(f.state)) {
+					} else if (pathState.equals(f.state)) {
 						continue;
 					}
 					String url = download.getString("url");

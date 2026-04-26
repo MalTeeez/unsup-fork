@@ -105,8 +105,8 @@ public class PlatDetect {
 	}
 	
 	static {
-		String osName = System.getProperty("os.name");
-		String osArch = System.getProperty("os.arch");
+		String osName = System.getProperty("os.name", "Unknown");
+		String osArch = System.getProperty("os.arch", "Unknown");
 		OSType ourOs = OSType.UNSUPPORTED;
 		ArchType ourArch = ArchType.UNSUPPORTED;
 		// adapted from LWJGL3 Platform

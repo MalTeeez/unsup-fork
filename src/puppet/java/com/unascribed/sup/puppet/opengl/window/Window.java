@@ -31,6 +31,8 @@ import org.lwjgl.opengl.KHRDebug;
 import org.lwjgl.system.MemoryStack;
 import org.lwjgl.system.MemoryUtil;
 import org.lwjgl.system.Platform;
+
+import com.unascribed.sup.ann.NotNull;
 import com.unascribed.sup.data.ColorChoice;
 import com.unascribed.sup.puppet.Puppet;
 import com.unascribed.sup.puppet.opengl.GLPuppet;
@@ -51,7 +53,7 @@ import static org.lwjgl.system.MemoryUtil.*;
 
 public abstract class Window {
 	
-	private static final Map<Class<? extends Window>, AtomicInteger> threadNumbers = Collections.synchronizedMap(new HashMap<>());
+	private static final Map<Class<? extends Window>, @NotNull AtomicInteger> threadNumbers = Collections.synchronizedMap(new HashMap<>());
 	
 	private static final boolean MACOS = Platform.get() == Platform.MACOSX;
 	private static final boolean OS_HAS_BROKEN_BUFFER_SWAP = Platform.get() == Platform.WINDOWS || MACOS;
