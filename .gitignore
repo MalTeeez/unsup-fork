@@ -13,3 +13,4 @@ out
 .unsup-tmp
 /ci-version.txt
 /.apt_generated/
+*.bundle

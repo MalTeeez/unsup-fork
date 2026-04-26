@@ -106,6 +106,7 @@ public record Config(
 			/*boolean serverAuthority*/false,
 			/*boolean updateMMCPack*/false,
 			/*boolean noGui*/false,
+			/*boolean useParentDirectory*/false,
 			/*String initialSubtitle*/"",
 			/*List<AuthorizerSpec> authorizers*/Collections.emptyList(),
 			/*Function<OkHttpClient, @NotNull Dns> dnsBuilder*/c -> Dns.SYSTEM,
