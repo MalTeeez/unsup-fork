@@ -32,7 +32,8 @@ public class SysProps {
 	public static final BiasedOptional<Boolean> IGNORE_ENVS = getBoolean(SysPropDefs.IGNORE_ENVS, false);
 	public static final BiasedOptional<Boolean> ABORT_ON_PUPPET_CRASH = getBoolean(SysPropDefs.ABORT_ON_PUPPET_CRASH, false);
 	public static final BiasedOptional<Integer> DOWNLOAD_WORKERS = getInteger(SysPropDefs.DOWNLOAD_WORKERS, 6);
-	
+	public static final BiasedOptional<Boolean> REFORMAT_GITHUB_RAW_URLS = getBoolean(SysPropDefs.REFORMAT_GITHUB_RAW_URLS, false);
+
 	@SuppressWarnings("deprecation")
 	// todo else
 	public static final BiasedOptional<Behavior> BEHAVIOR = getEnum(SysPropDefs.BEHAVIOR, Behavior.class,

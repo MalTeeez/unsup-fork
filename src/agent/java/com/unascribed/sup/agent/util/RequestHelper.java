@@ -194,7 +194,7 @@ public class RequestHelper {
 		}
 		if ("github.com".equals(url.getHost())) {
 			var m = RAW_GITHUB.matcher(url.getRawPath());
-			if (m.matches()) {
+			if (m.matches() && SysProps.REFORMAT_GITHUB_RAW_URLS.bias()) {
 				try {
 					var corrected = new URI(url.getScheme(), url.getUserInfo(), "raw.githubusercontent.com", url.getPort(), "/"+m.group(1)+"/"+m.group(2), url.getRawQuery(), url.getRawFragment());
 					Log.debug("Correcting bad 502-prone github.com/*/*/raw/ URL to raw.githubusercontent.com ("+url+" -> "+corrected+")");

@@ -93,6 +93,14 @@ public class SysPropDefs {
 	 * @since 1.1-beta1
 	 */
 	public static final String DOWNLOAD_WORKERS = "unsup.downloadWorkers";
+	/**
+	 * {@value}: <ul>
+	 * <li><b>true</b>: Reformat github.com /raw/ urls to raw.githubusercontent.com to catch early failed 502 responses.</li>
+	 * <li><b>false</b>: Don't change github.com /raw/ urls.</li>
+	 * </ul>
+	 * @since 1.2.4
+	 */
+	public static final String REFORMAT_GITHUB_RAW_URLS = "unsup.reformatGithubRawUrls";
 	
 	/**
 	 * {@value}: Set how much control unsup should give to the user as to how updates should proceed.
