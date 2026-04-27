@@ -257,7 +257,7 @@ public class NativeHandler extends AbstractFormatHandler {
 			int updates = theirVersion.code() - ourVersion.code();
 			for (int i = 0; i < updates; i++) {
 				int code = ourVersion.code() +(i+1);
-				JsonObject ver = RequestHelper.loadJson(src.resolve(Util.uriOfPath("versions/"+code+".json")), 4*M,
+				JsonObject ver = RequestHelper.loadJson(src.resolve(Util.uriOfPath("versions/"+code+".json")), 16*M,
 						src.resolve(Util.uriOfPath("versions/"+code+".sig")));
 				checkManifestFlavor(ver, "update", it -> it == 1);
 				HashFunction func = HashFunction.byName(ver.getString("hash_function", DEFAULT_HASH_FUNCTION));
