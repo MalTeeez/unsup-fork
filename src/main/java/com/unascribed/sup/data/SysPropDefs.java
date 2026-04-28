@@ -230,5 +230,14 @@ public class SysPropDefs {
 	 * @since 0.2.0-pre1
 	 */
 	public static final String DEBUG_OVERRIDE_REMOTE_VERSION_CODE = "unsup.debug.overrideRemoteVersionCode";
-	
+
+	/**
+	 * {@value}: <ul>
+	 * <li><b>true</b>: Show a version selector dialog on every launch, allowing the user to
+	 * manually choose which version to install. Native mode only.</li>
+	 * <li><b>false</b>: Normal behavior.</li>
+	 * </ul>
+	 */
+	public static final String VERSION_SELECTOR_ON_LAUNCH = "unsup.versionSelectorOnLaunch";
+
 }

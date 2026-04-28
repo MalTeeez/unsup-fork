@@ -30,6 +30,7 @@ import org.lwjgl.util.freetype.FreeType;
 import com.unascribed.sup.bootstrap.Util;
 import com.unascribed.sup.data.AlertMessageType;
 import com.unascribed.sup.data.FlavorGroup;
+import com.unascribed.sup.data.Version;
 import com.unascribed.sup.data.SysPropDefs;
 import com.unascribed.sup.pieces.Latch;
 import com.unascribed.sup.puppet.Puppet;
@@ -39,6 +40,7 @@ import com.unascribed.sup.puppet.WindowIcons;
 import com.unascribed.sup.puppet.opengl.util.CachedSDLEvent;
 import com.unascribed.sup.puppet.opengl.util.QDPNG;
 import com.unascribed.sup.puppet.opengl.window.FlavorDialogWindow;
+import com.unascribed.sup.puppet.opengl.window.VersionDialogWindow;
 import com.unascribed.sup.puppet.opengl.window.ProgressWindow;
 import com.unascribed.sup.util.Resources;
 import com.unascribed.sup.util.SuppressFBWarnings;
@@ -271,6 +273,25 @@ public class GLPuppet {
 						diag.create(mainWindow, dpiScale);
 						diag.setVisible(true);
 					});
+				});
+			}
+
+			@Override
+			public void openVersionDialog(String name, String title, String body, List<Version> versions, int currentCode) {
+				Puppet.slow.execute(() -> {
+					mainVisibleLatch.awaitUninterruptibly();
+					VersionDialogWindow diag = new VersionDialogWindow(name, title, body, versions, currentCode);
+					try {
+						Puppet.submitToMainThread(() -> {
+							diag.create(mainWindow, dpiScale);
+							return null;
+						});
+					} catch (Exception e) {
+						Puppet.log("ERROR", "Failed to create version selector", e);
+						Puppet.reportChoice(name, "closed");
+						return;
+					}
+					diag.setVisible(true);
 				});
 			}
 			

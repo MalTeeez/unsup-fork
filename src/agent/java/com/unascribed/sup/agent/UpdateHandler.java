@@ -280,7 +280,8 @@ public class UpdateHandler {
 			}
 			PuppetHandler.updateProgress((int)((sum*1000)/denom));
 		};
-		PuppetHandler.updateTitle(bootstrapping ? "title.bootstrapping" : "title.updating", true);
+		String title = bootstrapping ? "title.bootstrapping" : res.theirVersion.code() > res.ourVersion.code() ? "title.updating" : "title.downgrading";
+		PuppetHandler.updateTitle(title, true);
 		int workers = SysProps.DOWNLOAD_WORKERS.orBias();
 		Log.debug("Using "+workers+" download worker"+(workers == 1 ? "" : "s"));
 		ExecutorService svc = Executors.newFixedThreadPool(workers);
@@ -378,7 +379,7 @@ public class UpdateHandler {
 				}
 			}
 		}
-		PuppetHandler.updateTitle(bootstrapping ? "title.bootstrapping" : "title.updating", false);
+		PuppetHandler.updateTitle(title, false);
 		if (!dryRun) {
 			synchronized (Agent.dangerMutex) {
 				PuppetHandler.updateSubtitle("subtitle.applying");

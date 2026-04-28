@@ -53,6 +53,7 @@ import com.unascribed.sup.data.AlertMessageType;
 import com.unascribed.sup.data.ColorChoice;
 import com.unascribed.sup.data.FlavorGroup;
 import com.unascribed.sup.data.SysProps;
+import com.unascribed.sup.data.Version;
 import com.unascribed.sup.data.FlavorChoice;
 import com.unascribed.sup.data.SysProps.PuppetMode;
 import com.unascribed.sup.pieces.Latch;
@@ -349,6 +350,19 @@ public class Puppet {
 								groups.add(grp.build());
 							}
 							r = () -> del.openFlavorDialog(name, groups);
+						}
+						case "pickVersion" -> {
+							String[] entries = arg.replace('', ':').split("");
+							String[] header = entries[0].split("", 3);
+							String titleKey = header[0];
+							String bodyKey = header[1];
+							int currentCode = Integer.parseInt(header[2]);
+							List<Version> versions = new ArrayList<>();
+							for (int i = 1; i < entries.length; i++) {
+								String[] fields = entries[i].split("", 2);
+								versions.add(new Version(fields[1], Integer.parseInt(fields[0])));
+							}
+							r = () -> del.openVersionDialog(name, titleKey, bodyKey, versions, currentCode);
 						}
 						default -> {
 							Puppet.log("WARN", "Unknown order "+order);

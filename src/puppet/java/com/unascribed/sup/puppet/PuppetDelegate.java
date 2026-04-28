@@ -23,6 +23,7 @@ import java.util.List;
 
 import com.unascribed.sup.data.AlertMessageType;
 import com.unascribed.sup.data.FlavorGroup;
+import com.unascribed.sup.data.Version;
 
 public interface PuppetDelegate {
 
@@ -43,6 +44,7 @@ public interface PuppetDelegate {
 	void openChoiceDialog(String name, String title, String body, String[] options, String def);
 	void openMessageDialog(String name, String title, String body, AlertMessageType messageType, String[] options, String def);
 	void openFlavorDialog(String name, List<FlavorGroup> groups);
+	void openVersionDialog(String name, String title, String body, List<Version> versions, int currentCode);
 
 	void setDownloading(String[] files);
 	

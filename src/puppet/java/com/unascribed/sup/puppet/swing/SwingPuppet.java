@@ -63,6 +63,7 @@ import javax.swing.JDialog;
 import javax.swing.JEditorPane;
 import javax.swing.JFrame;
 import javax.swing.JLabel;
+import javax.swing.JList;
 import javax.swing.JOptionPane;
 import javax.swing.JProgressBar;
 import javax.swing.JScrollBar;
@@ -88,6 +89,7 @@ import com.unascribed.sup.data.AlertMessageType;
 import com.unascribed.sup.data.ColorChoice;
 import com.unascribed.sup.data.FlavorGroup;
 import com.unascribed.sup.data.FlavorChoice;
+import com.unascribed.sup.data.Version;
 import com.unascribed.sup.puppet.FontResources;
 import com.unascribed.sup.puppet.Puppet;
 import com.unascribed.sup.puppet.PuppetDelegate;
@@ -250,7 +252,14 @@ public class SwingPuppet {
 					SwingPuppet.openFlavorDialog(name, groups);
 				});
 			}
-			
+
+			@Override
+			public void openVersionDialog(String name, String title, String body, List<Version> versions, int currentCode) {
+				invokeLater(() -> {
+					SwingPuppet.openVersionDialog(name, title, body, versions, currentCode);
+				});
+			}
+
 		};
 	}
 	
@@ -844,5 +853,56 @@ public class SwingPuppet {
 		}
 		Puppet.reportChoice(name, sj.toString());
 	}
-	
+
+	private static void openVersionDialog(String name, String title, String body, List<Version> versions, int currentCode) {
+		String[] entries = new String[versions.size()];
+		int selectedIndex = 0;
+		for (int i = 0; i < versions.size(); i++) {
+			Version v = versions.get(i);
+			entries[i] = (v.code() == currentCode ? "• " : "") + v.name() + " (code " + v.code() + ")";
+			if (v.code() == currentCode) selectedIndex = i;
+		}
+		JList<String> list = new JList<>(entries);
+		list.setSelectedIndex(selectedIndex);
+		JScrollPane scroll = new JScrollPane(list);
+		scroll.setPreferredSize(new java.awt.Dimension(380, 220));
+		JDialog dialog = new JDialog(frame != null && frame.isVisible() ? frame : null, Translate.format(title));
+		dialog.setIconImages(logos);
+		dialog.setModal(true);
+		dialog.setBackground(getColor(ColorChoice.BACKGROUND));
+		dialog.setForeground(getColor(ColorChoice.DIALOG));
+		dialog.setLocationRelativeTo(frame);
+		String[] result = {"closed"};
+		JButton ok = new JButton(Translate.format("option.ok"));
+		ok.addActionListener(e -> {
+			result[0] = String.valueOf(versions.get(list.getSelectedIndex()).code());
+			dialog.dispose();
+		});
+		JButton skip = new JButton(Translate.format("option.skip"));
+		skip.addActionListener(e -> {
+			result[0] = "skip";
+			dialog.dispose();
+		});
+		JButton cancel = new JButton(Translate.format("option.cancel"));
+		cancel.addActionListener(e -> dialog.dispose());
+		javax.swing.JPanel buttons = new javax.swing.JPanel();
+		buttons.add(skip);
+		buttons.add(cancel);
+		buttons.add(ok);
+		JLabel hint = new JLabel("<html><center><small>" + Translate.format("dialog.version_selector.hint") + "</small></center></html>");
+		hint.setHorizontalAlignment(JLabel.CENTER);
+		javax.swing.JPanel south = new javax.swing.JPanel(new java.awt.BorderLayout());
+		south.add(buttons, java.awt.BorderLayout.CENTER);
+		south.add(hint, java.awt.BorderLayout.SOUTH);
+		dialog.getContentPane().setLayout(new java.awt.BorderLayout());
+		if (body != null && !body.isEmpty()) {
+			dialog.getContentPane().add(new JLabel("<html><center>" + Translate.format(body) + "</center></html>"), java.awt.BorderLayout.NORTH);
+		}
+		dialog.getContentPane().add(scroll, java.awt.BorderLayout.CENTER);
+		dialog.getContentPane().add(south, java.awt.BorderLayout.SOUTH);
+		dialog.pack();
+		dialog.setVisible(true);
+		Puppet.reportChoice(name, result[0]);
+	}
+
 }

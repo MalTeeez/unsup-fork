@@ -39,6 +39,7 @@ import java.util.HashMap;
 import java.util.List;
 import java.util.Locale;
 import java.util.Map;
+import java.util.Optional;
 import java.util.StringJoiner;
 import java.util.concurrent.ExecutionException;
 import java.util.concurrent.ExecutorService;
@@ -55,11 +56,13 @@ import com.unascribed.flexver.FlexVerComparator;
 import com.unascribed.sup.PlatDetect;
 import com.unascribed.sup.PlatDetect.ArchType;
 import com.unascribed.sup.PlatDetect.OSType;
+import com.unascribed.sup.agent.ExitCode;
 import com.unascribed.sup.agent.util.RequestHelper;
 import com.unascribed.sup.bootstrap.Bootstrapper;
 import com.unascribed.sup.bootstrap.Util;
 import com.unascribed.sup.data.AlertMessageType;
 import com.unascribed.sup.data.FlavorGroup;
+import com.unascribed.sup.data.Version;
 import com.unascribed.sup.data.SysPropDefs;
 import com.unascribed.sup.data.SysProps;
 import com.unascribed.sup.data.SysProps.PuppetMode;
@@ -578,6 +581,32 @@ public class PuppetHandler {
 			assert res != null;
 			return Arrays.asList(res.split("\u001C"));
 		}
+	}
+
+
+	public static Optional<Integer> openVersionSelectDialog(List<Version> versions, int currentCode) {
+		if (puppetOut == null) {
+			Log.warn("No GUI available, skipping version selector.");
+			return Optional.empty();
+		}
+		String name = Long.toString(ThreadLocalRandom.current().nextLong()&Long.MAX_VALUE, 36);
+		Latch latch = new Latch();
+		StringJoiner joiner = new StringJoiner("");
+		joiner.add("dialog.version_selector.titledialog.version_selector.body" + currentCode);
+		for (Version v : versions) {
+			joiner.add(v.code() + "" + v.name());
+		}
+		alertResults.put(name, "closed");
+		alertWaiters.put(name, latch);
+		tellPuppet("["+name+"]:pickVersion="+joiner.toString().replace(':', ''));
+		latch.awaitUninterruptibly();
+		String result = alertResults.remove(name);
+		if ("closed".equals(result)) {
+			Log.info("User closed version selector. Exiting...");
+			throw ExitCode.USER_REQUEST.exit();
+		}
+		if ("skip".equals(result)) return Optional.empty();
+		return Optional.of(Integer.parseInt(result));
 	}
 
 }

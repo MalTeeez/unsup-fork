@@ -25,9 +25,13 @@ import java.net.URI;
 import java.net.URISyntaxException;
 import java.util.ArrayList;
 import java.util.Collections;
+import java.util.Comparator;
 import java.util.List;
 import java.util.Objects;
+import java.util.Optional;
 import java.util.function.IntPredicate;
+import java.util.stream.Collectors;
+
 import com.grack.nanojson.JsonArray;
 import com.grack.nanojson.JsonObject;
 import com.grack.nanojson.JsonParserException;
@@ -54,6 +58,15 @@ public class NativeHandler extends AbstractFormatHandler {
 	private static class FileToDownloadWithCode extends FilePlan {
 		int code;
 	}
+
+	private static final class PathAndHash {
+		final String path, hash;
+		PathAndHash(String path, String hash) { this.path = path; this.hash = hash; }
+		@Override public boolean equals(Object o) {
+			return o instanceof PathAndHash p && Objects.equals(path, p.path) && Objects.equals(hash, p.hash);
+		}
+		@Override public int hashCode() { return Objects.hash(path, hash); }
+	}
 	
 	public static CheckResult check(URI src, boolean autoaccept, boolean forceFlavorDefaults, JsonObject baseState) throws IOException, JsonParserException, URISyntaxException {
 		Log.info("Loading unsup-format manifest from "+src);
@@ -67,6 +80,20 @@ public class NativeHandler extends AbstractFormatHandler {
 			theirVersion = new Version(theirVersion.name(), SysProps.DEBUG_OVERRIDE_REMOTE_VERSION_CODE.get());
 		}
 		JsonObject newState = new JsonObject(baseState);
+		// Accumulate version history so the selector has past versions to offer
+		if (ourVersion != null) {
+			JsonArray history = newState.getArray("version_history");
+			if (history == null) history = new JsonArray(Collections.emptyList());
+			boolean alreadyTracked = false;
+			for (Object o : history) {
+				if (o instanceof JsonObject jo) {
+					Version v = Version.fromJson(jo);
+					if (v != null && v.code() == ourVersion.code()) { alreadyTracked = true; break; }
+				}
+			}
+			if (!alreadyTracked) history.add(ourVersion.toJson());
+			newState.put("version_history", history);
+		}
 		JsonArray ourFlavors = baseState.getArray("flavors");
 		if (ourFlavors == null && baseState.containsKey("flavor")) {
 			ourFlavors = new JsonArray();
@@ -167,6 +194,52 @@ public class NativeHandler extends AbstractFormatHandler {
 				ourFlavors = handleFlavorSelection(ourFlavors, unpickedGroups, newState, forceFlavorDefaults);
 			}
 		}
+		boolean selectorChosen = false;
+		if (SysProps.VERSION_SELECTOR_ON_LAUNCH.orBias() && ourVersion != null) {
+			List<Version> available = new ArrayList<>();
+			available.add(theirVersion);
+			// Include versions advertised in the manifest's history array
+			JsonObject versionsObj = manifest.getObject("versions");
+			if (versionsObj != null) {
+				JsonArray manifestHistory = versionsObj.getArray("history");
+				if (manifestHistory != null) {
+					for (Object o : manifestHistory) {
+						if (o instanceof JsonObject jo) {
+							Version v = Version.fromJson(jo);
+							if (v != null && available.stream().noneMatch(x -> x.code() == v.code()))
+								available.add(v);
+						}
+					}
+				}
+			}
+			// Also include versions from accumulated state history
+			JsonArray stateHistory = newState.getArray("version_history");
+			if (stateHistory != null) {
+				for (Object o : stateHistory) {
+					if (o instanceof JsonObject jo) {
+						Version v = Version.fromJson(jo);
+						if (v != null && available.stream().noneMatch(x -> x.code() == v.code()))
+							available.add(v);
+					}
+				}
+			}
+			available.sort(Comparator.comparingInt(Version::code).reversed());
+			if (available.size() <= 1) {
+				Log.info("No version history available, skipping version selector.");
+			} else if (PuppetHandler.puppetOut == null) {
+				Log.warn("No GUI available, skipping version selector.");
+			} else {
+				// Returns empty on Skip; throws ExitCode.USER_REQUEST on Cancel/close
+				Optional<Integer> selected = PuppetHandler.openVersionSelectDialog(available, ourVersion.code());
+				if (selected.isPresent()) {
+					int code = selected.get();
+					theirVersion = available.stream().filter(v -> v.code() == code).findFirst().get();
+					selectorChosen = true;
+				} else {
+					Log.info("User skipped version selector.");
+				}
+			}
+		}
 		UpdatePlan<FileToDownloadWithCode> bootstrapPlan = null;
 		boolean bootstrapping = false;
 		if (ourVersion == null) {
@@ -232,7 +305,7 @@ public class NativeHandler extends AbstractFormatHandler {
 		if (theirVersion.code() > ourVersion.code()) {
 			if (!bootstrapping) {
 				Log.info("Update available! We have "+ourVersion+", they have "+theirVersion);
-				if (!autoaccept) {
+				if (!autoaccept && !selectorChosen) {
 					AlertOption updateResp = PuppetHandler.openAlert("dialog.update.title",
 							"dialog.update.named¤"+ ourVersion.name() +"¤"+ theirVersion.name(),
 							AlertMessageType.QUESTION, AlertOptionType.YES_NO, AlertOption.YES);
@@ -328,7 +401,7 @@ public class NativeHandler extends AbstractFormatHandler {
 			return new CheckResult(ourVersion, theirVersion, bootstrapPlan, Collections.emptyMap());
 		} else if (ourVersion.code() > theirVersion.code()) {
 			Log.info("Downgrade available! We have "+ourVersion+", they have "+theirVersion);
-			if (!autoaccept) {
+			if (!autoaccept && !selectorChosen) {
 				AlertOption downgradeResp = PuppetHandler.openAlert("dialog.downgrade.title",
 						"dialog.downgrade.named¤"+ ourVersion.name() +"¤"+ theirVersion.name(),
 						AlertMessageType.QUESTION, AlertOptionType.YES_NO, AlertOption.YES);
@@ -341,21 +414,27 @@ public class NativeHandler extends AbstractFormatHandler {
 					return new CheckResult(ourVersion, theirVersion, null, Collections.emptyMap());
 				}
 			}
+			Log.debug("User accepted downgrade (or autoaccept/selectorChosen); building downgrade plan");
 			UpdatePlan<FileToDownloadWithCode> plan = new UpdatePlan<>(false, newState);
 			PuppetHandler.updateTitle("title.downgrading", false);
 			PuppetHandler.updateSubtitle("subtitle.calculating");
 			boolean yappedAboutConsistency = false;
 			int downgrades = ourVersion.code() - theirVersion.code();
+			Log.debug("Downgrade spans "+downgrades+" version step(s): "+ourVersion.code()+" -> "+theirVersion.code());
 			// Walk patches backwards: from ourVersion down to theirVersion+1.
 			// Each patch N describes the forward change; reversing it means the desired
 			// state is from_hash/from_size and the expected current state is to_hash/to_size.
 			for (int i = 0; i < downgrades; i++) {
 				int code = ourVersion.code() - i;
+				Log.debug("Processing patch "+code+" (step "+(i+1)+" of "+downgrades+")");
 				JsonObject ver = RequestHelper.loadJson(src.resolve(Util.uriOfPath("versions/"+code+".json")), 16*M,
 						src.resolve(Util.uriOfPath("versions/"+code+".sig")));
 				checkManifestFlavor(ver, "update", it -> it == 1);
 				HashFunction func = HashFunction.byName(ver.getString("hash_function", DEFAULT_HASH_FUNCTION));
-				for (Object o : ver.getArray("changes")) {
+				Log.debug("Patch "+code+" uses hash function: "+func);
+				var changes = ver.getArray("changes");
+				Log.debug("Patch "+code+" contains "+changes.size()+" change(s)");
+				for (Object o : changes) {
 					if (!(o instanceof JsonObject file)) throw new IOException("Entry "+o+" in changes array is not an object");
 					var path = file.getString("path");
 					if (path == null) throw new IOException("Entry in changes array is missing path");
@@ -367,6 +446,7 @@ public class NativeHandler extends AbstractFormatHandler {
 					if (toHash != null && toHash.length() != func.sizeInHexChars()) throw new IOException(path+" in changes array to_hash "+toHash+" is wrong length ("+toHash.length()+" != "+func.sizeInHexChars()+")");
 					long toSize = file.getLong("to_size", -1);
 					if (toSize < 0) throw new IOException(path+" in changes array has invalid or missing to_size");
+					Log.debug("Considering "+path+": forward patch was ["+func+"("+toHash+") size "+toSize+"] <- ["+func+"("+fromHash+") size "+fromSize+"]");
 					if (fromSize == toSize && Objects.equals(fromHash, toHash)) {
 						Log.warn(path+" in changes array has same from and to hash/size? Ignoring");
 						continue;
@@ -384,26 +464,31 @@ public class NativeHandler extends AbstractFormatHandler {
 					// For a downgrade, the desired state is from_* and the blob URL uses from_hash.
 					URI fallbackUrl = fromHash == null ? null : src.resolve(Util.uriOfPath(blobPath(fromHash)));
 					URI url = fallbackUrl;
+					Log.debug("Downgrade target for "+path+": desired state "+func+"("+fromHash+") size "+fromSize+(fromHash == null ? " (file deletion)" : " blob: "+fallbackUrl));
 					FileToDownloadWithCode to = plan.files.get(path);
 					if (to != null) {
 						// This file was already seen in a later (higher-numbered) patch.
 						// Consistency check: its expected current state (to_hash from that later patch)
 						// should match to_hash from this patch (what the forward pass put there).
+						Log.debug(path+" already in plan from patch "+to.code+"; performing multi-step consistency check");
 						if (to.state.func() == func) {
 							if (!Objects.equals(to.state.hash(), toHash) || to.state.size() != toSize) {
 								throw new IOException("Bad downgrade: "+path+" in "+to.code+" expected current state "+to.state+
 										", but "+code+" says forward result was "+func+"("+toHash+") size "+toSize);
 							}
+							Log.debug("Consistency check passed for "+path);
 						} else if (!yappedAboutConsistency) {
 							yappedAboutConsistency = true;
 							Log.warn("Cannot perform consistency check on multi-downgrade due to mismatched hash functions");
 						}
 						// Update to the earlier (lower-numbered) desired state.
+						Log.debug("Updating "+path+" desired state to earlier patch "+code+": "+func+"("+fromHash+") size "+fromSize);
 						to.state = new FileState(func, fromHash, fromSize);
 						to.code = code;
 						to.fallbackUrl = fallbackUrl;
 						to.url = url;
 					} else {
+						Log.debug("Adding "+path+" to downgrade plan: expected on disk "+func+"("+toHash+") size "+toSize+", target "+func+"("+fromHash+") size "+fromSize);
 						to = new FileToDownloadWithCode();
 						to.code = code;
 						to.state = new FileState(func, fromHash, fromSize);
@@ -415,6 +500,49 @@ public class NativeHandler extends AbstractFormatHandler {
 					}
 				}
 			}
+			// Second pass: for any file whose desired content was never the result of a forward patch in the range we
+			// walked (e.g. it existed since before any of these versions), we need to try and use any set "url" fields.
+			// Scan all versions up to the target downgrade version to find an explicit "url" field from any patch
+			// entry where to_hash matches the desired hash, and use that instead.
+			var needsUrlLookup = plan.files.entrySet().stream()
+					.filter(e -> e.getValue().state.hash() != null
+							&& Objects.equals(e.getValue().url, e.getValue().fallbackUrl))
+					.collect(Collectors.toList());
+			if (!needsUrlLookup.isEmpty()) {
+				Log.debug("Scanning prior versions for explicit URLs for "+needsUrlLookup.size()+" file(s) that may not have hosted blobs");
+				// cant just key by hash, because duplicate file contents. Also not just by path because of same naming across different versions
+				var byPathAndHash = new java.util.HashMap<PathAndHash, FileToDownloadWithCode>();
+				for (var e : needsUrlLookup) byPathAndHash.put(new PathAndHash(e.getKey(), e.getValue().state.hash()), e.getValue());
+				for (int code = theirVersion.code(); code >= 1 && !byPathAndHash.isEmpty(); code--) {
+					Log.debug("Scanning version "+code+" for explicit URLs");
+					JsonObject ver;
+					try {
+						ver = RequestHelper.loadJson(src.resolve(Util.uriOfPath("versions/"+code+".json")), 16*M,
+								src.resolve(Util.uriOfPath("versions/"+code+".sig")));
+					} catch (FileNotFoundException e) {
+						Log.debug("Version "+code+" not found, stopping URL scan");
+						break;
+					}
+					for (Object o : ver.getArray("changes")) {
+						if (!(o instanceof JsonObject file)) continue;
+						var path = file.getString("path");
+						var toHash = file.getString("to_hash");
+						if (path == null || toHash == null) continue;
+						var to = byPathAndHash.get(new PathAndHash(path, toHash));
+						if (to == null) continue;
+						String urlStr = RequestHelper.checkSchemeMismatch(src, file.getString("url"));
+						if (urlStr != null) {
+							Log.debug("Found explicit URL for "+path+" (hash "+toHash+") in version "+code+": "+urlStr);
+							to.url = new URI(urlStr);
+							byPathAndHash.remove(new PathAndHash(path, toHash));
+						}
+					}
+				}
+				if (!byPathAndHash.isEmpty()) {
+					Log.debug(byPathAndHash.size()+" file(s) have no explicit URL in any prior version; will rely on blob fallback URL");
+				}
+			}
+			Log.debug("Downgrade plan complete: "+plan.files.size()+" file(s) to restore");
 			return new CheckResult(ourVersion, theirVersion, plan, Collections.emptyMap());
 		} else {
 			Log.info("We appear to be up-to-date. Nothing to do");
