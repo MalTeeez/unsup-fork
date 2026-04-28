@@ -327,8 +327,95 @@ public class NativeHandler extends AbstractFormatHandler {
 		} else if (bootstrapPlan != null) {
 			return new CheckResult(ourVersion, theirVersion, bootstrapPlan, Collections.emptyMap());
 		} else if (ourVersion.code() > theirVersion.code()) {
-			Log.info("Remote version is older than local version, doing nothing");
-			return new CheckResult(ourVersion, theirVersion, null, Collections.emptyMap());
+			Log.info("Downgrade available! We have "+ourVersion+", they have "+theirVersion);
+			if (!autoaccept) {
+				AlertOption downgradeResp = PuppetHandler.openAlert("dialog.downgrade.title",
+						"dialog.downgrade.named¤"+ ourVersion.name() +"¤"+ theirVersion.name(),
+						AlertMessageType.QUESTION, AlertOptionType.YES_NO, AlertOption.YES);
+				if (downgradeResp == AlertOption.CLOSED) {
+					Log.info("User closed downgrade dialog! Exiting...");
+					throw ExitCode.USER_REQUEST.exit();
+				}
+				if (downgradeResp == AlertOption.NO) {
+					Log.info("Ignoring downgrade by user choice.");
+					return new CheckResult(ourVersion, theirVersion, null, Collections.emptyMap());
+				}
+			}
+			UpdatePlan<FileToDownloadWithCode> plan = new UpdatePlan<>(false, newState);
+			PuppetHandler.updateTitle("title.downgrading", false);
+			PuppetHandler.updateSubtitle("subtitle.calculating");
+			boolean yappedAboutConsistency = false;
+			int downgrades = ourVersion.code() - theirVersion.code();
+			// Walk patches backwards: from ourVersion down to theirVersion+1.
+			// Each patch N describes the forward change; reversing it means the desired
+			// state is from_hash/from_size and the expected current state is to_hash/to_size.
+			for (int i = 0; i < downgrades; i++) {
+				int code = ourVersion.code() - i;
+				JsonObject ver = RequestHelper.loadJson(src.resolve(Util.uriOfPath("versions/"+code+".json")), 16*M,
+						src.resolve(Util.uriOfPath("versions/"+code+".sig")));
+				checkManifestFlavor(ver, "update", it -> it == 1);
+				HashFunction func = HashFunction.byName(ver.getString("hash_function", DEFAULT_HASH_FUNCTION));
+				for (Object o : ver.getArray("changes")) {
+					if (!(o instanceof JsonObject file)) throw new IOException("Entry "+o+" in changes array is not an object");
+					var path = file.getString("path");
+					if (path == null) throw new IOException("Entry in changes array is missing path");
+					var fromHash = file.getString("from_hash");
+					if (fromHash != null && fromHash.length() != func.sizeInHexChars()) throw new IOException(path+" in changes array from_hash "+fromHash+" is wrong length ("+fromHash.length()+" != "+func.sizeInHexChars()+")");
+					long fromSize = file.getLong("from_size", -1);
+					if (fromSize < 0) throw new IOException(path+" in changes array has invalid or missing from_size");
+					var toHash = file.getString("to_hash");
+					if (toHash != null && toHash.length() != func.sizeInHexChars()) throw new IOException(path+" in changes array to_hash "+toHash+" is wrong length ("+toHash.length()+" != "+func.sizeInHexChars()+")");
+					long toSize = file.getLong("to_size", -1);
+					if (toSize < 0) throw new IOException(path+" in changes array has invalid or missing to_size");
+					if (fromSize == toSize && Objects.equals(fromHash, toHash)) {
+						Log.warn(path+" in changes array has same from and to hash/size? Ignoring");
+						continue;
+					}
+					JsonArray envs = file.getArray("envs");
+					if (Agent.config().useEnvs() && !Iterables.contains(envs, Agent.config().detectedEnv())) {
+						Log.info("Skipping "+path+" as it's not eligible for env "+Agent.config().detectedEnv());
+						continue;
+					}
+					var flavors = file.getArray("flavors");
+					if (flavors != null && !Iterables.intersects(flavors, ourFlavors)) {
+						Log.info("Skipping "+path+" as it's not eligible for our selected flavors");
+						continue;
+					}
+					// For a downgrade, the desired state is from_* and the blob URL uses from_hash.
+					URI fallbackUrl = fromHash == null ? null : src.resolve(Util.uriOfPath(blobPath(fromHash)));
+					URI url = fallbackUrl;
+					FileToDownloadWithCode to = plan.files.get(path);
+					if (to != null) {
+						// This file was already seen in a later (higher-numbered) patch.
+						// Consistency check: its expected current state (to_hash from that later patch)
+						// should match to_hash from this patch (what the forward pass put there).
+						if (to.state.func() == func) {
+							if (!Objects.equals(to.state.hash(), toHash) || to.state.size() != toSize) {
+								throw new IOException("Bad downgrade: "+path+" in "+to.code+" expected current state "+to.state+
+										", but "+code+" says forward result was "+func+"("+toHash+") size "+toSize);
+							}
+						} else if (!yappedAboutConsistency) {
+							yappedAboutConsistency = true;
+							Log.warn("Cannot perform consistency check on multi-downgrade due to mismatched hash functions");
+						}
+						// Update to the earlier (lower-numbered) desired state.
+						to.state = new FileState(func, fromHash, fromSize);
+						to.code = code;
+						to.fallbackUrl = fallbackUrl;
+						to.url = url;
+					} else {
+						to = new FileToDownloadWithCode();
+						to.code = code;
+						to.state = new FileState(func, fromHash, fromSize);
+						to.fallbackUrl = fallbackUrl;
+						to.url = url;
+						// Expected current state on disk is what the forward pass wrote: to_hash/to_size.
+						plan.expectedState.put(path, new FileState(func, toHash, toSize));
+						plan.files.put(path, to);
+					}
+				}
+			}
+			return new CheckResult(ourVersion, theirVersion, plan, Collections.emptyMap());
 		} else {
 			Log.info("We appear to be up-to-date. Nothing to do");
 			return new CheckResult(ourVersion, theirVersion, null, Collections.emptyMap());
