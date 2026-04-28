@@ -116,6 +116,15 @@ public class Agent {
 	public static void premain(String arg) {
 		launched = true;
 		long start = System.nanoTime();
+		// OkHttp's TaskRunner thread throws RejectedExecutionException during shutdown when evictAll()
+		// schedules work on an already-shut-down executor; suppress these meaningless errors
+		Thread.setDefaultUncaughtExceptionHandler((t, e) -> {
+			if (e instanceof java.util.concurrent.RejectedExecutionException
+					&& t.getName().contains("OkHttp")) return;
+			// fall back to default behavior (print to stderr)
+			System.err.println("Exception in thread \"" + t.getName() + "\" " + e);
+			for (var el : e.getStackTrace()) System.err.println("\tat " + el);
+		});
 		try {
 			Log.init();
 			Log.info((standalone ? "Starting in standalone mode" : "Launch hijack successful")+". unsup v"+Util.VERSION);
@@ -510,14 +519,6 @@ public class Agent {
 			} catch (Throwable t) {}
 		}
 		destroyOkHttp(true);
-		var tarray = new Thread[16];
-		Thread.enumerate(tarray);
-		for (var t : tarray) {
-			if (t != null && ("OkHttp TaskRunner".equals(t.getName()) || "com.unascribed.sup.lib.okhttp3.OkHttp TaskRunner".equals(t.getName()))) {
-				// silence meaningless errors due to OkHttp not being designed for its background trash to ever be thrown away
-				t.setUncaughtExceptionHandler((x, e) -> {});
-			}
-		}
 		// not in destroyOkHttp as this is not reversible
 		TaskRunner.INSTANCE.cancelAll();
 		((TaskRunner.RealBackend)TaskRunner.INSTANCE.getBackend()).shutdown();
