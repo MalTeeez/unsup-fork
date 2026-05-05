@@ -152,7 +152,11 @@ public class UpdateHandler {
 			Log.debug("- "+en.getKey()+" is currently "+ponder(from));
 			Log.debug("  It has been changed to "+ponder(to.state));
 			if (to.url != null) {
-				if (to.fallbackUrl != null) {
+				if (to.mirrorUrl != null && to.fallbackUrl != null) {
+					Log.debug("  I'll be grabbing that from "+to.url+" (or "+to.mirrorUrl+", or "+to.fallbackUrl+" if that doesn't work)");
+				} else if (to.mirrorUrl != null) {
+					Log.debug("  I'll be grabbing that from "+to.url+" (or "+to.mirrorUrl+" if that doesn't work)");
+				} else if (to.fallbackUrl != null) {
 					Log.debug("  I'll be grabbing that from "+to.url+" (or "+to.fallbackUrl+" if that doesn't work)");
 				} else {
 					Log.debug("  I'll be grabbing that from "+to.url);
@@ -332,22 +336,38 @@ public class UpdateHandler {
 						}
 						Thread.sleep(2000+ThreadLocalRandom.current().nextInt(1200));
 					}
-					DownloadedFile df;
-					try {
-						if ("file".equals(f.url.getScheme())) {
-							Log.info("Copying "+path);
-						} else {
-							Log.info("Downloading "+path+" from "+describe(f.url));
-						}
-						df = downloadAndCheckHash(tmp, progresses, fi, updateProgress, path, f, f.url, to);
-					} catch (Throwable t) {
-						if (f.fallbackUrl != null) {
-							Log.warn("Failed to download "+path+" from specified URL, trying again from "+describe(f.fallbackUrl), t);
-							df = downloadAndCheckHash(tmp, progresses, fi, updateProgress, path, f, f.fallbackUrl, to);
-						} else {
-							throw t;
-						}
+				DownloadedFile df;
+				try {
+					if ("file".equals(f.url.getScheme())) {
+						Log.info("Copying "+path);
+					} else if (f.mirrorUrl != null && f.fallbackUrl != null) {
+						Log.info("Downloading "+path+" from "+describe(f.url)+" (mirror: "+describe(f.mirrorUrl)+", blob: "+describe(f.fallbackUrl)+")");
+					} else if (f.mirrorUrl != null) {
+						Log.info("Downloading "+path+" from "+describe(f.url)+" (mirror: "+describe(f.mirrorUrl)+")");
+					} else {
+						Log.info("Downloading "+path+" from "+describe(f.url));
 					}
+					df = downloadAndCheckHash(tmp, progresses, fi, updateProgress, path, f, f.url, to);
+				} catch (Throwable t) {
+					if (f.mirrorUrl != null) {
+						Log.warn("Failed to download "+path+" from primary URL, trying mirror from "+describe(f.mirrorUrl), t);
+						try {
+							df = downloadAndCheckHash(tmp, progresses, fi, updateProgress, path, f, f.mirrorUrl, to);
+						} catch (Throwable t2) {
+							if (f.fallbackUrl != null) {
+								Log.warn("Failed to download "+path+" from mirror URL, trying blob from "+describe(f.fallbackUrl), t2);
+								df = downloadAndCheckHash(tmp, progresses, fi, updateProgress, path, f, f.fallbackUrl, to);
+							} else {
+								throw t2;
+							}
+						}
+					} else if (f.fallbackUrl != null) {
+						Log.warn("Failed to download "+path+" from specified URL, trying again from "+describe(f.fallbackUrl), t);
+						df = downloadAndCheckHash(tmp, progresses, fi, updateProgress, path, f, f.fallbackUrl, to);
+					} else {
+						throw t;
+					}
+				}
 					synchronized (downloads) {
 						downloads.put(f, df);
 					}

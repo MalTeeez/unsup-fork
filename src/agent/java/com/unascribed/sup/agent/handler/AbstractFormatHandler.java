@@ -43,6 +43,7 @@ public abstract class AbstractFormatHandler {
 	public static class FilePlan {
 		public FileState state;
 		public URI url;
+		public URI mirrorUrl;    // optional second explicit URL; tried if url fails
 		public URI fallbackUrl;
 		public URI primerUrl;
 		public boolean hostile;

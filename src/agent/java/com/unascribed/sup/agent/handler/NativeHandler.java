@@ -271,28 +271,32 @@ public class NativeHandler extends AbstractFormatHandler {
 					long size = file.getLong("size", -1);
 					if (size < 0) throw new IOException(path+" in files array has invalid or missing size");
 					if (size == 0 && !hash.equals(func.emptyHash())) throw new IOException(path+" in files array is empty file, but hash isn't the empty hash ("+hash+" != "+func.emptyHash()+")");
-					String urlStr = RequestHelper.checkSchemeMismatch(src, file.getString("url"));
-					JsonArray envs = file.getArray("envs");
-					if (Agent.config().useEnvs() && !Iterables.contains(envs, Agent.config().detectedEnv())) {
-						Log.info("Skipping "+path+" as it's not eligible for env "+Agent.config().detectedEnv());
-						continue;
-					}
-					JsonArray flavors = file.getArray("flavors");
-					if (flavors != null && !Iterables.intersects(flavors, ourFlavors)) {
-						Log.info("Skipping "+path+" as it's not eligible for our selected flavors");
-						continue;
-					}
-					URI fallbackUrl = src.resolve(Util.uriOfPath(blobPath(hash)));
-					URI url;
-					if (urlStr == null) {
-						url = fallbackUrl;
-					} else {
-						url = new URI(urlStr);
-					}
-					FileToDownloadWithCode ftd = new FileToDownloadWithCode();
-					ftd.state = new FileState(func, hash, size);
-					ftd.url = url;
-					ftd.fallbackUrl = fallbackUrl;
+				String urlStr = RequestHelper.checkSchemeMismatch(src, file.getString("url"));
+				String mirrorUrlStr = RequestHelper.checkSchemeMismatch(src, file.getString("mirror_url"));
+				JsonArray envs = file.getArray("envs");
+				if (Agent.config().useEnvs() && !Iterables.contains(envs, Agent.config().detectedEnv())) {
+					Log.info("Skipping "+path+" as it's not eligible for env "+Agent.config().detectedEnv());
+					continue;
+				}
+				JsonArray flavors = file.getArray("flavors");
+				if (flavors != null && !Iterables.intersects(flavors, ourFlavors)) {
+					Log.info("Skipping "+path+" as it's not eligible for our selected flavors");
+					continue;
+				}
+				URI fallbackUrl = src.resolve(Util.uriOfPath(blobPath(hash)));
+				URI url;
+				URI mirrorUrl = null;
+				if (urlStr == null) {
+					url = fallbackUrl;
+				} else {
+					url = new URI(urlStr);
+					if (mirrorUrlStr != null) mirrorUrl = new URI(mirrorUrlStr);
+				}
+				FileToDownloadWithCode ftd = new FileToDownloadWithCode();
+				ftd.state = new FileState(func, hash, size);
+				ftd.url = url;
+				ftd.mirrorUrl = mirrorUrl;
+				ftd.fallbackUrl = fallbackUrl;
 					ftd.code = bootstrapVersion.code();
 					bootstrapPlan.files.put(path, ftd);
 					bootstrapPlan.expectedState.put(path, FileState.EMPTY);
@@ -352,48 +356,53 @@ public class NativeHandler extends AbstractFormatHandler {
 						Log.warn(path+" in changes array has same from and to hash/size? Ignoring");
 						continue;
 					}
-					String urlStr = RequestHelper.checkSchemeMismatch(src, file.getString("url"));
-					JsonArray envs = file.getArray("envs");
-					if (Agent.config().useEnvs() && !Iterables.contains(envs, Agent.config().detectedEnv())) {
-						Log.info("Skipping "+path+" as it's not eligible for env "+Agent.config().detectedEnv());
-						continue;
-					}
-					var flavors = file.getArray("flavors");
-					if (flavors != null && !Iterables.intersects(flavors, ourFlavors)) {
-						Log.info("Skipping "+path+" as it's not eligible for our selected flavors");
-						continue;
-					}
-					URI fallbackUrl = toHash == null ? null : src.resolve(Util.uriOfPath(blobPath(toHash)));
-					URI url;
-					if (urlStr == null) {
-						url = fallbackUrl;
-					} else {
-						url = new URI(urlStr);
-					}
-					FileToDownloadWithCode to = plan.files.get(path);
-					if (to != null) {
-						if (to.state.func() == func) {
-							if (!Objects.equals(to.state.hash(), fromHash) || to.state.size() != fromSize) {
-								throw new IOException("Bad update: "+path+" in "+to.code+" specified to become "+to.state+
-										", but "+code+" expects it to have been "+func+"("+fromHash+") size "+fromSize);
-							}
-						} else if (!yappedAboutConsistency) {
-							yappedAboutConsistency = true;
-							Log.warn("Cannot perform consistency check on multi-update due to mismatched hash functions");
+				String urlStr = RequestHelper.checkSchemeMismatch(src, file.getString("url"));
+				String mirrorUrlStr = RequestHelper.checkSchemeMismatch(src, file.getString("mirror_url"));
+				JsonArray envs = file.getArray("envs");
+				if (Agent.config().useEnvs() && !Iterables.contains(envs, Agent.config().detectedEnv())) {
+					Log.info("Skipping "+path+" as it's not eligible for env "+Agent.config().detectedEnv());
+					continue;
+				}
+				var flavors = file.getArray("flavors");
+				if (flavors != null && !Iterables.intersects(flavors, ourFlavors)) {
+					Log.info("Skipping "+path+" as it's not eligible for our selected flavors");
+					continue;
+				}
+				URI fallbackUrl = toHash == null ? null : src.resolve(Util.uriOfPath(blobPath(toHash)));
+				URI url;
+				URI mirrorUrl = null;
+				if (urlStr == null) {
+					url = fallbackUrl;
+				} else {
+					url = new URI(urlStr);
+					if (mirrorUrlStr != null) mirrorUrl = new URI(mirrorUrlStr);
+				}
+				FileToDownloadWithCode to = plan.files.get(path);
+				if (to != null) {
+					if (to.state.func() == func) {
+						if (!Objects.equals(to.state.hash(), fromHash) || to.state.size() != fromSize) {
+							throw new IOException("Bad update: "+path+" in "+to.code+" specified to become "+to.state+
+									", but "+code+" expects it to have been "+func+"("+fromHash+") size "+fromSize);
 						}
-						to.state = new FileState(func, toHash, toSize);
-						to.code = code;
-						to.fallbackUrl = fallbackUrl;
-						to.url = url;
-					} else {
-						to = new FileToDownloadWithCode();
-						to.code = code;
-						to.state = new FileState(func, toHash, toSize);
-						to.fallbackUrl = fallbackUrl;
-						to.url = url;
-						plan.expectedState.put(path, new FileState(func, fromHash, fromSize));
-						plan.files.put(path, to);
+					} else if (!yappedAboutConsistency) {
+						yappedAboutConsistency = true;
+						Log.warn("Cannot perform consistency check on multi-update due to mismatched hash functions");
 					}
+					to.state = new FileState(func, toHash, toSize);
+					to.code = code;
+					to.fallbackUrl = fallbackUrl;
+					to.mirrorUrl = mirrorUrl;
+					to.url = url;
+				} else {
+					to = new FileToDownloadWithCode();
+					to.code = code;
+					to.state = new FileState(func, toHash, toSize);
+					to.fallbackUrl = fallbackUrl;
+					to.mirrorUrl = mirrorUrl;
+					to.url = url;
+					plan.expectedState.put(path, new FileState(func, fromHash, fromSize));
+					plan.files.put(path, to);
+				}
 				}
 			}
 			return new CheckResult(ourVersion, theirVersion, plan, Collections.emptyMap());
@@ -530,12 +539,16 @@ public class NativeHandler extends AbstractFormatHandler {
 						if (path == null || toHash == null) continue;
 						var to = byPathAndHash.get(new PathAndHash(path, toHash));
 						if (to == null) continue;
-						String urlStr = RequestHelper.checkSchemeMismatch(src, file.getString("url"));
-						if (urlStr != null) {
-							Log.debug("Found explicit URL for "+path+" (hash "+toHash+") in version "+code+": "+urlStr);
-							to.url = new URI(urlStr);
-							byPathAndHash.remove(new PathAndHash(path, toHash));
+					String urlStr = RequestHelper.checkSchemeMismatch(src, file.getString("url"));
+					String mirrorUrlStr = RequestHelper.checkSchemeMismatch(src, file.getString("mirror_url"));
+					if (urlStr != null) {
+						Log.debug("Found explicit URL for "+path+" (hash "+toHash+") in version "+code+": "+urlStr);
+						to.url = new URI(urlStr);
+						if (mirrorUrlStr != null) {
+							to.mirrorUrl = new URI(mirrorUrlStr);
 						}
+						byPathAndHash.remove(new PathAndHash(path, toHash));
+					}
 					}
 				}
 				if (!byPathAndHash.isEmpty()) {
