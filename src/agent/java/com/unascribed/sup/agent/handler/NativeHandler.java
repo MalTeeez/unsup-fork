@@ -226,10 +226,8 @@ public class NativeHandler extends AbstractFormatHandler {
 			available.sort(Comparator.comparingInt(Version::code).reversed());
 			if (available.size() <= 1) {
 				Log.info("No version history available, skipping version selector.");
-			} else if (PuppetHandler.puppetOut == null) {
-				Log.warn("No GUI available, skipping version selector.");
 			} else {
-				// Returns empty on Skip; throws ExitCode.USER_REQUEST on Cancel/close
+				// Returns empty on Skip; throws ExitCode.USER_REQUEST on Cancel/close (GUI only)
 				Optional<Integer> selected = PuppetHandler.openVersionSelectDialog(available, ourVersion.code());
 				if (selected.isPresent()) {
 					int code = selected.get();

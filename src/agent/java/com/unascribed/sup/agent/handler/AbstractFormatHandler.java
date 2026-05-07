@@ -27,6 +27,7 @@ import java.util.Map;
 import com.github.bsideup.jabel.Desugar;
 import com.grack.nanojson.JsonArray;
 import com.grack.nanojson.JsonObject;
+import com.unascribed.sup.agent.ConsoleUI;
 import com.unascribed.sup.agent.ExitCode;
 import com.unascribed.sup.agent.Log;
 import com.unascribed.sup.agent.PuppetHandler;
@@ -98,8 +99,8 @@ public abstract class AbstractFormatHandler {
 	protected static JsonArray handleFlavorSelection(JsonArray ourFlavors, List<FlavorGroup> unpickedGroups, JsonObject newState, boolean forceDefault) {
 		if (!unpickedGroups.isEmpty()) {
 			ourFlavors = new JsonArray(ourFlavors == null ? Collections.emptyList() : ourFlavors);
-			if (PuppetHandler.puppetOut != null) {
-				PuppetHandler.tellPuppet(":expedite=openTimeout");
+			if (PuppetHandler.puppetOut != null || ConsoleUI.INTERACTIVE) {
+				if (PuppetHandler.puppetOut != null) PuppetHandler.tellPuppet(":expedite=openTimeout");
 				ourFlavors.addAll(PuppetHandler.openFlavorSelectDialog("dialog.flavors.title", "", unpickedGroups));
 			} else {
 				for (FlavorGroup grp : unpickedGroups) {

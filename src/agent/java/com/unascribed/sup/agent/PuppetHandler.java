@@ -501,20 +501,88 @@ public class PuppetHandler {
 		tellPuppet(":prog=0");
 		tellPuppet(":mode="+(determinate ? "det" : "ind"));
 		tellPuppet(":title="+title);
+		if (puppetOut == null) ConsoleUI.startProgress(resolveString(title), determinate);
 	}
 
 	public static void updateSubtitle(String subtitle) {
 		tellPuppet(":subtitle="+subtitle);
+		if (puppetOut == null) ConsoleUI.updateSubtitle(resolveString(subtitle));
 	}
 
 	public static void updateSubtitleDownloading(String... files) {
 		StringJoiner joiner = new StringJoiner("\u001C");
 		for (String s : files) joiner.add(s);
 		tellPuppet(":downloading="+joiner);
+		if (puppetOut == null) {
+			// Mimic the puppet's elision logic: join names, trim from the end if too long
+			List<String> names = new ArrayList<>(Arrays.asList(files));
+			int elided = 0;
+			final int maxSubtitleLen = 50;
+			String subtitle;
+			do {
+				if (names.isEmpty()) {
+					subtitle = resolveString("subtitle.downloading_indeterminate");
+					break;
+				}
+				StringJoiner sj = new StringJoiner(", ");
+				names.forEach(sj::add);
+				if (elided == 0) {
+					subtitle = sj.toString();
+				} else {
+					subtitle = sj + " +" + elided + " more";
+				}
+				if (subtitle.length() <= maxSubtitleLen) break;
+				elided++;
+				names.remove(names.size() - 1);
+			} while (true);
+			ConsoleUI.updateSubtitle(subtitle);
+		}
+	}
+
+	/**
+	 * Resolves a translation key to a display string for the TUI.
+	 * Uses the configured strings map if available, otherwise converts the key
+	 * to a readable form (e.g. "title.updating" → "Updating").
+	 */
+	private static String resolveString(String key) {
+		if (key == null) return "";
+		String configured = Agent.config().strings().get(key);
+		if (configured != null) return configured;
+		// Fall back: humanize the key.
+		// For "title.*" / "subtitle.*" the last segment is sufficient ("Updating", "Calculating").
+		// For deeper keys like "dialog.error.normal" use the last two segments ("error normal").
+		String[] parts = key.split("\\.");
+		String base;
+		if (parts.length <= 2) {
+			base = parts[parts.length - 1];
+		} else {
+			base = parts[parts.length - 2] + " " + parts[parts.length - 1];
+		}
+		base = base.replace('_', ' ');
+		return base.substring(0, 1).toUpperCase(Locale.ROOT) + base.substring(1);
+	}
+
+	/**
+	 * Resolves a body string for the TUI. Body strings may be a single translation key,
+	 * or a ¤-delimited sequence where each segment is either a translation key or a
+	 * literal value (e.g. a file path). Each segment is resolved individually and the
+	 * results are joined with a space.
+	 */
+	private static String resolveBody(String body) {
+		if (body == null || body.isEmpty()) return "";
+		String[] parts = body.split("¤");
+		if (parts.length == 1) return resolveString(parts[0]);
+		StringBuilder sb = new StringBuilder();
+		for (String part : parts) {
+			if (sb.length() > 0) sb.append(' ');
+			sb.append(resolveString(part));
+		}
+		return sb.toString();
 	}
 
 	public static void updateProgress(int prog) {
 		tellPuppet(":prog="+prog);
+		if (puppetOut == null) ConsoleUI.updateProgress(prog);
 		if (Math.abs(lastReportedProgress-prog) >= 100 || System.nanoTime()-lastReportedProgressTime > TimeUnit.SECONDS.toNanos(3)) {
 			lastReportedProgress = prog;
 			lastReportedProgressTime = System.nanoTime();
@@ -524,7 +592,7 @@ public class PuppetHandler {
 
 	public static AlertOption openAlert(String title, String body, AlertMessageType messageType, AlertOptionType optionType, AlertOption def) {
 		if (puppetOut == null) {
-			return def;
+			return ConsoleUI.promptAlert(resolveString(title), resolveBody(body), optionType, def);
 		} else {
 			String name = Long.toString(ThreadLocalRandom.current().nextLong()&Long.MAX_VALUE, 36);
 			Latch latch = new Latch();
@@ -540,7 +608,7 @@ public class PuppetHandler {
 
 	public static String openChoiceAlert(String title, String body, Collection<String> choices, String def) {
 		if (puppetOut == null) {
-			return def;
+			return ConsoleUI.promptChoiceAlert(resolveString(title), resolveBody(body), choices, def);
 		} else {
 			String name = Long.toString(ThreadLocalRandom.current().nextLong()&Long.MAX_VALUE, 36);
 			Latch latch = new Latch();
@@ -556,7 +624,7 @@ public class PuppetHandler {
 	
 	public static List<String> openFlavorSelectDialog(String title, String body, List<FlavorGroup> groups) {
 		if (puppetOut == null) {
-			return new ArrayList<>();
+			return ConsoleUI.promptFlavorSelect(title, body, groups);
 		} else {
 			String name = Long.toString(ThreadLocalRandom.current().nextLong()&Long.MAX_VALUE, 36);
 			Latch latch = new Latch();
@@ -586,8 +654,7 @@ public class PuppetHandler {
 
 	public static Optional<Integer> openVersionSelectDialog(List<Version> versions, int currentCode) {
 		if (puppetOut == null) {
-			Log.warn("No GUI available, skipping version selector.");
-			return Optional.empty();
+			return ConsoleUI.promptVersionSelect(versions, currentCode);
 		}
 		String name = Long.toString(ThreadLocalRandom.current().nextLong()&Long.MAX_VALUE, 36);
 		Latch latch = new Latch();

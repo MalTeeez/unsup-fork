@@ -38,6 +38,11 @@ public class Log {
 	private static final SimpleDateFormat dateFormat = new SimpleDateFormat("HH:mm:ss");
 	private static PrintStream fileStream;
 	private static String defaultTag;
+
+	/** Called before each log line is printed to stdout, under the log lock. */
+	public static Runnable beforeLine = null;
+	/** Called after each log line is printed to stdout, under the log lock. */
+	public static Runnable afterLine = null;
 	
 	@SuppressFBWarnings("RV_RETURN_VALUE_IGNORED_BAD_PRACTICE")
 	public static void init() {
@@ -95,7 +100,11 @@ public class Log {
 	
 	public synchronized static void log(String flavor, String tag, String msg) {
 		String line = "["+dateFormat.format(new Date())+"] [unsup "+tag+"/"+flavor+"]: "+msg;
-		if (!("DEBUG".equals(flavor)) || SysProps.DEBUG.orBias()) System.out.println(line);
+		if (!("DEBUG".equals(flavor)) || SysProps.DEBUG.orBias()) {
+			if (beforeLine != null) beforeLine.run();
+			System.out.println(line);
+			if (afterLine != null) afterLine.run();
+		}
 		fileStream.println(line);
 	}
 	
