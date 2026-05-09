@@ -69,42 +69,43 @@ import com.unascribed.sup.data.SysProps.PuppetMode;
 import com.unascribed.sup.pieces.Latch;
 
 public class PuppetHandler {
-	
+
 	public static volatile Process puppet;
 	public static volatile OutputStream puppetOut;
-	
+
 	private static final LinkedBlockingQueue<String> commandQueue = new LinkedBlockingQueue<>();
-	
+
 	private static volatile boolean destroyed = false;
-	
+
 	private static String title;
 	private static int lastReportedProgress = 0;
 	private static long lastReportedProgressTime = 0;
-	
+
 	private static final Map<String, String> alertResults = new HashMap<>();
 	private static final Map<String, Latch> alertWaiters = new HashMap<>();
-	
+
 	private static final int crashId = ThreadLocalRandom.current().nextInt()&Integer.MAX_VALUE;
-	
+
 	private static final Pattern IMK_CLIENT = Pattern.compile(" \\+\\[IMKClient subclass\\]: chose IMKClient_(Modern|Legacy)$");
-	
+	private static final Pattern BODY_PLACEHOLDER = Pattern.compile("%(?:([0-9+])\\$)?(.)");
+
 	public enum AlertOptionType { OK, OK_CANCEL, YES_NO, YES_NO_CANCEL, YES_NO_TO_ALL_CANCEL }
 	public enum AlertOption { CLOSED, OK, YES, NO, CANCEL, YESTOALL, NOTOALL }
 
 	private static final String bundleVersion = "3.4.1";
-	
+
 	private static final String[] copyableProps = {
 		"javax.accessibility.assistive_technologies",
 		"assistive_technologies",
 		"sun.java2d.uiScale",
 		"unsup.scale"
 	};
-	
+
 	public static void destroy() {
 		destroyed = true;
 		if (puppet != null) puppet.destroy();
 	}
-	
+
 	public static void create() {
 		out: {
 			URI uri;
@@ -235,16 +236,16 @@ public class PuppetHandler {
 					args.add("-XX:ErrorFile="+errorFile.getAbsolutePath());
 					args.add("-XX:+ErrorLogSecondaryErrorDetails");
 					args.add(Util.DEVELOPMENT_ENVIRONMENT ? "com.unascribed.sup.puppet.Puppet" : "com.unascribed.sup.puppet.Bootstrap");
-					
+
 					StringJoiner printJ = new StringJoiner("' '", "'", "'");
 					for (String s : args) {
 						printJ.add(s.replace("'", "\\'"));
 					}
-					
+
 					Log.debug("unsup location detected as "+ourPath);
 					Log.debug("Java location detected as "+java);
 					Log.debug("Puppet command: "+printJ);
-					
+
 					ProcessBuilder bldr = new ProcessBuilder(args);
 					bldr.environment().put("_JAVA_AWT_WM_NONREPARENTING", "1");
 					bldr.environment().put("NO_AWT_MITSHM", "1");
@@ -362,7 +363,7 @@ public class PuppetHandler {
 			}
 		}
 	}
-	
+
 	private static boolean checkEarlyDestroy() {
 		if (destroyed) {
 			Log.debug("Puppet was destroyed before it finished starting.");
@@ -375,7 +376,7 @@ public class PuppetHandler {
 	private static String determineErrorFileName() {
 		return "unsup-puppet-native-crash-"+crashId+".log";
 	}
-	
+
 	private static File determineErrorFilePath() {
 		File logs = new File("logs");
 		String n = determineErrorFileName();
@@ -387,7 +388,7 @@ public class PuppetHandler {
 		if (nativeCrash.exists()) {
 			Log.error("The Puppet crashed in native code. Please report this issue, including the full unsup.log and "+determineErrorFileName());
 		}
-		
+
 		if (SysProps.ABORT_ON_PUPPET_CRASH.orBias()) {
 			Log.error("Puppet crashed! Exiting, as requested by -Dunsup.abortOnPuppetCrash=true!");
 			try {
@@ -396,7 +397,7 @@ public class PuppetHandler {
 			}
 		}
 	}
-	
+
 	private static void exit() throws InterruptedException {
 		Agent.awaitingExit = true;
 		long start = System.nanoTime();
@@ -418,7 +419,7 @@ public class PuppetHandler {
 
 	private static File obtainAsset(File cacheDir, String url) throws IOException {
 		final int M = 1024*1024;
-		
+
 		String fname = url.replace("/", "-");
 		File cacheFile = new File(cacheDir, fname+".jar");
 		File cacheFileTmp = new File(cacheDir, fname+".jar.tmp");
@@ -541,42 +542,64 @@ public class PuppetHandler {
 
 	/**
 	 * Resolves a translation key to a display string for the TUI.
-	 * Uses the configured strings map if available, otherwise converts the key
-	 * to a readable form (e.g. "title.updating" → "Updating").
 	 */
 	private static String resolveString(String key) {
 		if (key == null) return "";
 		String configured = Agent.config().strings().get(key);
-		if (configured != null) return configured;
-		// Fall back: humanize the key.
-		// For "title.*" / "subtitle.*" the last segment is sufficient ("Updating", "Calculating").
-		// For deeper keys like "dialog.error.normal" use the last two segments ("error normal").
-		String[] parts = key.split("\\.");
-		String base;
-		if (parts.length <= 2) {
-			base = parts[parts.length - 1];
-		} else {
-			base = parts[parts.length - 2] + " " + parts[parts.length - 1];
-		}
-		base = base.replace('_', ' ');
-		return base.substring(0, 1).toUpperCase(Locale.ROOT) + base.substring(1);
+		return configured != null ? configured : key;
 	}
 
 	/**
+	 * Basically a mirror of BasicFormat without the import for the TUI.
 	 * Resolves a body string for the TUI. Body strings may be a single translation key,
 	 * or a ¤-delimited sequence where each segment is either a translation key or a
-	 * literal value (e.g. a file path). Each segment is resolved individually and the
-	 * results are joined with a space.
+	 * literal value (e.g. a file path).
 	 */
 	private static String resolveBody(String body) {
 		if (body == null || body.isEmpty()) return "";
 		String[] parts = body.split("¤");
-		if (parts.length == 1) return resolveString(parts[0]);
-		StringBuilder sb = new StringBuilder();
-		for (String part : parts) {
-			if (sb.length() > 0) sb.append(' ');
-			sb.append(resolveString(part));
+		String key = parts[0];
+		String template = Agent.config().strings().getOrDefault(key, key);
+		if (parts.length == 1) return applyBodyFormat(template, new Object[0]);
+
+		// populate args from remaining segments as literals,
+		// then recursively format any that are themselves translation keys (skip index 0).
+		Object[] args = new Object[parts.length - 1];
+        System.arraycopy(parts, 1, args, 0, args.length);
+		for (int i = 1; i < args.length; i++) {
+			String arg = (String) args[i];
+			String resolved = Agent.config().strings().get(arg);
+			if (resolved != null) {
+				args[i] = applyBodyFormat(resolved, args);
+			}
 		}
+		return applyBodyFormat(template, args);
+	}
+
+	private static String applyBodyFormat(String template, Object[] args) {
+		Matcher m = BODY_PLACEHOLDER.matcher(template);
+		StringBuilder sb = new StringBuilder();
+		int nextAutoIndex = 1;
+		int last = 0;
+		while (m.find()) {
+			sb.append(template, last, m.start());
+			last = m.end();
+			int idx = m.group(1) == null ? 0 : Integer.parseInt(m.group(1));
+			switch (m.group(2)) {
+				case "n":
+					sb.append('\n');
+					break;
+				case "s":
+					if (idx == 0) { idx = nextAutoIndex++; }
+					idx--;
+					if (idx < args.length) sb.append(args[idx]);
+					break;
+				default:
+					sb.append(m.group(0));
+					break;
+			}
+		}
+		sb.append(template, last, template.length());
 		return sb.toString();
 	}
 
@@ -621,7 +644,7 @@ public class PuppetHandler {
 			return alertResults.remove(name);
 		}
 	}
-	
+
 	public static List<String> openFlavorSelectDialog(String title, String body, List<FlavorGroup> groups) {
 		if (puppetOut == null) {
 			return ConsoleUI.promptFlavorSelect(title, body, groups);

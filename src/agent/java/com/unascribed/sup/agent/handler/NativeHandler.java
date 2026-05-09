@@ -36,6 +36,7 @@ import com.grack.nanojson.JsonArray;
 import com.grack.nanojson.JsonObject;
 import com.grack.nanojson.JsonParserException;
 import com.unascribed.sup.agent.Agent;
+import com.unascribed.sup.agent.ConsoleUI;
 import com.unascribed.sup.agent.ExitCode;
 import com.unascribed.sup.agent.Log;
 import com.unascribed.sup.agent.PuppetHandler;
@@ -86,6 +87,7 @@ public class NativeHandler extends AbstractFormatHandler {
         if (!manifest.containsKey("versions")) throw new IOException("Manifest is missing versions field");
         Version theirVersion = Version.fromJson(manifest.getObject("versions").getObject("current"));
         if (theirVersion == null) throw new IOException("Manifest is missing current version field");
+        Log.debug("Version selector is active? " + SysProps.VERSION_SELECTOR_ON_LAUNCH.orBias());
         if (SysProps.DEBUG_OVERRIDE_REMOTE_VERSION_CODE.isPresent()) {
             theirVersion = new Version(theirVersion.name(), SysProps.DEBUG_OVERRIDE_REMOTE_VERSION_CODE.get());
         }
@@ -239,11 +241,15 @@ public class NativeHandler extends AbstractFormatHandler {
             available.sort(Comparator.comparingInt(Version::code).reversed());
             if (available.size() <= 1) {
                 Log.info("No version history available, skipping version selector.");
-            } else if (PuppetHandler.puppetOut == null) {
-                Log.warn("No GUI available, skipping version selector.");
             } else {
-                // Returns empty on Skip; throws ExitCode.USER_REQUEST on Cancel/close
-                Optional<Integer> selected = PuppetHandler.openVersionSelectDialog(available, ourVersion.code());
+                Optional<Integer> selected;
+                if (PuppetHandler.puppetOut == null) {
+                    // No GUI; fall back to console
+                    selected = ConsoleUI.promptVersionSelect(available, ourVersion.code());
+                } else {
+                    // Returns empty on Skip; throws ExitCode.USER_REQUEST on Cancel/close
+                    selected = PuppetHandler.openVersionSelectDialog(available, ourVersion.code());
+                }
                 if (selected.isPresent()) {
                     int code = selected.get();
                     theirVersion = available.stream().filter(v -> v.code() == code).findFirst().get();
