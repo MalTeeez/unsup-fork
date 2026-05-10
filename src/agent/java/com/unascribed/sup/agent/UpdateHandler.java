@@ -276,11 +276,16 @@ public class UpdateHandler {
 			Files.createDirectories(tmp.toPath());
 		}
 		AtomicIntegerArray progresses = new AtomicIntegerArray(plan.files.size());
-		long denom = plan.files.size()*1000L;
+		// Only count files that will actually be downloaded
+		long downloadCount = plan.files.values().stream()
+				.filter(f -> f != null && !f.skip && f.state.size() > 0)
+				.count();
+		long denom = Math.max(1, downloadCount) * 1000L;
+		List<Integer> activeIndices = new ArrayList<>();
 		Runnable updateProgress = () -> {
 			long sum = 0;
-			for (int i = 0; i < progresses.length(); i++) {
-				sum += progresses.get(i);
+			for (int idx : activeIndices) {
+				sum += progresses.get(idx);
 			}
 			PuppetHandler.updateProgress((int)((sum*1000)/denom));
 		};
@@ -313,13 +318,16 @@ public class UpdateHandler {
 			if (f.skip) {
 				Log.info("Skipping download of "+path);
 				progresses.set(i, 1000);
+				i++;
 				continue;
 			}
 			FileState to = f.state;
 			if (to.size() == 0) {
 				progresses.set(i, 1000);
+				i++;
 				continue;
 			}
+			activeIndices.add(i);
 			final int fi = i;
 			futures.add(svc.submit(() -> {
 				synchronized (files) {
@@ -494,7 +502,11 @@ public class UpdateHandler {
 							case DOWNLOADING -> {
 								if (size.isPresent()) {
 									progresses.set(progressIdx, (int)((amt*1000)/size.getAsLong()));
+								} else if (to.size() > 0) {
+									// No Content-Length from server; use manifest size as best-effort.
+									progresses.set(progressIdx, (int) Math.min(999, (amt * 1000) / to.size()));
 								}
+								// If size unknown and manifest size is 0, leave at 0 until COMPLETE.
 							}
 							case COMPLETE -> {
 								progresses.set(progressIdx, 1000);

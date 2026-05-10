@@ -67,6 +67,7 @@ import com.unascribed.sup.ann.NotNull;
 import com.unascribed.sup.bootstrap.Bootstrapper;
 import com.unascribed.sup.bootstrap.Util;
 import com.unascribed.sup.data.AlertMessageType;
+import com.unascribed.sup.data.ColorChoice;
 import com.unascribed.sup.data.SysProps;
 import com.unascribed.sup.pieces.ExceptableRunnable;
 import com.unascribed.sup.util.Bases;
@@ -169,9 +170,18 @@ public class Agent {
 				MMCUpdater.scan();
 			}
 			
-			PuppetHandler.sendConfig();
-			
-			PuppetHandler.tellPuppet(":build");
+		PuppetHandler.sendConfig();
+
+		// Expose configured colors to ConsoleUI via ColorChoice.delegate.
+		// Mirrors what the puppet does via IPC, but without the pipe.
+		int[] colorLookup = ColorChoice.createLookup();
+		for (var en : config().colorChoices().entrySet()) {
+			try { colorLookup[en.getKey().ordinal()] = Integer.parseInt(en.getValue(), 16); }
+			catch (NumberFormatException ignored) {}
+		}
+		ColorChoice.delegate = c -> colorLookup[c.ordinal()];
+		
+		PuppetHandler.tellPuppet(":build");
 			PuppetHandler.tellPuppet(":subtitle="+config().initialSubtitle());
 			String delay;
 			if (config().offerChangeFlavors()) {

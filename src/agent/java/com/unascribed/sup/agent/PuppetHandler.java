@@ -507,7 +507,10 @@ public class PuppetHandler {
 
 	public static void updateSubtitle(String subtitle) {
 		tellPuppet(":subtitle="+subtitle);
-		if (puppetOut == null) ConsoleUI.updateSubtitle(resolveString(subtitle));
+		if (puppetOut == null) {
+			ConsoleUI.updateSubtitle(resolveString(subtitle));
+			if ("subtitle.applying".equals(subtitle)) ConsoleUI.newline();
+		}
 	}
 
 	public static void updateSubtitleDownloading(String... files) {
@@ -615,7 +618,7 @@ public class PuppetHandler {
 
 	public static AlertOption openAlert(String title, String body, AlertMessageType messageType, AlertOptionType optionType, AlertOption def) {
 		if (puppetOut == null) {
-			return ConsoleUI.promptAlert(resolveString(title), resolveBody(body), optionType, def);
+			return ConsoleUI.promptAlert(resolveString(title), resolveBody(body), messageType, optionType, def);
 		} else {
 			String name = Long.toString(ThreadLocalRandom.current().nextLong()&Long.MAX_VALUE, 36);
 			Latch latch = new Latch();
