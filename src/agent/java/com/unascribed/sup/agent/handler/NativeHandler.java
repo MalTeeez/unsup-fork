@@ -79,7 +79,7 @@ public class NativeHandler extends AbstractFormatHandler {
         }
     }
 
-    public static CheckResult check(URI src, boolean autoaccept, boolean forceFlavorDefaults, JsonObject baseState) throws IOException, JsonParserException, URISyntaxException {
+    public static CheckResult check(URI src, boolean autoaccept, boolean forceFlavorDefaults, boolean serverAuthorityPass, JsonObject baseState) throws IOException, JsonParserException, URISyntaxException {
         Log.info("Loading unsup-format manifest from " + src);
         JsonObject manifest = RequestHelper.loadJson(src, 1 * M, src.resolve("manifest.sig"));
         checkManifestFlavor(manifest, "root", it -> it == 1);
@@ -210,7 +210,7 @@ public class NativeHandler extends AbstractFormatHandler {
             }
         }
         boolean selectorChosen = false;
-        if (SysProps.VERSION_SELECTOR_ON_LAUNCH.orBias() && ourVersion != null) {
+        if ((SysProps.VERSION_SELECTOR_ON_LAUNCH.orBias() || ourVersion == null) && !serverAuthorityPass) {
             List<Version> available = new ArrayList<>();
             available.add(theirVersion);
             // Include versions advertised in the manifest's history array
@@ -243,12 +243,13 @@ public class NativeHandler extends AbstractFormatHandler {
                 Log.info("No version history available, skipping version selector.");
             } else {
                 Optional<Integer> selected;
+                int currentCode = ourVersion != null ? ourVersion.code() : theirVersion.code();
                 if (PuppetHandler.puppetOut == null) {
                     // No GUI; fall back to console
-                    selected = ConsoleUI.promptVersionSelect(available, ourVersion.code());
+                    selected = ConsoleUI.promptVersionSelect(available, currentCode);
                 } else {
                     // Returns empty on Skip; throws ExitCode.USER_REQUEST on Cancel/close
-                    selected = PuppetHandler.openVersionSelectDialog(available, ourVersion.code());
+                    selected = PuppetHandler.openVersionSelectDialog(available, currentCode);
                 }
                 if (selected.isPresent()) {
                     int code = selected.get();

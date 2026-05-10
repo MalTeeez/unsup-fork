@@ -133,11 +133,12 @@ public class Agent {
 			
 			if (config().serverAuthority()) {
 				Log.info("Performing pre-update to check for a new config");
-				if (UpdateHandler.checkForUpdate(state, config().format(), config().source(),
-						true,
-						false,
-						true,
-						res -> {
+			if (UpdateHandler.checkForUpdate(state, config().format(), config().source(),
+					true,
+					false,
+					true,
+					true,
+					res -> {
 					res.componentVersions.clear();
 					if (res.plan != null) {
 						res.plan.skipStateApplication = true;
@@ -194,12 +195,13 @@ public class Agent {
 			}
 			PuppetHandler.tellPuppet("[openTimeout]"+delay+":visible=true");
 			
-			UpdateHandler.checkForUpdate(state, config().format(), config().source(),
-					!config().behavior().promptUpdates(),
-					SysProps.DRY_RUN.orBias(),
-					false,
-					res -> {}
-				);
+		UpdateHandler.checkForUpdate(state, config().format(), config().source(),
+				!config().behavior().promptUpdates(),
+				SysProps.DRY_RUN.orBias(),
+				false,
+				false,
+				res -> {}
+			);
 
 			if (awaitingExit) Agent.blockForever();
 

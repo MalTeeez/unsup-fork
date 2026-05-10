@@ -71,7 +71,7 @@ public class UpdateHandler {
 
 	private static final Pattern domainPattern = Pattern.compile("(^|\\.)([^\\.]+\\.[^\\.]+)$");
 
-	public static boolean checkForUpdate(JsonObject baseState, SourceFormat fmt, URI src, boolean autoaccept, boolean dryRun, boolean forceFlavorDefaults, Consumer<CheckResult> modifier) {
+	public static boolean checkForUpdate(JsonObject baseState, SourceFormat fmt, URI src, boolean autoaccept, boolean dryRun, boolean forceFlavorDefaults, boolean serverAuthorityPass, Consumer<CheckResult> modifier) {
 		PuppetHandler.updateTitle("title.checking", false);
 		try {
 			CheckResult res = null;
@@ -84,7 +84,7 @@ public class UpdateHandler {
 				}
 				for (String s : src.getRawSchemeSpecificPart().split(";")) {
 					JsonObject thisState = mergeStates.getObject(s, new JsonObject());
-					if (checkForUpdate(thisState, fmt, new URI(s), autoaccept, dryRun, forceFlavorDefaults, modifier)) {
+					if (checkForUpdate(thisState, fmt, new URI(s), autoaccept, dryRun, forceFlavorDefaults, serverAuthorityPass, modifier)) {
 						// if the user has accepted an update, then accept the rest of them implicitly
 						autoaccept = true;
 					}
@@ -105,7 +105,7 @@ public class UpdateHandler {
 					case NONE ->
 						throw new AssertionError("Config must be initialized by this point");
 					case UNSUP ->
-						NativeHandler.check(src, autoaccept, forceFlavorDefaults, baseState);
+						NativeHandler.check(src, autoaccept, forceFlavorDefaults, serverAuthorityPass, baseState);
 					case PACKWIZ ->
 						PackwizHandler.check(src, autoaccept, forceFlavorDefaults, baseState);
 				};
