@@ -69,6 +69,7 @@ public abstract class Window {
 	
 	protected double mouseX, mouseY;
 	protected boolean mouseClicked;
+	protected boolean mouseDown;
 	
 	protected final FontManager font = new FontManager();
 	protected int scratchTex;
@@ -84,7 +85,7 @@ public abstract class Window {
 	
 	protected boolean enforceSize = true;
 	protected boolean updateDpiScaleByFramebuffer = true;
-	protected long defaultCursor, clickCursor;
+	protected long defaultCursor, clickCursor, textCursor;
 	
 	protected synchronized void customizeProperties(int props) {}
 	protected synchronized void customizeWindow() {}
@@ -92,6 +93,8 @@ public abstract class Window {
 	protected synchronized void onWindowCloseRequest() {}
 	protected synchronized void onKeyDown(int key, int scancode, int mod, boolean repeat) {}
 	protected synchronized void onScroll(float dwheelX, float dwheelY) {}
+	protected synchronized void onTextInput(String text) {}
+	protected synchronized void onMouseRelease() {}
 	
 	public synchronized void create(Window parent, String title, int width, int height, double initialExplicitDpiScale) {
 		if (!Puppet.isMainThread()) throw new IllegalStateException("Must be on main thread");
@@ -154,6 +157,7 @@ public abstract class Window {
 		
 		defaultCursor = check(SDL_CreateSystemCursor(SDL_SYSTEM_CURSOR_DEFAULT));
 		clickCursor = check(SDL_CreateSystemCursor(SDL_SYSTEM_CURSOR_POINTER));
+		textCursor = check(SDL_CreateSystemCursor(SDL_SYSTEM_CURSOR_TEXT));
 		
 		int windowId = SDL_GetWindowID(handle);
 		GLPuppet.listen(evt -> {
@@ -220,15 +224,31 @@ public abstract class Window {
 						}
 					}
 				}
-				case SDL_EVENT_MOUSE_BUTTON_DOWN -> {
-					if (evt.button().windowID() == windowId && evt.button().button() == 1) {
-						synchronized (this) {
-							mouseClicked = true;
-							onMouseClick();
-						}
+			case SDL_EVENT_MOUSE_BUTTON_DOWN -> {
+				if (evt.button().windowID() == windowId && evt.button().button() == 1) {
+					synchronized (this) {
+						mouseDown = true;
+						mouseClicked = true;
+						onMouseClick();
 					}
 				}
-				case SDL_EVENT_WINDOW_CLOSE_REQUESTED -> {
+			}
+			case SDL_EVENT_MOUSE_BUTTON_UP -> {
+				if (evt.button().windowID() == windowId && evt.button().button() == 1) {
+					synchronized (this) {
+						mouseDown = false;
+						onMouseRelease();
+					}
+				}
+			}
+			case SDL_EVENT_TEXT_INPUT -> {
+				if (evt.text().windowID() == windowId) {
+					synchronized (this) {
+						onTextInput(evt.text().textString());
+					}
+				}
+			}
+			case SDL_EVENT_WINDOW_CLOSE_REQUESTED -> {
 					if (evt.window().windowID() == windowId) {
 						synchronized (this) {
 							onWindowCloseRequest();
@@ -403,10 +423,11 @@ public abstract class Window {
 					memFree(GL.getCapabilities().getAddressBuffer());
 					GL.setCapabilities(null);
 					synchronized (this) {
-						SDL_GL_DestroyContext(glContext);
-						SDL_DestroyCursor(defaultCursor);
-						SDL_DestroyCursor(clickCursor);
-						SDL_DestroyWindow(handle);
+					SDL_GL_DestroyContext(glContext);
+					SDL_DestroyCursor(defaultCursor);
+					SDL_DestroyCursor(clickCursor);
+					SDL_DestroyCursor(textCursor);
+					SDL_DestroyWindow(handle);
 					}
 				});
 			}, getClass().getSimpleName().replace("Window", "")+"#"+threadNumbers.computeIfAbsent(getClass(), k -> new AtomicInteger(1)).getAndIncrement());
